@@ -1,0 +1,29 @@
+BODY {
+    background-color: black;
+    color: white;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    font-weight: normal;
+}
+
+A {
+    color: #6d85ff;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.wrapper {
+    border: 10px;
+    display: flex;
+}
+
+#sidebar {
+    top: 0;
+    height: 100%;
+    width: 30%;
+    position: sticky;
+}
+
+#sidebar a {
+    font-weight: normal;
+}

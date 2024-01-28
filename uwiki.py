@@ -43,7 +43,7 @@ class Folder(Page):
     def child(self, is_folder, name, path, fullpath):
         res = self.build_child(is_folder, name, path, fullpath)
         res.depth = self.depth + 1
-        if name == self.name:
+        if name in [self.name, 'index']:
             self.page = res
         else:
             self.children[name] = res
@@ -152,12 +152,12 @@ class Renderer:
         return template
 
     def read_template(self, name):
-        with open(f'{self.path}/templates/{name}.tpl', 'r', encoding='utf-8') as f:
+        with open(f'{self.path}/assets/{name}', 'r', encoding='utf-8') as f:
             return f.read()
 
     def write(self, name):
         with open(f'{name}.html', 'w', encoding='utf-8') as f:
-            f.write(self.render('main.html', {
+            f.write(self.render('uwiki.html', {
                 'title': name,
                 'content': self.html,
             }))
