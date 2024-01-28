@@ -71,7 +71,7 @@ class Converter:
         title = self.page.title
         if title != self.page.folder.title:
             title = f'{self.page.folder.title} / {title}'
-        return f'<h1 id="{self.page.name}">{title}</h1>'
+        return f'<h2 id="{self.page.name}">{title}</h2>'
 
     def html(self):
         text = self.header()
@@ -103,6 +103,36 @@ class Scanner:
             else:
                 self.pages[name] = item
 
+class Renderer:
+    def __init__(self, scanner):
+        self.path = os.path.dirname(os.path.abspath(__file__))
+        self.scanner = scanner
+        self.html = self.prepare();
+
+    def prepare(self):
+        self.scanner.scan()
+        html = ''
+        for page in self.scanner.pages.values():
+            html += Converter(page).html()
+        return html
+
+    def render(self, name, vars={}):
+        template = self.read_template(name)
+        for key, value in vars.items():
+            template = template.replace(f'{{{key}}}', value)
+        return template
+
+    def read_template(self, name):
+        with open(f'{self.path}/templates/{name}.tpl', 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def write(self, name):
+        with open(f'{name}.html', 'w', encoding='utf-8') as f:
+            f.write(self.render('main.html', {
+                'title': name,
+                'content': self.html,
+            }))
+
 def main():
     args = sys.argv
     if len(args) < 2:
@@ -111,13 +141,9 @@ def main():
     path = args[1]
     if path[0] != '/':
         path = os.path.join(os.getcwd(), path)
-    scanner = Scanner(path)
-    scanner.scan()
 
-    for page in scanner.pages.values():
-        html = Converter(page).html()
-        print(html)
-        print()
+    renderer = Renderer(Scanner(path))
+    renderer.write(Path(path).stem)
 
 if __name__ == '__main__':
     main()
