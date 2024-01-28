@@ -10,6 +10,7 @@ import markdown
 class Page:
     def __init__(self, folder, name, path, fullpath):
         self.folder = folder
+        self.depth = 0
         self.name = name
         self.path = path
         self.fullpath = fullpath
@@ -30,12 +31,23 @@ class Folder(Page):
     def __init__(self, folder, name, path, fullpath):
         super().__init__(folder, name, path, fullpath)
         self.is_folder = True
+        self.children = {}
+        self.page = None
 
-    def child(self, is_folder, name, path, fullpath):
+    def build_child(self, is_folder, name, path, fullpath):
         if is_folder:
             return Folder(self, name, path, fullpath)
         else:
             return Page(self, name, path, fullpath)
+
+    def child(self, is_folder, name, path, fullpath):
+        res = self.build_child(is_folder, name, path, fullpath)
+        res.depth = self.depth + 1
+        if name == self.name:
+            self.page = res
+        else:
+            self.children[name] = res
+        return res
 
     def __str__(self):
         return f'Folder(name={self.name}, title={self.title}, path={self.path})'
@@ -48,8 +60,15 @@ class Converter:
         self.page = page
 
     def read(self):
+        if self.page.is_folder:
+            if self.page.page is None:
+                return ''
+            return self.read_file(self.page.page)
+        return self.read_file(self.page)
+
+    def read_file(self, page):
         text = ''
-        with open(self.page.fullpath, 'r', encoding='utf-8') as f:
+        with open(page.fullpath, 'r', encoding='utf-8') as f:
             while True:
                 line = f.readline()
                 if not line:
@@ -67,11 +86,14 @@ class Converter:
                 line = line.replace(f'[[{link}]]', f'[{link}](#{link})')
         return line
 
-    def header(self): # with anchor
+    def header(self):
         title = self.page.title
-        if title != self.page.folder.title:
-            title = f'{self.page.folder.title} / {title}'
-        return f'<h2 id="{self.page.name}">{title}</h2>'
+        if self.page.folder:
+            pretitle = self.page.folder.title
+            if pretitle != '' and self.page.folder.name != 'root':
+                title = f'{pretitle} / {title}'
+        tag = f'h{self.page.depth+1}'
+        return f'<{tag} id="{self.page.name}">{title}</{tag}>\n'
 
     def html(self):
         text = self.header()
@@ -79,13 +101,14 @@ class Converter:
         return markdown.markdown(text, extensions=['markdown.extensions.tables', 'markdown.extensions.wikilinks'])
 
 class Scanner:
-    def __init__(self, path):
+    def __init__(self, path, title):
         self.path = path
         self.pages = {}
+        self.root = Folder(None, 'root', '', self.path)
+        self.root.title = title
 
     def scan(self):
-        folder = Folder(None, 'root', 'ROOT', self.path)
-        self._scan_dir(folder)
+        self._scan_dir(self.root)
 
     def _scan_dir(self, folder):
         base = folder.fullpath
@@ -111,9 +134,15 @@ class Renderer:
 
     def prepare(self):
         self.scanner.scan()
-        html = ''
-        for page in self.scanner.pages.values():
-            html += Converter(page).html()
+        return self.folder2html(self.scanner.root)
+
+    def folder2html(self, folder):
+        html = Converter(folder).html()
+        for child in folder.children.values():
+            if child.is_folder:
+                html += self.folder2html(child)
+            else:
+                html += Converter(child).html()
         return html
 
     def render(self, name, vars={}):
@@ -142,8 +171,9 @@ def main():
     if path[0] != '/':
         path = os.path.join(os.getcwd(), path)
 
-    renderer = Renderer(Scanner(path))
-    renderer.write(Path(path).stem)
+    title = Path(path).stem
+    renderer = Renderer(Scanner(path, title))
+    renderer.write(title)
 
 if __name__ == '__main__':
     main()
