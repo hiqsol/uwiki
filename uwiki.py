@@ -155,23 +155,36 @@ class Renderer:
         with open(f'{self.path}/assets/{name}', 'r', encoding='utf-8') as f:
             return f.read()
 
+    def css_path(self):
+        file = 'assets/uwiki.css'
+        return file if self.exist(file) else 
+
+    def exists(self, file):
+        path = os.path.join(self.path, file)
+        return os.path.exists(path)
+
+    def cdn_url(self, file):
+        return f'https://8bitgalaxy.com/uwiki/{file}'
+
     def write(self, name):
         with open(f'{name}.html', 'w', encoding='utf-8') as f:
             f.write(self.render('uwiki.html', {
                 'title': name,
                 'content': self.html,
+                'css_path': 'assets/uwiki.css',
+                'js_path': 'assets/uwiki.js',
             }))
 
 def main():
     args = sys.argv
     if len(args) < 2:
-        print(f'Usage: {args[0]} <directory>')
+        print(f'Usage: {args[0]} <directory> [title]')
         sys.exit(1)
     path = args[1]
+    title = args[2] if len(args) > 2 else Path(path).stem
+
     if path[0] != '/':
         path = os.path.join(os.getcwd(), path)
-
-    title = Path(path).stem
     renderer = Renderer(Scanner(path, title))
     renderer.write(title)
 
