@@ -19,11 +19,20 @@ A {
 
 #sidebar {
     top: 0;
-    height: 100%;
-    width: 30%;
+    height: 1000px;
+    width: 25%;
     position: sticky;
+    overflow-y: auto;
 }
 
 #sidebar a {
     font-weight: normal;
+}
+
+#sidebar ul {
+    padding-left: 30px;
+}
+
+.content {
+    padding-left: 20px;
 }
