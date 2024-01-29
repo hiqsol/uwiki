@@ -152,27 +152,29 @@ class Renderer:
         return template
 
     def read_template(self, name):
-        with open(f'{self.path}/assets/{name}', 'r', encoding='utf-8') as f:
+        with open(f'{self.path}/{name}', 'r', encoding='utf-8') as f:
             return f.read()
 
-    def css_path(self):
-        file = 'assets/uwiki.css'
-        return file if self.exist(file) else 
+    def css_url(self): return self.url_or_path('src/uwiki.css')
+    def js_url(self): return self.url_or_path('src/uwiki.js')
+
+    def url_or_path(self, file):
+        return file if self.exists(file) else self.cdn_url(file)
 
     def exists(self, file):
-        path = os.path.join(self.path, file)
+        path = os.path.join('.', file)
         return os.path.exists(path)
 
     def cdn_url(self, file):
-        return f'https://8bitgalaxy.com/uwiki/{file}'
+        return f'https://hiqdev.com/assets/uwiki/{file}'
 
     def write(self, name):
         with open(f'{name}.html', 'w', encoding='utf-8') as f:
             f.write(self.render('uwiki.html', {
-                'title': name,
-                'content': self.html,
-                'css_path': 'assets/uwiki.css',
-                'js_path': 'assets/uwiki.js',
+                'title':    name,
+                'content':  self.html,
+                'css_url':  self.css_url(),
+                'js_url':   self.js_url(),
             }))
 
 def main():
