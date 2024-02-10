@@ -146,12 +146,12 @@ class Renderer:
         return html
 
     def render(self, name, vars={}):
-        template = self.read_template(name)
+        template = self.read_file(name)
         for key, value in vars.items():
             template = template.replace(f'{{{key}}}', value)
         return template
 
-    def read_template(self, name):
+    def read_file(self, name):
         with open(f'{self.path}/{name}', 'r', encoding='utf-8') as f:
             return f.read()
 
@@ -173,8 +173,8 @@ class Renderer:
             f.write(self.render('uwiki.html', {
                 'title':    name,
                 'content':  self.html,
-                'css_url':  self.css_url(),
-                'js_url':   self.js_url(),
+                'style':    self.read_file('uwiki.css'),
+                'script':   self.read_file('uwiki.js'),
             }))
 
 def main():
