@@ -7,6 +7,11 @@ from pathlib import Path
 
 import markdown
 
+def titleize(name):
+    return ' '.join(camel_split(name))
+def camel_split(name):
+    return re.findall(r'[A-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))', name)
+
 class Page:
     def __init__(self, folder, name, path, fullpath):
         self.folder = folder
@@ -15,12 +20,7 @@ class Page:
         self.path = path
         self.fullpath = fullpath
         self.is_folder = False
-        self.title = self.titleize(name)
-
-    def titleize(self, name):
-        return ' '.join(self.camel_split(name))
-    def camel_split(self, name):
-        return re.findall(r'[A-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))', name)
+        self.title = titleize(name)
 
     def __str__(self):
         return f'Page(name={self.name}, title={self.title}, path={self.path})'
@@ -83,7 +83,8 @@ class Converter:
                 link, description = link.split('|')
                 line = line.replace(f'[[{link}|{description}]]', f'[{description}](#{link})')
             else:
-                line = line.replace(f'[[{link}]]', f'[{link}](#{link})')
+                title = titleize(link)
+                line = line.replace(f'[[{link}]]', f'[{title}](#{link})')
         return line
 
     def header(self):
