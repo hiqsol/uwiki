@@ -43,11 +43,18 @@ class Folder(Page):
     def child(self, is_folder, name, path, fullpath):
         res = self.build_child(is_folder, name, path, fullpath)
         res.depth = self.depth + 1
-        if name in [self.name, 'index']:
+        if name in [self.name, self.singularize(self.name), 'index']:
             self.page = res
         else:
             self.children[name] = res
         return res
+
+    def singularize(self, name):
+        if name.endswith('ies'):
+            return name[:-3] + 'y'
+        if name.endswith('s'):
+            return name[:-1]
+        return name
 
     def __str__(self):
         return f'Folder(name={self.name}, title={self.title}, path={self.path})'
@@ -131,7 +138,7 @@ class Renderer:
     def __init__(self, scanner):
         self.path = os.path.dirname(os.path.abspath(__file__))
         self.scanner = scanner
-        self.html = self.prepare();
+        self.html = self.prepare()
 
     def prepare(self):
         self.scanner.scan()
