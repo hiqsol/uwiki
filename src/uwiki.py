@@ -136,7 +136,7 @@ class Scanner:
 
 class Renderer:
     def __init__(self, scanner):
-        self.path = os.path.dirname(os.path.abspath(__file__))
+        self.path = os.path.dirname(os.path.realpath(__file__))
         self.scanner = scanner
         self.html = self.prepare()
 
