@@ -9,6 +9,7 @@ BODY {
 TABLE {
     border-collapse: collapse;
     border-spacing: 0;
+    margin: 25px 5px;
 }
 TABLE TH {
     background-color: #555;
