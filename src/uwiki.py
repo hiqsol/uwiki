@@ -153,7 +153,7 @@ class Renderer:
                 html += Converter(child).html()
         return html
 
-    def render(self, name, vars={}):
+    def render(self, name, vars):
         template = self.read_file(name)
         for key, value in vars.items():
             template = template.replace(f'{{{key}}}', value)
