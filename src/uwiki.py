@@ -186,7 +186,14 @@ class Renderer:
             }))
 
 def main():
-    args = sys.argv
+    args = [sys.argv[0]]
+    ops = []
+    for i in range(1, len(sys.argv)):
+        if sys.argv[i].startswith('-'):
+            ops.append(sys.argv[i][1:])
+        else:
+            args.append(sys.argv[i])
+
     if len(args) < 2:
         print(f'Usage: {args[0]} <directory> [title]')
         sys.exit(1)
