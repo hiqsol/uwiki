@@ -9,6 +9,8 @@ import markdown
 
 def titleize(name):
     return ' '.join(camel_split(name))
+def cebabize(name):
+    return '-'.join(camel_split(name)).lower()
 def camel_split(name):
     return re.findall(r'[A-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))', name)
 
@@ -65,6 +67,7 @@ class Folder(Page):
 class Converter:
     def __init__(self, page):
         self.page = page
+        self._title = ''
 
     def read(self):
         if self.page.is_folder:
@@ -77,7 +80,10 @@ class Converter:
         text = ''
         with open(page.fullpath, 'r', encoding='utf-8') as f:
             while True:
-                line = f.readline()
+                try:
+                    line = f.readline()
+                except UnicodeDecodeError as e:
+                    raise ValueError(f'Error reading {page.fullpath}') from e
                 if not line:
                     break
                 text += self.process_line(line)
@@ -85,28 +91,44 @@ class Converter:
 
     def process_line(self, line):
         for match in re.finditer(r'\[\[(.+?)\]\]', line):
-            link = match.group(1)
-            if '|' in str(link):
-                link, description = link.split('|')
-                line = line.replace(f'[[{link}|{description}]]', f'[{description}](#{link})')
+            name = match.group(1)
+            if '|' in str(name):
+                name, description = name.split('|')
+                link = cebabize(name)
+                line = line.replace(f'[[{name}|{description}]]', f'[{description}](#{link})')
             else:
-                title = titleize(link)
-                line = line.replace(f'[[{link}]]', f'[{title}](#{link})')
+                title = titleize(name)
+                link = cebabize(name)
+                line = line.replace(f'[[{name}]]', f'[{title}](#{link})')
         return line
 
-    def header(self):
+    @property
+    def title(self):
+        if self._title:
+            return self._title
         title = self.page.title
         if self.page.folder:
             pretitle = self.page.folder.title
             if pretitle != '' and self.page.folder.name != 'root':
                 title = f'{pretitle} / {title}'
+        self._title = title
+        return title
+
+    def html_header(self):
         tag = f'h{self.page.depth+1}'
-        return f'<{tag} id="{self.page.name}">{title}</{tag}>\n'
+        return f'<{tag} id="{self.page.name}">{self.title}</{tag}>\n'
 
     def html(self):
-        text = self.header()
+        text = self.html_header()
         text += self.read()
         return markdown.markdown(text, extensions=['markdown.extensions.tables', 'markdown.extensions.wikilinks'])
+
+    def md_header(self):
+        tag = '#' * (self.page.depth + 1)
+        return f'{tag} {self.title}\n\n'
+
+    def md(self):
+        return self.md_header() + self.read().strip() + '\n\n'
 
 class Scanner:
     def __init__(self, path, title):
@@ -134,10 +156,32 @@ class Scanner:
             else:
                 self.pages[name] = item
 
+class MDRenderer:
+    def __init__(self, scanner):
+        self.scanner = scanner
+        self.md = self.prepare()
+
+    def prepare(self):
+        self.scanner.scan()
+        return self.folder2md(self.scanner.root)
+
+    def folder2md(self, folder):
+        md = Converter(folder).md()
+        for child in folder.children.values():
+            if child.is_folder:
+                md += self.folder2md(child)
+            else:
+                md += Converter(child).md()
+        return md
+
+    def write(self, name):
+        with open(f'{name}.md', 'w', encoding='utf-8') as f:
+            f.write(self.md)
+
 class Renderer:
     def __init__(self, scanner):
-        self.path = os.path.dirname(os.path.realpath(__file__))
         self.scanner = scanner
+        self.path = os.path.dirname(os.path.realpath(__file__))
         self.html = self.prepare()
 
     def prepare(self):
@@ -202,8 +246,11 @@ def main():
 
     if path[0] != '/':
         path = os.path.join(os.getcwd(), path)
-    renderer = Renderer(Scanner(path, title))
-    renderer.write(title)
+    scanner = Scanner(path, title)
+    htmler = Renderer(scanner)
+    htmler.write(title)
+    mder = MDRenderer(scanner)
+    mder.write(title)
 
 if __name__ == '__main__':
     main()
