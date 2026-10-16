@@ -23,6 +23,7 @@ class Page:
         self.fullpath = fullpath
         self.is_folder = False
         self.title = titleize(name)
+        self.anchor = cebabize(name)
 
     def __str__(self):
         return f'Page(name={self.name}, title={self.title}, path={self.path})'
@@ -116,7 +117,7 @@ class Converter:
 
     def html_header(self):
         tag = f'h{self.page.depth+1}'
-        return f'<{tag} id="{self.page.name}">{self.title}</{tag}>\n'
+        return f'<{tag} id="{self.page.anchor}">{self.title}</{tag}>\n\n'
 
     def html(self):
         text = self.html_header()
@@ -125,7 +126,7 @@ class Converter:
 
     def md_header(self):
         tag = '#' * (self.page.depth + 1)
-        return f'{tag} {self.title}\n\n'
+        return f'<a id="{self.page.anchor}"></a>\n\n{tag} {self.title}\n\n'
 
     def md(self):
         return self.md_header() + self.read().strip() + '\n\n'
@@ -136,6 +137,7 @@ class Scanner:
         self.pages = {}
         self.root = Folder(None, 'root', '', self.path)
         self.root.title = title
+        self.root.anchor = 'root'
 
     def scan(self):
         self._scan_dir(self.root)
