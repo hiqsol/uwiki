@@ -97,6 +97,7 @@ class Converter:
     FENCE = re.compile(r'^\s*(```|~~~)')
     HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$')
     CODE = re.compile(r'(`+).*?\1')
+    FRONT_MATTER = re.compile(r'\A---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)', re.DOTALL | re.MULTILINE)
 
     def __init__(self, page, scanner):
         self.page = page
@@ -117,7 +118,7 @@ class Converter:
                 text = f.read()
         except UnicodeDecodeError as e:
             raise ValueError(f'Error reading {page.fullpath}') from e
-        return self.process(text)
+        return self.process(self.FRONT_MATTER.sub('', text, count=1))
 
     def process(self, text):
         res = ''
