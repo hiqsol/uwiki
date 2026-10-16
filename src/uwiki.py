@@ -86,6 +86,10 @@ class Folder(Page):
         return self.__str__()
 
 class Converter:
+    FENCE = re.compile(r'^\s*(```|~~~)')
+    HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$')
+    CODE = re.compile(r'(`+).*?\1')
+
     def __init__(self, page):
         self.page = page
         self._title = ''
@@ -98,30 +102,54 @@ class Converter:
         return self.read_file(self.page)
 
     def read_file(self, page):
-        text = ''
-        with open(page.fullpath, 'r', encoding='utf-8') as f:
-            while True:
-                try:
-                    line = f.readline()
-                except UnicodeDecodeError as e:
-                    raise ValueError(f'Error reading {page.fullpath}') from e
-                if not line:
-                    break
-                text += self.process_line(line)
-        return text
+        try:
+            with open(page.fullpath, 'r', encoding='utf-8') as f:
+                text = f.read()
+        except UnicodeDecodeError as e:
+            raise ValueError(f'Error reading {page.fullpath}') from e
+        return self.process(text)
+
+    def process(self, text):
+        res = ''
+        fence = None
+        for line in text.splitlines(keepends=True):
+            m = self.FENCE.match(line)
+            if fence:
+                if m and line.lstrip().startswith(fence):
+                    fence = None
+                res += line
+            elif m:
+                fence = m[1]
+                res += line
+            else:
+                res += self.process_line(line)
+        return res
 
     def process_line(self, line):
-        for match in re.finditer(r'\[\[(.+?)\]\]', line):
-            name = match.group(1)
-            if '|' in str(name):
-                name, description = name.split('|')
-                link = cebabize(name)
-                line = line.replace(f'[[{name}|{description}]]', f'[{description}](#{link})')
-            else:
-                title = titleize(name)
-                link = cebabize(name)
-                line = line.replace(f'[[{name}]]', f'[{title}](#{link})')
-        return line
+        m = self.HEADING.match(line)
+        if m:
+            level = min(len(m[1]) + self.page.depth + 1, 6)
+            line = f"{'#' * level} {m[2]}\n"
+        return self.outside_code(line, self.process_links)
+
+    def outside_code(self, line, func):
+        res = ''
+        pos = 0
+        for m in self.CODE.finditer(line):
+            res += func(line[pos:m.start()]) + m[0]
+            pos = m.end()
+        return res + func(line[pos:])
+
+    def process_links(self, text):
+        return re.sub(r'\[\[(.+?)\]\]', self.link, text)
+
+    def link(self, match):
+        name = match[1]
+        if '|' in name:
+            name, description = name.split('|', 1)
+        else:
+            description = titleize(name)
+        return f'[{description}](#{cebabize(name)})'
 
     @property
     def title(self):
@@ -136,16 +164,16 @@ class Converter:
         return title
 
     def html_header(self):
-        tag = f'h{self.page.depth+1}'
+        tag = f'h{min(self.page.depth + 1, 6)}'
         return f'<{tag} id="{self.page.anchor}">{html.escape(self.title)}</{tag}>\n\n'
 
     def html(self):
         text = self.html_header()
         text += self.read()
-        return markdown.markdown(text, extensions=['markdown.extensions.tables', 'markdown.extensions.wikilinks'])
+        return markdown.markdown(text, extensions=['tables', 'fenced_code'])
 
     def md_header(self):
-        tag = '#' * (self.page.depth + 1)
+        tag = '#' * min(self.page.depth + 1, 6)
         return f'<a id="{self.page.anchor}"></a>\n\n{tag} {self.title}\n\n'
 
     def md(self):
