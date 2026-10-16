@@ -69,7 +69,8 @@ class Folder(Page):
         if not is_folder and self.page is None and self.is_index(name):
             self.page = res
         else:
-            self.children[name] = res
+            # page `Name.md` and folder `Name/` can sit side by side
+            self.children[name if is_folder else name + '.md'] = res
         return res
 
     def is_index(self, name):
@@ -586,9 +587,11 @@ class Checker:
 
     def check(self):
         seen = set()
+        folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in map(os.path.abspath, self.paths)]
+        common = os.path.commonpath(folders)
         for arg in self.paths:
             path = os.path.abspath(arg)
-            scanner, pages = self.vault(self.vault_root(path))
+            scanner, pages = self.vault(self.vault_root(path, common))
             if os.path.isdir(path):
                 files = sorted((p for p in pages if p.startswith(os.path.join(path, ''))), key=Path)
             else:
@@ -601,13 +604,13 @@ class Checker:
         return self.problems
 
     @staticmethod
-    def vault_root(path):
-        """Nearest folder with `.obsidian`, else given folder or file's folder."""
+    def vault_root(path, common):
+        """Nearest folder with `.obsidian`, else common folder of all checked paths."""
         start = Path(path if os.path.isdir(path) else os.path.dirname(path))
         for folder in [start, *start.parents]:
             if (folder / '.obsidian').is_dir():
                 return str(folder)
-        return str(start)
+        return common
 
     def vault(self, root):
         """Scanned vault and its pages by file path, folder pages give folders."""

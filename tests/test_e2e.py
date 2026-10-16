@@ -246,6 +246,14 @@ class CheckTest(unittest.TestCase):
         ], err)
         self.assertEqual(code, 1)
 
+    def test_paths_share_vault(self):
+        code, lines, err = self.check('shared/docs', 'shared/ideas', 'shared/Review.md')
+        self.assertEqual((code, lines), (0, []), err)
+
+    def test_page_next_to_same_named_folder(self):
+        code, lines, err = self.check('shared')
+        self.assertEqual((code, lines), (0, []), err)
+
     def test_clean(self):
         code, lines, err = self.check('broken/Good.md', 'broken/Bad.md')
         self.assertNotIn('broken/Good.md', '\n'.join(lines))
