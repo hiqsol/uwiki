@@ -54,3 +54,9 @@ A {
 .content {
     padding-left: 20px;
 }
+
+.embed {
+    border-left: 3px solid #555;
+    margin: 10px 0;
+    padding-left: 10px;
+}

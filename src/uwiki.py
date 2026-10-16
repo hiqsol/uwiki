@@ -6,6 +6,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 import markdown
 
@@ -97,12 +98,17 @@ class Converter:
     FENCE = re.compile(r'^\s*(```|~~~)')
     HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$')
     CODE = re.compile(r'(`+).*?\1')
+    EMBED_LINE = re.compile(r'^\s*!\[\[([^\]]+)\]\]\s*$')
+    IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.avif'}
     FRONT_MATTER = re.compile(r'\A---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)', re.DOTALL | re.MULTILINE)
 
-    def __init__(self, page, scanner):
+    def __init__(self, page, scanner, outdir='.', stack=(), source=None):
         self.page = page
         self.scanner = scanner
-        self.source = page.page if page.is_folder and page.page else page
+        self.outdir = os.path.abspath(outdir)
+        self.embedded = source is not None
+        self.source = source or (page.page if page.is_folder and page.page else page)
+        self.stack = set(stack) | {self.source.fullpath}
         self.mode = 'html'
         self.heading_ids = set()
         self._title = ''
@@ -114,13 +120,36 @@ class Converter:
             return self.read_file(self.page.page)
         return self.read_file(self.page)
 
-    def read_file(self, page):
+    def read_file(self, page, heading=''):
         try:
             with open(page.fullpath, 'r', encoding='utf-8') as f:
                 text = f.read()
         except UnicodeDecodeError as e:
             raise ValueError(f'Error reading {page.fullpath}') from e
-        return self.process(self.FRONT_MATTER.sub('', text, count=1))
+        text = self.FRONT_MATTER.sub('', text, count=1)
+        if heading:
+            text = self.section(text, heading)
+        return self.process(text)
+
+    def section(self, text, heading):
+        """Extracts section from given heading till next heading of same or higher level."""
+        res = ''
+        level = 0
+        fence = None
+        for line in text.splitlines(keepends=True):
+            f = self.FENCE.match(line)
+            if fence and f and line.lstrip().startswith(fence):
+                fence = None
+            elif not fence and f:
+                fence = f[1]
+            m = None if fence or f else self.HEADING.match(line)
+            if m and level and len(m[1]) <= level:
+                break
+            if m and not level and cebabize(m[2]) == cebabize(heading):
+                level = len(m[1])
+            if level:
+                res += line
+        return res
 
     def process(self, text):
         res = ''
@@ -142,12 +171,17 @@ class Converter:
         m = self.HEADING.match(line)
         if m:
             return self.heading(len(m[1]), m[2])
+        m = self.EMBED_LINE.match(line)
+        if m and not self.attachment(m[1]):
+            return self.embed_note(m[1])
         return self.outside_code(line, self.process_links)
 
     def heading(self, level, text):
         level = min(level + self.page.depth + 1, 6)
-        id = self.heading_id(text)
         text = self.outside_code(text, self.process_links)
+        if self.embedded:
+            return f"{'#' * level} {text}\n"
+        id = self.heading_id(text)
         if self.mode == 'md':
             return f"<a id=\"{id}\"></a>\n\n{'#' * level} {text}\n"
         return f"{'#' * level} {text} {{#{id}}}\n"
@@ -175,10 +209,48 @@ class Converter:
         return res + func(line[pos:])
 
     def process_links(self, text):
-        return re.sub(r'\[\[(.+?)\]\]', self.link, text)
+        return re.sub(r'(!?)\[\[(.+?)\]\]', self.wikilink, text)
 
-    def link(self, match):
-        name, heading, description = self.parse_link(match[1])
+    def wikilink(self, match):
+        if match[1] and self.attachment(match[2]):
+            return self.embed_file(match[2])
+        return self.link(match[2])
+
+    def attachment(self, text):
+        return self.scanner.attachment(text.partition('|')[0].strip(), self.source.path)
+
+    def embed_file(self, text):
+        name, _, size = text.partition('|')
+        path = self.attachment(text)
+        src = quote(os.path.relpath(path, self.outdir).replace(os.sep, '/'))
+        name = Path(name.strip()).name
+        if Path(path).suffix.lower() not in self.IMAGE_EXTS:
+            return f'[{name}]({src})'
+        attrs = f'src="{src}"'
+        m = re.fullmatch(r'(\d+)(?:x(\d+))?', size.strip())
+        if m:
+            attrs += f' alt="{html.escape(name)}" width="{m[1]}"'
+            if m[2]:
+                attrs += f' height="{m[2]}"'
+        else:
+            attrs += f' alt="{html.escape(size.strip() or name)}"'
+        return f'<img {attrs} />'
+
+    def embed_note(self, text):
+        name, heading, _ = self.parse_link(text)
+        target = self.scanner.resolve(name, self.source.path) if name else self.source
+        node = target.page if target and target.is_folder else target
+        if node is None or node.fullpath in self.stack:
+            return self.link(text) + '\n'
+        sub = Converter(self.page, self.scanner, self.outdir, self.stack, node)
+        sub.mode = self.mode
+        content = sub.read_file(node, heading).strip()
+        if self.mode == 'md':
+            return f'\n{content}\n\n'
+        return f'\n<div class="embed" markdown="1">\n\n{content}\n\n</div>\n\n'
+
+    def link(self, text):
+        name, heading, description = self.parse_link(text)
         if name:
             target = self.scanner.resolve(name, self.source.path)
             title = target.title if target else titleize(Path(name).name)
@@ -219,7 +291,7 @@ class Converter:
         self.mode = 'html'
         text = self.html_header()
         text += self.read()
-        return markdown.markdown(text, extensions=['tables', 'fenced_code', 'attr_list'])
+        return markdown.markdown(text, extensions=['tables', 'fenced_code', 'attr_list', 'md_in_html'])
 
     def md_header(self):
         tag = '#' * min(self.page.depth + 1, 6)
@@ -304,6 +376,17 @@ class Scanner:
             node.anchor = unique
             used.add(unique)
 
+    def attachment(self, name, source=''):
+        """Finds attachment file by name or path, prefers ones near the source page."""
+        name = name.strip().strip('/')
+        near = os.path.join(self.path, str(Path(source).parent).strip('/'), '')
+        candidates = [
+            (not path.startswith(near), path.count('/'), path)
+            for path in self.attachments.get(Path(name).name.lower(), [])
+            if path.lower().endswith('/' + name.lower())
+        ]
+        return min(candidates)[2] if candidates else None
+
     def resolve(self, name, source=''):
         """Finds link target by name or path like Obsidian does.
 
@@ -321,20 +404,21 @@ class Scanner:
         return min(candidates, key=lambda c: c[:3])[3] if candidates else None
 
 class MDRenderer:
-    def __init__(self, scanner):
+    def __init__(self, scanner, outdir='.'):
         self.scanner = scanner
+        self.outdir = outdir
         self.md = self.prepare()
 
     def prepare(self):
         return self.folder2md(self.scanner.root)
 
     def folder2md(self, folder):
-        md = Converter(folder, self.scanner).md()
+        md = Converter(folder, self.scanner, self.outdir).md()
         for child in folder.children.values():
             if child.is_folder:
                 md += self.folder2md(child)
             else:
-                md += Converter(child, self.scanner).md()
+                md += Converter(child, self.scanner, self.outdir).md()
         return md
 
     def write(self, filename):
@@ -342,8 +426,9 @@ class MDRenderer:
             f.write(self.md)
 
 class Renderer:
-    def __init__(self, scanner):
+    def __init__(self, scanner, outdir='.'):
         self.scanner = scanner
+        self.outdir = outdir
         self.path = os.path.dirname(os.path.realpath(__file__))
         self.html = self.prepare()
 
@@ -351,12 +436,12 @@ class Renderer:
         return self.folder2html(self.scanner.root)
 
     def folder2html(self, folder):
-        html = Converter(folder, self.scanner).html()
+        html = Converter(folder, self.scanner, self.outdir).html()
         for child in folder.children.values():
             if child.is_folder:
                 html += self.folder2html(child)
             else:
-                html += Converter(child, self.scanner).html()
+                html += Converter(child, self.scanner, self.outdir).html()
         return html
 
     def render(self, name, vars):
@@ -396,9 +481,9 @@ def main():
     scanner = Scanner(path, title)
     scanner.scan()
     if args.html or both:
-        Renderer(scanner).write(f'{output}.html', title)
+        Renderer(scanner, args.output).write(f'{output}.html', title)
     if args.md or both:
-        MDRenderer(scanner).write(f'{output}.md')
+        MDRenderer(scanner, args.output).write(f'{output}.md')
 
 if __name__ == '__main__':
     main()
