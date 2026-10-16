@@ -8,8 +8,6 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
-import markdown
-
 def titleize(name):
     words = camel_split(name, r'[\s_-]+')
     if not words:
@@ -315,6 +313,7 @@ class Converter:
         self.mode = 'html'
         text = self.html_header()
         text += self.read()
+        import markdown
         return markdown.markdown(text, extensions=['tables', 'fenced_code', 'attr_list', 'md_in_html'])
 
     def md_header(self):
@@ -485,19 +484,91 @@ class Renderer:
                 'script':   self.read_file('uwiki.js'),
             }))
 
+class Checker:
+    """Checks vault consistency, reports problems as `path:line: message`."""
+
+    LINK = re.compile(r'\[\[([^\]|#]*)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]')
+    IMAGE = re.compile(r'!\[[^\]]*\]\(([^)\s]+)\)')
+    CODE = re.compile(r'`[^`]*`')
+    NUMBERED = re.compile(r'^(\t*)(\d+)\. ')
+
+    def __init__(self, paths):
+        self.files = []
+        for path in map(Path, paths):
+            self.files += sorted(path.rglob('*.md')) if path.is_dir() else [path]
+        self.problems = []
+
+    def report(self, path, line, msg):
+        self.problems.append(f'{path}:{line}: {msg}')
+
+    def check(self):
+        names = {}
+        for path in self.files:
+            if path.stem in names:
+                self.report(path, 1, f'duplicate page name, also {names[path.stem]}')
+            names.setdefault(path.stem, path)
+        for path in self.files:
+            self.check_file(path, names)
+        return self.problems
+
+    def check_file(self, path, names):
+        lines = path.read_text(encoding='utf-8').split('\n')
+        start = 0
+        if lines[0] == '---':
+            if '---' not in lines[1:]:
+                self.report(path, 1, 'unclosed frontmatter')
+                return
+            start = lines.index('---', 1) + 1
+            for n, line in enumerate(lines[1:start - 1], 2):
+                if line and not line.startswith((' ', '-')) and ':' not in line:
+                    self.report(path, n, f'malformed frontmatter: {line}')
+
+        counters = []
+        for n, line in enumerate(lines[start:], start + 1):
+            clean = self.CODE.sub('', line)
+            for target in self.LINK.findall(clean):
+                if target.strip() not in names:
+                    self.report(path, n, f'unresolved link: [[{target.strip()}]]')
+            for src in self.IMAGE.findall(clean):
+                if '://' not in src and not (path.parent / src).exists():
+                    self.report(path, n, f'missing image: {src}')
+
+            m = self.NUMBERED.match(line)
+            if m:
+                depth, num = len(m[1]), int(m[2])
+                del counters[depth + 1:]
+                counters += [0] * (depth + 1 - len(counters))
+                if num != counters[depth] + 1:
+                    self.report(path, n, f'list number {num}, expected {counters[depth] + 1}')
+                counters[depth] = num
+            elif line and not line[0].isspace():
+                counters = []
+
 def main():
     parser = argparse.ArgumentParser(description='Renders folder of markdown files to single HTML file.')
-    parser.add_argument('directory', help='folder with markdown files, e.g. Obsidian vault')
-    parser.add_argument('title', nargs='?', help='title and output file name, default: folder name')
+    parser.add_argument('paths', nargs='+', metavar='directory [title]',
+                        help='folder with markdown files, e.g. Obsidian vault, and optional title, '
+                             'default: folder name; with --check-only: folders or files to check')
+    parser.add_argument('--check-only', action='store_true',
+                        help='check instead of rendering: unresolved wiki links, missing images, '
+                             'duplicate page names, frontmatter syntax and list numbering')
     parser.add_argument('--html', action='store_true', help='write HTML (default: both HTML and markdown)')
     parser.add_argument('--md', action='store_true', help='write single markdown file')
     parser.add_argument('-o', '--output', default='.', help='output directory, default: current')
     args = parser.parse_args()
 
-    path = os.path.abspath(args.directory)
+    if args.check_only:
+        problems = Checker(args.paths).check()
+        for problem in problems:
+            print(problem)
+        sys.exit(1 if problems else 0)
+
+    if len(args.paths) > 2:
+        parser.error('expected directory and optional title')
+    path = os.path.abspath(args.paths[0])
     if not os.path.isdir(path):
-        parser.error(f'not a directory: {args.directory}')
-    title = args.title or Path(path).name
+        parser.error(f'not a directory: {args.paths[0]}')
+    title = args.paths[1] if len(args.paths) > 1 else Path(path).name
     both = not args.html and not args.md
     os.makedirs(args.output, exist_ok=True)
     output = os.path.join(args.output, title)
