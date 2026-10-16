@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import html
 import os
 import re
@@ -298,8 +299,8 @@ class MDRenderer:
                 md += Converter(child, self.scanner).md()
         return md
 
-    def write(self, name):
-        with open(f'{name}.md', 'w', encoding='utf-8') as f:
+    def write(self, filename):
+        with open(filename, 'w', encoding='utf-8') as f:
             f.write(self.md)
 
 class Renderer:
@@ -328,21 +329,8 @@ class Renderer:
         with open(f'{self.path}/{name}', 'r', encoding='utf-8') as f:
             return f.read()
 
-    def css_url(self): return self.url_or_path('src/uwiki.css')
-    def js_url(self): return self.url_or_path('src/uwiki.js')
-
-    def url_or_path(self, file):
-        return file if self.exists(file) else self.cdn_url(file)
-
-    def exists(self, file):
-        path = os.path.join('.', file)
-        return os.path.exists(path)
-
-    def cdn_url(self, file):
-        return f'https://hiqdev.com/assets/uwiki/{file}'
-
-    def write(self, name):
-        with open(f'{name}.html', 'w', encoding='utf-8') as f:
+    def write(self, filename, name):
+        with open(filename, 'w', encoding='utf-8') as f:
             f.write(self.render('uwiki.html', {
                 'title':    html.escape(name),
                 'content':  self.html,
@@ -351,28 +339,28 @@ class Renderer:
             }))
 
 def main():
-    args = [sys.argv[0]]
-    ops = []
-    for i in range(1, len(sys.argv)):
-        if sys.argv[i].startswith('-'):
-            ops.append(sys.argv[i][1:])
-        else:
-            args.append(sys.argv[i])
+    parser = argparse.ArgumentParser(description='Renders folder of markdown files to single HTML file.')
+    parser.add_argument('directory', help='folder with markdown files, e.g. Obsidian vault')
+    parser.add_argument('title', nargs='?', help='title and output file name, default: folder name')
+    parser.add_argument('--html', action='store_true', help='write HTML (default: both HTML and markdown)')
+    parser.add_argument('--md', action='store_true', help='write single markdown file')
+    parser.add_argument('-o', '--output', default='.', help='output directory, default: current')
+    args = parser.parse_args()
 
-    if len(args) < 2:
-        print(f'Usage: {args[0]} <directory> [title]')
-        sys.exit(1)
-    path = args[1]
-    title = args[2] if len(args) > 2 else Path(path).stem
+    path = os.path.abspath(args.directory)
+    if not os.path.isdir(path):
+        parser.error(f'not a directory: {args.directory}')
+    title = args.title or Path(path).name
+    both = not args.html and not args.md
+    os.makedirs(args.output, exist_ok=True)
+    output = os.path.join(args.output, title)
 
-    if path[0] != '/':
-        path = os.path.join(os.getcwd(), path)
     scanner = Scanner(path, title)
     scanner.scan()
-    htmler = Renderer(scanner)
-    htmler.write(title)
-    mder = MDRenderer(scanner)
-    mder.write(title)
+    if args.html or both:
+        Renderer(scanner).write(f'{output}.html', title)
+    if args.md or both:
+        MDRenderer(scanner).write(f'{output}.md')
 
 if __name__ == '__main__':
     main()
