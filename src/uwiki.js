@@ -1,5 +1,5 @@
 window.onload = function(event) {
-  var hs = document.querySelectorAll("h2, h3, h4, h5, h6");
+  var hs = document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page");
   var toc = document.getElementById("toc");
   processHeaders(toc, hs, 0);
 };

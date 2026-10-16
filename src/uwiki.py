@@ -103,6 +103,8 @@ class Converter:
         self.page = page
         self.scanner = scanner
         self.source = page.page if page.is_folder and page.page else page
+        self.mode = 'html'
+        self.heading_ids = set()
         self._title = ''
 
     def read(self):
@@ -139,9 +141,30 @@ class Converter:
     def process_line(self, line):
         m = self.HEADING.match(line)
         if m:
-            level = min(len(m[1]) + self.page.depth + 1, 6)
-            line = f"{'#' * level} {m[2]}\n"
+            return self.heading(len(m[1]), m[2])
         return self.outside_code(line, self.process_links)
+
+    def heading(self, level, text):
+        level = min(level + self.page.depth + 1, 6)
+        id = self.heading_id(text)
+        text = self.outside_code(text, self.process_links)
+        if self.mode == 'md':
+            return f"<a id=\"{id}\"></a>\n\n{'#' * level} {text}\n"
+        return f"{'#' * level} {text} {{#{id}}}\n"
+
+    def heading_id(self, text):
+        base = self.heading_anchor(self.page, text)
+        id = base
+        n = 2
+        while id in self.heading_ids:
+            id = f'{base}-{n}'
+            n += 1
+        self.heading_ids.add(id)
+        return id
+
+    @staticmethod
+    def heading_anchor(page, heading):
+        return f'{page.anchor}--{cebabize(heading)}'
 
     def outside_code(self, line, func):
         res = ''
@@ -155,14 +178,26 @@ class Converter:
         return re.sub(r'\[\[(.+?)\]\]', self.link, text)
 
     def link(self, match):
-        name = match[1]
-        if '|' in name:
-            name, description = name.split('|', 1)
+        name, heading, description = self.parse_link(match[1])
+        if name:
+            target = self.scanner.resolve(name, self.source.path)
+            title = target.title if target else titleize(Path(name).name)
         else:
-            description = titleize(Path(name).name)
-        target = self.scanner.resolve(name, self.source.path)
-        anchor = target.anchor if target else cebabize(Path(name).name)
-        return f'[{description}](#{anchor})'
+            target = self.page
+            title = ''
+        if heading and not heading.startswith('^'):
+            anchor = self.heading_anchor(target, heading) if target else cebabize(heading)
+            title = f'{title} > {heading}' if title else heading
+        else:
+            anchor = target.anchor if target else cebabize(Path(name).name)
+        return f'[{description or title}](#{anchor})'
+
+    @staticmethod
+    def parse_link(text):
+        """Parses `Page#Heading|description` into parts, nested headings resolve to the last one."""
+        text, _, description = text.partition('|')
+        name, *headings = text.split('#')
+        return name.strip(), headings[-1].strip() if headings else '', description.strip()
 
     @property
     def title(self):
@@ -178,18 +213,20 @@ class Converter:
 
     def html_header(self):
         tag = f'h{min(self.page.depth + 1, 6)}'
-        return f'<{tag} id="{self.page.anchor}">{html.escape(self.title)}</{tag}>\n\n'
+        return f'<{tag} id="{self.page.anchor}" class="page">{html.escape(self.title)}</{tag}>\n\n'
 
     def html(self):
+        self.mode = 'html'
         text = self.html_header()
         text += self.read()
-        return markdown.markdown(text, extensions=['tables', 'fenced_code'])
+        return markdown.markdown(text, extensions=['tables', 'fenced_code', 'attr_list'])
 
     def md_header(self):
         tag = '#' * min(self.page.depth + 1, 6)
         return f'<a id="{self.page.anchor}"></a>\n\n{tag} {self.title}\n\n'
 
     def md(self):
+        self.mode = 'md'
         return self.md_header() + self.read().strip() + '\n\n'
 
 class Scanner:
