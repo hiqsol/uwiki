@@ -8,11 +8,30 @@ from pathlib import Path
 import markdown
 
 def titleize(name):
-    return ' '.join(camel_split(name))
+    words = camel_split(name, r'[\s_-]+')
+    if not words:
+        return name
+    return ' '.join(w[0].upper() + w[1:] for w in words)
 def cebabize(name):
-    return '-'.join(camel_split(name)).lower()
-def camel_split(name):
-    return re.findall(r'[A-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))', name)
+    return '-'.join(camel_split(name)).lower() or 'page'
+def camel_split(name, separators=r'[\W_]+'):
+    """Splits `MyPage`, `my notes`, `my-notes`, `HTMLParser`, `2024Plans` into words."""
+    words = []
+    for chunk in re.split(separators, name):
+        word = ''
+        for i, c in enumerate(chunk):
+            prev = chunk[i-1] if i else ''
+            next = chunk[i+1] if i+1 < len(chunk) else ''
+            if word and (
+                (c.isupper() and (prev.islower() or prev.isdigit() or (prev.isupper() and next.islower())))
+                or (c.isdigit() and prev.isalpha())
+            ):
+                words.append(word)
+                word = ''
+            word += c
+        if word:
+            words.append(word)
+    return words
 
 class Page:
     def __init__(self, folder, name, path, fullpath):
