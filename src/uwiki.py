@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import html
 import os
 import re
 import sys
@@ -136,7 +137,7 @@ class Converter:
 
     def html_header(self):
         tag = f'h{self.page.depth+1}'
-        return f'<{tag} id="{self.page.anchor}">{self.title}</{tag}>\n\n'
+        return f'<{tag} id="{self.page.anchor}">{html.escape(self.title)}</{tag}>\n\n'
 
     def html(self):
         text = self.html_header()
@@ -220,9 +221,7 @@ class Renderer:
 
     def render(self, name, vars):
         template = self.read_file(name)
-        for key, value in vars.items():
-            template = template.replace(f'{{{key}}}', value)
-        return template
+        return re.sub(r'\{(\w+)\}', lambda m: vars.get(m[1], m[0]), template)
 
     def read_file(self, name):
         with open(f'{self.path}/{name}', 'r', encoding='utf-8') as f:
@@ -244,7 +243,7 @@ class Renderer:
     def write(self, name):
         with open(f'{name}.html', 'w', encoding='utf-8') as f:
             f.write(self.render('uwiki.html', {
-                'title':    name,
+                'title':    html.escape(name),
                 'content':  self.html,
                 'style':    self.read_file('uwiki.css'),
                 'script':   self.read_file('uwiki.js'),
