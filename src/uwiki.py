@@ -66,11 +66,18 @@ class Folder(Page):
     def child(self, is_folder, name, path, fullpath):
         res = self.build_child(is_folder, name, path, fullpath)
         res.depth = self.depth + 1
-        if name in [self.name, self.singularize(self.name), 'index']:
+        if not is_folder and self.page is None and self.is_index(name):
             self.page = res
         else:
             self.children[name] = res
         return res
+
+    def is_index(self, name):
+        name = name.lower()
+        return name in [self.name.lower(), self.singularize(self.name.lower()), 'index']
+
+    def is_empty(self):
+        return self.page is None and not self.children
 
     def singularize(self, name):
         if name.endswith('ies'):
@@ -90,8 +97,10 @@ class Converter:
     HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$')
     CODE = re.compile(r'(`+).*?\1')
 
-    def __init__(self, page):
+    def __init__(self, page, scanner):
         self.page = page
+        self.scanner = scanner
+        self.source = page.page if page.is_folder and page.page else page
         self._title = ''
 
     def read(self):
@@ -148,8 +157,10 @@ class Converter:
         if '|' in name:
             name, description = name.split('|', 1)
         else:
-            description = titleize(name)
-        return f'[{description}](#{cebabize(name)})'
+            description = titleize(Path(name).name)
+        target = self.scanner.resolve(name, self.source.path)
+        anchor = target.anchor if target else cebabize(Path(name).name)
+        return f'[{description}](#{anchor})'
 
     @property
     def title(self):
@@ -158,7 +169,7 @@ class Converter:
         title = self.page.title
         if self.page.folder:
             pretitle = self.page.folder.title
-            if pretitle != '' and self.page.folder.name != 'root':
+            if pretitle != '' and self.page.folder.folder is not None:
                 title = f'{pretitle} / {title}'
         self._title = title
         return title
@@ -182,13 +193,16 @@ class Converter:
 class Scanner:
     def __init__(self, path, title):
         self.path = path
-        self.pages = {}
-        self.root = Folder(None, 'root', '', self.path)
+        self.root = Folder(None, Path(path).name, '', self.path)
         self.root.title = title
         self.root.anchor = 'root'
+        self.targets = {}
+        self.attachments = {}
 
     def scan(self):
         self._scan_dir(self.root)
+        self._index(self.root)
+        self._assign_anchors()
 
     def _scan_dir(self, folder):
         base = folder.fullpath
@@ -197,14 +211,75 @@ class Scanner:
             if entry.name.startswith('.'):
                 continue
             fullpath = os.path.join(base, entry.name)
-            name = Path(entry.name).stem
-            path = os.path.join(base, name)
-            part = path[len(self.path):]
-            item = folder.child(entry.is_dir(), name, part, fullpath)
             if entry.is_dir():
+                item = folder.child(True, entry.name, fullpath[len(self.path):], fullpath)
                 self._scan_dir(item)
+                if item.is_empty():
+                    del folder.children[item.name]
+            elif entry.name.endswith('.md'):
+                name = Path(entry.name).stem
+                folder.child(False, name, fullpath[len(self.path):-3], fullpath)
             else:
-                self.pages[name] = item
+                self.attachments.setdefault(entry.name.lower(), []).append(fullpath)
+
+    def _index(self, folder):
+        """Registers link targets: pages, folders and folder pages, the latter resolve to the folder."""
+        if folder.page:
+            self._add_target(folder.page.path, folder)
+        if folder.folder:
+            self._add_target(folder.path, folder)
+        for child in folder.children.values():
+            if child.is_folder:
+                self._index(child)
+            else:
+                self._add_target(child.path, child)
+
+    def _add_target(self, path, node):
+        self.targets.setdefault(Path(path).name.lower(), []).append((path.lower(), node))
+
+    def _assign_anchors(self):
+        """Anchors are made from names, from paths for clashing names."""
+        nodes = {}
+        for entries in self.targets.values():
+            for _, node in entries:
+                if node is not self.root:
+                    nodes[id(node)] = node
+        groups = {}
+        for node in nodes.values():
+            groups.setdefault(cebabize(node.name), []).append(node)
+        used = {'root'}
+        clashing = []
+        for anchor, group in groups.items():
+            if len(group) == 1 and anchor not in used:
+                group[0].anchor = anchor
+                used.add(anchor)
+            else:
+                clashing += group
+        for node in clashing:
+            anchor = cebabize(node.path)
+            unique = anchor
+            n = 2
+            while unique in used:
+                unique = f'{anchor}-{n}'
+                n += 1
+            node.anchor = unique
+            used.add(unique)
+
+    def resolve(self, name, source=''):
+        """Finds link target by name or path like Obsidian does.
+
+        Prefers targets near the source page, then shortest path.
+        """
+        near = str(Path(source).parent).lower().rstrip('/') + '/'
+        name = name.strip().strip('/').lower()
+        if name.endswith('.md'):
+            name = name[:-3]
+        candidates = [
+            (not path.startswith(near), path.count('/'), path, node)
+            for path, node in self.targets.get(Path(name).name, [])
+            if path.endswith('/' + name)
+        ]
+        return min(candidates, key=lambda c: c[:3])[3] if candidates else None
 
 class MDRenderer:
     def __init__(self, scanner):
@@ -212,16 +287,15 @@ class MDRenderer:
         self.md = self.prepare()
 
     def prepare(self):
-        self.scanner.scan()
         return self.folder2md(self.scanner.root)
 
     def folder2md(self, folder):
-        md = Converter(folder).md()
+        md = Converter(folder, self.scanner).md()
         for child in folder.children.values():
             if child.is_folder:
                 md += self.folder2md(child)
             else:
-                md += Converter(child).md()
+                md += Converter(child, self.scanner).md()
         return md
 
     def write(self, name):
@@ -235,16 +309,15 @@ class Renderer:
         self.html = self.prepare()
 
     def prepare(self):
-        self.scanner.scan()
         return self.folder2html(self.scanner.root)
 
     def folder2html(self, folder):
-        html = Converter(folder).html()
+        html = Converter(folder, self.scanner).html()
         for child in folder.children.values():
             if child.is_folder:
                 html += self.folder2html(child)
             else:
-                html += Converter(child).html()
+                html += Converter(child, self.scanner).html()
         return html
 
     def render(self, name, vars):
@@ -295,6 +368,7 @@ def main():
     if path[0] != '/':
         path = os.path.join(os.getcwd(), path)
     scanner = Scanner(path, title)
+    scanner.scan()
     htmler = Renderer(scanner)
     htmler.write(title)
     mder = MDRenderer(scanner)
