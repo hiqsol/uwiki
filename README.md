@@ -1,8 +1,8 @@
 # uWiki -  micro wiki
 
 Renders folder of markdown files to single HTML file.
-With `--check-only` checks it instead: unresolved wiki links, missing images,
-duplicate page names, frontmatter syntax and list numbering.
+With `--check-only` checks it instead: unresolved wiki links and headings, missing images,
+frontmatter syntax and list numbering, resolving links the same way rendering does.
 I use it for Obsidian vaults.
 
 ## Installation

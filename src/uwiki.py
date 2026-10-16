@@ -110,6 +110,7 @@ class Converter:
         self.stack = set(stack) | {self.source.fullpath}
         self.mode = 'html'
         self.heading_ids = set()
+        self.line = 0
         self._title = ''
 
     def read(self):
@@ -120,28 +121,42 @@ class Converter:
         return self.read_file(self.page)
 
     def read_file(self, page, heading=''):
+        text, start = self.read_text(page)
+        if heading:
+            text = self.section(text, heading)
+        return self.process(text, start)
+
+    @classmethod
+    def read_text(cls, page):
+        """Returns page text without front matter and number of its first line."""
         try:
             with open(page.fullpath, 'r', encoding='utf-8') as f:
                 text = f.read()
         except UnicodeDecodeError as e:
             raise ValueError(f'Error reading {page.fullpath}') from e
-        text = self.FRONT_MATTER.sub('', text, count=1)
-        if heading:
-            text = self.section(text, heading)
-        return self.process(text)
+        m = cls.FRONT_MATTER.match(text)
+        if not m:
+            return text, 1
+        return text[m.end():], m[0].count('\n') + 1
 
-    def section(self, text, heading):
-        """Extracts section from given heading till next heading of same or higher level."""
-        res = ''
-        level = 0
+    @classmethod
+    def headings(cls, text):
+        """Yields lines with their heading matches, None for non headings and fenced code."""
         fence = None
         for line in text.splitlines(keepends=True):
-            f = self.FENCE.match(line)
+            f = cls.FENCE.match(line)
             if fence and f and line.lstrip().startswith(fence):
                 fence = None
             elif not fence and f:
                 fence = f[1]
-            m = None if fence or f else self.HEADING.match(line)
+            yield line, None if fence or f else cls.HEADING.match(line)
+
+    @classmethod
+    def section(cls, text, heading):
+        """Extracts section from given heading till next heading of same or higher level."""
+        res = ''
+        level = 0
+        for line, m in cls.headings(text):
             if m and level and len(m[1]) <= level:
                 break
             if m and not level and cebabize(m[2]) == cebabize(heading):
@@ -150,13 +165,14 @@ class Converter:
                 res += line
         return res
 
-    def process(self, text):
+    def process(self, text, start=1):
         res = ''
         fence = None
         lines = text.splitlines(keepends=True)
         i = 0
         while i < len(lines):
             line = lines[i]
+            self.line = start + i
             i += 1
             m = self.FENCE.match(line)
             callout = self.mode == 'html' and not fence and self.CALLOUT.match(line)
@@ -169,18 +185,19 @@ class Converter:
                 res += line
             elif callout:
                 body = ''
+                body_start = start + i
                 while i < len(lines) and lines[i].startswith('>'):
                     body += re.sub(r'^> ?', '', lines[i])
                     i += 1
-                res += self.callout(*callout.groups(), body)
+                res += self.callout(*callout.groups(), body, body_start)
             else:
                 res += self.process_line(line)
         return res
 
-    def callout(self, kind, fold, title, body):
+    def callout(self, kind, fold, title, body, start=1):
         kind = kind.lower()
         title = self.outside_code(title, self.process_links) if title else html.escape(kind.title())
-        body = self.process(body).strip()
+        body = self.process(body, start).strip()
         tag, title_tag = ('details', 'summary') if fold else ('div', 'div')
         open = ' open' if fold == '+' else ''
         return (
@@ -241,10 +258,18 @@ class Converter:
     def attachment(self, text):
         return self.scanner.attachment(text.partition('|')[0].strip(), self.source.path)
 
+    def attachment_src(self, path):
+        return quote(os.path.relpath(path, self.outdir).replace(os.sep, '/'))
+
+    def attachment_link(self, text):
+        name, _, description = text.partition('|')
+        src = self.attachment_src(self.attachment(text))
+        return f'[{description.strip() or Path(name.strip()).name}]({src})'
+
     def embed_file(self, text):
         name, _, size = text.partition('|')
         path = self.attachment(text)
-        src = quote(os.path.relpath(path, self.outdir).replace(os.sep, '/'))
+        src = self.attachment_src(path)
         name = Path(name.strip()).name
         if Path(path).suffix.lower() not in self.IMAGE_EXTS:
             return f'[{name}]({src})'
@@ -275,6 +300,8 @@ class Converter:
         name, heading, description = self.parse_link(text)
         if name:
             target = self.scanner.resolve(name, self.source.path)
+            if not target and not heading and self.attachment(text):
+                return self.attachment_link(text)
             title = target.title if target else titleize(Path(name).name)
         else:
             target = self.page
@@ -484,92 +511,143 @@ class Renderer:
                 'script':   self.read_file('uwiki.js'),
             }))
 
-class Checker:
-    """Checks vault consistency, reports problems as `path:line: message`."""
+class CheckConverter(Converter):
+    """Converts page like renderer does, reports what would render broken."""
 
-    LINK = re.compile(r'\[\[([^\]|#]*)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]')
     IMAGE = re.compile(r'!\[[^\]]*\]\(([^)\s]+)\)')
-    CODE = re.compile(r'`[^`]*`')
-    NUMBERED = re.compile(r'^(\t*)(\d+)\. ')
+    NUMBERED = re.compile(r'^([ \t]*)(\d+)\. ')
+    LIST_BREAK = re.compile(r'^(?:[-*+] |>|#{1,6}\s)')
+
+    def __init__(self, page, scanner, report):
+        super().__init__(page, scanner)
+        self.report = report
+        self.mode = 'md'
+        self.lists = []  # [indent, last number] of open numbered lists, outermost first
+        self.blank = False
+
+    def process_line(self, line):
+        self.check_numbering(line)
+        return super().process_line(line)
+
+    def process_links(self, text):
+        res = super().process_links(text)
+        for src in self.IMAGE.findall(text):
+            if '://' not in src and not (Path(self.source.fullpath).parent / src).exists():
+                self.report(self.line, f'missing image: {src}')
+        return res
+
+    def link(self, text):
+        self.check_link(text)
+        return super().link(text)
+
+    def embed_note(self, text):
+        self.check_link(text)
+        return ''
+
+    def check_link(self, text):
+        name, heading, _ = self.parse_link(text)
+        target = self.scanner.resolve(name, self.source.path) if name else self.source
+        if target is None:
+            if heading or not self.attachment(text):
+                self.report(self.line, f'unresolved link: [[{name}]]')
+        elif heading and not heading.startswith('^'):
+            node = target.page if target.is_folder else target
+            if node is None or not self.section(self.read_text(node)[0], heading):
+                self.report(self.line, f'missing heading: [[{name}#{heading}]]')
+
+    def check_numbering(self, line):
+        """Numbered lists count from 1, nesting by indentation, lazy continuation lines keep list going."""
+        m = self.NUMBERED.match(line)
+        if not m:
+            if line.strip() and not line[0].isspace() and (self.blank or self.LIST_BREAK.match(line)):
+                self.lists = []
+            self.blank = not line.strip()
+            return
+        self.blank = False
+        indent, num = len(m[1].expandtabs(4)), int(m[2])
+        while self.lists and self.lists[-1][0] > indent:
+            self.lists.pop()
+        if not self.lists or self.lists[-1][0] < indent:
+            self.lists.append([indent, 0])
+        expected = self.lists[-1][1] + 1
+        if num != expected:
+            self.report(self.line, f'list number {num}, expected {expected}')
+        self.lists[-1][1] = num
+
+class Checker:
+    """Checks vault consistency the way renderer sees it, reports problems as `path:line: message`."""
+
+    FRONT_MATTER_START = re.compile(r'\A---[ \t]*\r?\n')
 
     def __init__(self, paths):
-        self.files = []
-        self.others = set()
-        for path in map(Path, paths):
-            if not path.is_dir():
-                self.files.append(path)
-                continue
-            for sub in sorted(path.rglob('*')):
-                if any(part.startswith('.') for part in sub.relative_to(path).parts):
-                    continue
-                if sub.suffix == '.md' and sub.is_file():
-                    self.files.append(sub)
-                else:
-                    self.others.add(sub.name.lower())
+        self.paths = paths
+        self.vaults = {}
         self.problems = []
 
-    def report(self, path, line, msg):
-        self.problems.append(f'{path}:{line}: {msg}')
-
     def check(self):
-        names = {}
-        for path in self.files:
-            name = path.stem.lower()
-            if name in names:
-                self.report(path, 1, f'duplicate page name, also {names[name]}')
-            names.setdefault(name, path)
-        for path in self.files:
-            self.check_file(path, names)
+        seen = set()
+        for arg in self.paths:
+            path = os.path.abspath(arg)
+            scanner, pages = self.vault(self.vault_root(path))
+            if os.path.isdir(path):
+                files = sorted((p for p in pages if p.startswith(os.path.join(path, ''))), key=Path)
+            else:
+                files = [path]
+            for file in files:
+                if file not in seen:
+                    seen.add(file)
+                    shown = os.path.join(arg, os.path.relpath(file, path)) if file != path else arg
+                    self.check_file(scanner, pages.get(file) or self.loose_page(scanner, file), shown)
         return self.problems
 
-    def check_file(self, path, names):
-        lines = path.read_text(encoding='utf-8').split('\n')
-        start = 0
-        if lines[0] == '---':
-            if '---' not in lines[1:]:
-                self.report(path, 1, 'unclosed frontmatter')
-                return
-            start = lines.index('---', 1) + 1
-            for n, line in enumerate(lines[1:start - 1], 2):
+    @staticmethod
+    def vault_root(path):
+        """Nearest folder with `.obsidian`, else given folder or file's folder."""
+        start = Path(path if os.path.isdir(path) else os.path.dirname(path))
+        for folder in [start, *start.parents]:
+            if (folder / '.obsidian').is_dir():
+                return str(folder)
+        return str(start)
+
+    def vault(self, root):
+        """Scanned vault and its pages by file path, folder pages give folders."""
+        if root not in self.vaults:
+            scanner = Scanner(root, '')
+            scanner.scan()
+            pages = {}
+            def collect(folder):
+                if folder.page:
+                    pages[folder.page.fullpath] = folder
+                for child in folder.children.values():
+                    if child.is_folder:
+                        collect(child)
+                    else:
+                        pages[child.fullpath] = child
+            collect(scanner.root)
+            self.vaults[root] = scanner, pages
+        return self.vaults[root]
+
+    @staticmethod
+    def loose_page(scanner, file):
+        """Page for a file scanner skipped, e.g. hidden one."""
+        return Page(None, Path(file).stem, os.path.splitext(file[len(scanner.path):])[0], file)
+
+    def check_file(self, scanner, page, shown):
+        report = lambda line, msg: self.problems.append(f'{shown}:{line}: {msg}')
+        source = page.page if page.is_folder else page
+        try:
+            with open(source.fullpath, encoding='utf-8') as f:
+                text = f.read()
+        except UnicodeDecodeError:
+            return report(1, 'not UTF-8')
+        m = Converter.FRONT_MATTER.match(text)
+        if m:
+            for n, line in enumerate(m[0].splitlines()[1:-1], 2):
                 if line and not line.startswith((' ', '-')) and ':' not in line:
-                    self.report(path, n, f'malformed frontmatter: {line}')
-
-        counters = []
-        fence = None
-        for n, line in enumerate(lines[start:], start + 1):
-            m = Converter.FENCE.match(line)
-            if fence or m:
-                if not fence:
-                    fence = m[1]
-                elif m and line.lstrip().startswith(fence):
-                    fence = None
-                continue
-            clean = self.CODE.sub('', line)
-            for target in self.LINK.findall(clean):
-                if not self.resolves(target, names):
-                    self.report(path, n, f'unresolved link: [[{target.strip()}]]')
-            for src in self.IMAGE.findall(clean):
-                if '://' not in src and not (path.parent / src).exists():
-                    self.report(path, n, f'missing image: {src}')
-
-            m = self.NUMBERED.match(line)
-            if m:
-                depth, num = len(m[1]), int(m[2])
-                del counters[depth + 1:]
-                counters += [0] * (depth + 1 - len(counters))
-                if num != counters[depth] + 1:
-                    self.report(path, n, f'list number {num}, expected {counters[depth] + 1}')
-                counters[depth] = num
-            elif line and not line[0].isspace():
-                counters = []
-
-    def resolves(self, target, names):
-        """Links resolve by last path part to pages, folders or attachments, same page links always do."""
-        target = target.strip()
-        if target.lower().endswith('.md'):
-            target = target[:-3]
-        name = Path(target).name.lower()
-        return not target or name in names or name in self.others
+                    report(n, f'malformed frontmatter: {line}')
+        elif self.FRONT_MATTER_START.match(text):
+            report(1, 'unclosed frontmatter')
+        CheckConverter(page, scanner, report).read()
 
 def main():
     parser = argparse.ArgumentParser(description='Renders folder of markdown files to single HTML file.')
@@ -577,8 +655,8 @@ def main():
                         help='folder with markdown files, e.g. Obsidian vault, and optional title, '
                              'default: folder name; with --check-only: folders or files to check')
     parser.add_argument('--check-only', action='store_true',
-                        help='check instead of rendering: unresolved wiki links, missing images, '
-                             'duplicate page names, frontmatter syntax and list numbering')
+                        help='check instead of rendering: unresolved wiki links and headings, missing images, '
+                             'frontmatter syntax and list numbering')
     parser.add_argument('--html', action='store_true', help='write HTML (default: both HTML and markdown)')
     parser.add_argument('--md', action='store_true', help='write single markdown file')
     parser.add_argument('-o', '--output', default='.', help='output directory, default: current')

@@ -137,6 +137,7 @@ class RenderTest(unittest.TestCase):
         self.assertIn(f'<img src="{self.src("pic.png")}" alt="pic.png" />', notes)
         self.assertIn(f'<img src="{self.src("pic.png")}" alt="pic.png" width="100" />', notes)
         self.assertIn(f'<a href="{self.src("doc.pdf")}">doc.pdf</a>', notes)
+        self.assertIn(f'<a href="{self.src("doc.pdf")}">the doc</a>', notes)
         embed = re.search(r'<div class="embed">(.*?)</div>', notes, re.DOTALL)[1]
         self.assertIn('<h3>Second Section</h3>', embed)
         self.assertIn('Literal {style}', embed)
@@ -221,7 +222,18 @@ class CheckTest(unittest.TestCase):
 
     def test_vault(self):
         code, lines, err = self.check('vault')
-        self.assertEqual(lines, ['vault/Projects/Alpha/Readme.md:1: duplicate page name, also vault/Archive/Readme.md'], err)
+        self.assertEqual((code, lines), (0, []), err)
+
+    def test_checks_agree_with_renderer(self):
+        code, lines, err = self.check('subtle')
+        self.assertEqual(lines, [
+            'subtle/Dots.md:4: unresolved link: [[Nowhere]]',
+            'subtle/Links.md:1: unresolved link: [[Wrong/Page]]',
+            'subtle/Links.md:1: missing heading: [[Page#NoSuchHeading]]',
+            'subtle/Links.md:3: missing heading: [[Sub/Page#Nope]]',
+            'subtle/Lists.md:5: list number 3, expected 2',
+            'subtle/Lists.md:10: list number 2, expected 1',
+        ], err)
         self.assertEqual(code, 1)
 
     def test_broken(self):
