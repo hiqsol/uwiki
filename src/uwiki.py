@@ -494,8 +494,18 @@ class Checker:
 
     def __init__(self, paths):
         self.files = []
+        self.others = set()
         for path in map(Path, paths):
-            self.files += sorted(path.rglob('*.md')) if path.is_dir() else [path]
+            if not path.is_dir():
+                self.files.append(path)
+                continue
+            for sub in sorted(path.rglob('*')):
+                if any(part.startswith('.') for part in sub.relative_to(path).parts):
+                    continue
+                if sub.suffix == '.md' and sub.is_file():
+                    self.files.append(sub)
+                else:
+                    self.others.add(sub.name.lower())
         self.problems = []
 
     def report(self, path, line, msg):
@@ -504,9 +514,10 @@ class Checker:
     def check(self):
         names = {}
         for path in self.files:
-            if path.stem in names:
-                self.report(path, 1, f'duplicate page name, also {names[path.stem]}')
-            names.setdefault(path.stem, path)
+            name = path.stem.lower()
+            if name in names:
+                self.report(path, 1, f'duplicate page name, also {names[name]}')
+            names.setdefault(name, path)
         for path in self.files:
             self.check_file(path, names)
         return self.problems
@@ -524,10 +535,18 @@ class Checker:
                     self.report(path, n, f'malformed frontmatter: {line}')
 
         counters = []
+        fence = None
         for n, line in enumerate(lines[start:], start + 1):
+            m = Converter.FENCE.match(line)
+            if fence or m:
+                if not fence:
+                    fence = m[1]
+                elif m and line.lstrip().startswith(fence):
+                    fence = None
+                continue
             clean = self.CODE.sub('', line)
             for target in self.LINK.findall(clean):
-                if target.strip() not in names:
+                if not self.resolves(target, names):
                     self.report(path, n, f'unresolved link: [[{target.strip()}]]')
             for src in self.IMAGE.findall(clean):
                 if '://' not in src and not (path.parent / src).exists():
@@ -543,6 +562,14 @@ class Checker:
                 counters[depth] = num
             elif line and not line[0].isspace():
                 counters = []
+
+    def resolves(self, target, names):
+        """Links resolve by last path part to pages, folders or attachments, same page links always do."""
+        target = target.strip()
+        if target.lower().endswith('.md'):
+            target = target[:-3]
+        name = Path(target).name.lower()
+        return not target or name in names or name in self.others
 
 def main():
     parser = argparse.ArgumentParser(description='Renders folder of markdown files to single HTML file.')
