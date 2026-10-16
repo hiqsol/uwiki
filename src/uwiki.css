@@ -60,3 +60,34 @@ A {
     margin: 10px 0;
     padding-left: 10px;
 }
+
+.callout {
+    --callout-color: #6d85ff;
+    background-color: #1a1a1a;
+    border-left: 4px solid var(--callout-color);
+    margin: 10px 0;
+    padding: 5px 12px;
+}
+.callout-title {
+    color: var(--callout-color);
+    font-weight: bold;
+    margin: 5px 0;
+}
+details.callout > summary {
+    cursor: pointer;
+}
+.callout-tip, .callout-hint, .callout-important, .callout-success, .callout-check, .callout-done {
+    --callout-color: #44cf6e;
+}
+.callout-question, .callout-help, .callout-faq, .callout-warning, .callout-caution, .callout-attention {
+    --callout-color: #e9973f;
+}
+.callout-failure, .callout-fail, .callout-missing, .callout-danger, .callout-error, .callout-bug {
+    --callout-color: #fb464c;
+}
+.callout-example {
+    --callout-color: #a882ff;
+}
+.callout-quote, .callout-cite {
+    --callout-color: #9e9e9e;
+}

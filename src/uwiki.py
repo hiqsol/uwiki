@@ -98,6 +98,7 @@ class Converter:
     FENCE = re.compile(r'^\s*(```|~~~)')
     HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$')
     CODE = re.compile(r'(`+).*?\1')
+    CALLOUT = re.compile(r'^>\s*\[!([\w-]+)\]([+-]?)[ \t]*(.*?)\s*$')
     EMBED_LINE = re.compile(r'^\s*!\[\[([^\]]+)\]\]\s*$')
     IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.avif'}
     FRONT_MATTER = re.compile(r'\A---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)', re.DOTALL | re.MULTILINE)
@@ -154,8 +155,13 @@ class Converter:
     def process(self, text):
         res = ''
         fence = None
-        for line in text.splitlines(keepends=True):
+        lines = text.splitlines(keepends=True)
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            i += 1
             m = self.FENCE.match(line)
+            callout = self.mode == 'html' and not fence and self.CALLOUT.match(line)
             if fence:
                 if m and line.lstrip().startswith(fence):
                     fence = None
@@ -163,9 +169,27 @@ class Converter:
             elif m:
                 fence = m[1]
                 res += line
+            elif callout:
+                body = ''
+                while i < len(lines) and lines[i].startswith('>'):
+                    body += re.sub(r'^> ?', '', lines[i])
+                    i += 1
+                res += self.callout(*callout.groups(), body)
             else:
                 res += self.process_line(line)
         return res
+
+    def callout(self, kind, fold, title, body):
+        kind = kind.lower()
+        title = self.outside_code(title, self.process_links) if title else html.escape(kind.title())
+        body = self.process(body).strip()
+        tag, title_tag = ('details', 'summary') if fold else ('div', 'div')
+        open = ' open' if fold == '+' else ''
+        return (
+            f'\n<{tag} class="callout callout-{kind}"{open} markdown="1">\n'
+            f'<{title_tag} class="callout-title" markdown="span">{title}</{title_tag}>\n\n'
+            f'{body}\n\n</{tag}>\n\n'
+        )
 
     def process_line(self, line):
         m = self.HEADING.match(line)
