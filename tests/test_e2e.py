@@ -50,7 +50,7 @@ class RenderTest(unittest.TestCase):
         assert res.returncode == 0, res.stderr
         cls.html = read(os.path.join(cls.out, 'vault.html'))
         cls.md = read(os.path.join(cls.out, 'vault.md'))
-        cls.content = cls.html[cls.html.index('class="content"'):cls.html.index('<style>')]
+        cls.content = cls.html[cls.html.index('class="content"'):cls.html.index('<script>')]
 
     @classmethod
     def tearDownClass(cls):

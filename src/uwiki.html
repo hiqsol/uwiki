@@ -1,21 +1,25 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{title}</title>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>{style}</style>
 </head>
 <body>
-    <div class="container">
-    <div class="wrapper">
-        <div id="sidebar">
-            <a href="#root">{title}</a>
-            <ul id="toc"></ul>
+    <button id="menu" type="button" aria-label="Toggle navigation">&#9776;</button>
+    <nav id="sidebar">
+        <a id="home" href="#root">{title}</a>
+        <div id="search">
+            <input id="query" type="search" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search">
+            <kbd>/</kbd>
         </div>
-        <div class="content">
-            {content}
-        </div>
-    </div>
-    </div>
-    <style>{style}</style>
+        <div id="results" hidden></div>
+        <ul id="toc"></ul>
+    </nav>
+    <main class="content">
+        {content}
+    </main>
     <script>{script}</script>
 </body>
 </html>
