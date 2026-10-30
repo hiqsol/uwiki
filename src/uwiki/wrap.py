@@ -3,6 +3,7 @@
 Only paragraphs and list items containing an overlong line are rewrapped,
 together with their continuation lines. Frontmatter, code blocks, tables
 and headings are left as is. Wiki links and inline code are not split.
+A line rewrapping leaves as is, e.g. a long URL, is not reported.
 """
 
 import re
@@ -73,12 +74,13 @@ def rewrap(text, width=WIDTH):
             else:
                 break
             j += 1
-        if all(columns(g) <= width for g in group):
-            out.extend(group)
-        else:
-            long += [i + 1 + k for k, g in enumerate(group) if columns(g) > width]
+        wrapped = group
+        if any(columns(g) > width for g in group):
             words = TOKEN.findall(' '.join([line[m.end():]] + [g.strip() for g in group[1:]]))
-            out.extend(wrap(head, cont, words, width))
+            wrapped = wrap(head, cont, words, width)
+        if wrapped != group:
+            long += [i + 1 + k for k, g in enumerate(group) if columns(g) > width]
+        out.extend(wrapped)
         i = j
     return '\n'.join(out), long
 

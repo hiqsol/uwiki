@@ -546,6 +546,17 @@ class WrapTest(unittest.TestCase):
         self.assertEqual(lines[-1], self.TEXT.splitlines()[-1])
         self.assertEqual(run('wrap', '--check', '-w', '40', self.file).returncode, 0)
 
+    def test_unbreakable_line_not_reported(self):
+        text = ('1. [Rules\n'
+                '   pdf](https://example.com/a/very/long/path/to/the/rules.pdf).\n'
+                '   `/a/very/long/path/that/inline/code/never/splits`\n')
+        with open(self.file, 'w', encoding='utf-8') as f:
+            f.write(text)
+        res = run('wrap', '--check', '-w', '40', self.file)
+        self.assertEqual(res.returncode, 0, res.stdout)
+        run('wrap', '-w', '40', self.file)
+        self.assertEqual(read(self.file), text)
+
 
 if __name__ == '__main__':
     unittest.main()

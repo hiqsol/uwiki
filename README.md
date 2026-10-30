@@ -74,7 +74,8 @@ It lists the largest pages and orphans: pages not linked from the counted ones, 
 
 `wrap` rewraps paragraphs and list items with lines longer than width (tab counts as 4),
 leaving frontmatter, code, tables and headings as is, never splitting wiki links and inline code.
-`--check` reports such lines instead and exits 1 if any.
+`--check` reports such lines instead and exits 1 if any,
+a line rewrapping leaves as is, e.g. a long URL or inline code, is not reported.
 
 Example:
 
