@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 
+from . import __version__
 from .build import MDRenderer, Renderer
 from .check import Checker
 from .stats import Stats
@@ -45,6 +46,7 @@ def wrap(args, parser):
 
 def main():
     parser = argparse.ArgumentParser(prog='uwiki', description='Markdown utility for Obsidian vaults and other wikis.')
+    parser.add_argument('-V', '--version', action='version', version=f'%(prog)s {__version__}')
     commands = parser.add_subparsers(dest='command', required=True, metavar='command')
 
     p = commands.add_parser('build', help='build folder of markdown files into single HTML and markdown file')

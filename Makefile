@@ -1,6 +1,7 @@
 .PHONY: test build clean version patch minor major release up
 
-VERSION = $(shell sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
+INIT = src/uwiki/__init__.py
+VERSION = $(shell sed -n 's/^__version__ = "\(.*\)"/\1/p' $(INIT))
 # mise reads releases from GitHub directly, its versions host and cache lag new releases
 MISE_FRESH = MISE_USE_VERSIONS_HOST=false MISE_FETCH_REMOTE_VERSIONS_CACHE=0s
 
@@ -14,7 +15,7 @@ clean:
 version:
 	@echo $(VERSION)
 
-# bump version in pyproject.toml, commit and tag it, e.g. 0.2.1 -> make minor -> 0.3.0
+# bump version in $(INIT), commit and tag it, e.g. 0.2.1 -> make minor -> 0.3.0
 patch minor major:
 	@test -z "$$(git status --porcelain)" || { echo 'commit or stash changes first' >&2; exit 1; }
 	@$(MAKE) --no-print-directory test
@@ -22,8 +23,8 @@ patch minor major:
 		if (part == "major") print $$1+1 ".0.0"; \
 		else if (part == "minor") print $$1 "." $$2+1 ".0"; \
 		else print $$1 "." $$2 "." $$3+1 }'); \
-	sed -i "s/^version = \".*\"/version = \"$$v\"/" pyproject.toml && \
-	git commit -q -m "v$$v" pyproject.toml && git tag "v$$v" && \
+	sed -i "s/^__version__ = \".*\"/__version__ = \"$$v\"/" $(INIT) && \
+	git commit -q -m "v$$v" $(INIT) && git tag "v$$v" && \
 	echo "tagged v$$v, make release to publish"
 
 # push branch and tag, the release workflow tests and creates GitHub release

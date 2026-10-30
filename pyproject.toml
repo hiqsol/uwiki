@@ -1,16 +1,33 @@
 [project]
 name = "uwiki"
-version = "0.2.1"
+dynamic = ["version"]
 description = "Builds, checks, counts and wraps markdown wikis, e.g. Obsidian vaults"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Andrii Vasyliev", email = "sol@hiqdev.com" }]
+keywords = ["markdown", "wiki", "obsidian", "static-site", "linter", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Documentation",
+]
 requires-python = ">=3.10"
 dependencies = ["markdown"]
 
 [project.urls]
 Homepage = "https://github.com/hiqsol/uwiki"
+Issues = "https://github.com/hiqsol/uwiki/issues"
 
 [project.scripts]
 uwiki = "uwiki.cli:main"
+
+[tool.hatch.version]
+path = "src/uwiki/__init__.py"
 
 [build-system]
 requires = ["hatchling"]

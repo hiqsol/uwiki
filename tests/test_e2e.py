@@ -209,6 +209,11 @@ class CliTest(unittest.TestCase):
         res = run()
         self.assertEqual(res.returncode, 2)
 
+    def test_version(self):
+        res = run('--version')
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertRegex(res.stdout, r'^uwiki \d+\.\d+\.\d+\n$')
+
 
 class CheckTest(unittest.TestCase):
     def check(self, *paths):

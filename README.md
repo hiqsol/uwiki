@@ -1,4 +1,6 @@
-# uWiki -  micro wiki
+# uWiki - micro wiki
+
+[![test](https://github.com/hiqsol/uwiki/actions/workflows/test.yml/badge.svg)](https://github.com/hiqsol/uwiki/actions/workflows/test.yml)
 
 Markdown utility for wikis: builds folder of markdown files into single HTML or markdown file,
 checks it, counts statistics and rewraps long lines.
@@ -41,6 +43,20 @@ It lists the largest pages and orphans: pages not linked from the counted ones, 
 leaving frontmatter, code, tables and headings as is, never splitting wiki links and inline code.
 `--check` reports such lines instead and exits 1 if any.
 
+Example:
+
+```
+$ uwiki build vault -o out     # out/vault.html and out/vault.md
+$ uwiki check vault
+vault/Ideas.md:12: unresolved link: [[Roadmap]]
+vault/Plans.md:7: list number 3, expected 2
+$ uwiki stats vault --by status --top 0
+status  pages  words  lines  headings  items  links  external  images
+draft      42   9120   1310        58    412    530         3       4
+done       17   2804    401        19    150    211         0       1
+total      59  11924   1711        77    562    741         3       5
+```
+
 Supported Obsidian syntax:
 
 - `[[Page]]`, `[[Page|text]]`, `[[folder/Page]]`, `[[Page#Heading]]`, `[[#Heading]]`
@@ -81,3 +97,7 @@ make up                      # wait for GitHub release, upgrade mise installed u
 
 The release workflow runs tests on the pushed tag and creates GitHub release,
 mise resolves `latest` from releases.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
