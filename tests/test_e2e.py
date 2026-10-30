@@ -22,6 +22,7 @@ BROKEN = os.path.join(FIXTURES, 'broken')
 MDLINKS = os.path.join(FIXTURES, 'mdlinks')
 PROJECT = os.path.join(FIXTURES, 'project')
 LINKCHECK = os.path.join(FIXTURES, 'linkcheck')
+EXTERNAL = os.path.join(FIXTURES, 'external')
 
 
 def run(*args, cwd=None):
@@ -441,6 +442,36 @@ class LlmsTest(unittest.TestCase):
             self.assertIn('# linkcheck\n\n> Line one.\n> Line two.\n\n## Home', read(output))
             res = run('llms', LINKCHECK, '-o', output, '--summary', 'Line one.\nLine two.', '--check')
             self.assertEqual((res.returncode, res.stdout), (0, ''))
+
+
+class LsTest(unittest.TestCase):
+    def ls(self, *args):
+        res = run('ls', *args, cwd=FIXTURES)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        return res.stdout
+
+    def test_files(self):
+        self.assertEqual(self.ls('external'), 'external/index.md\nexternal/my page.md\n')
+        self.assertEqual(self.ls('external', '-z'), 'external/index.md\0external/my page.md\0')
+        self.assertEqual(self.ls('external', '--exclude', 'index.md'), 'external/my page.md\n')
+
+    def test_files_skip_symlinks_and_skip_list(self):
+        self.assertEqual(self.ls('project').splitlines(), [
+            'project/AGENTS.md', 'project/README.md', 'project/docs/README.md',
+            'project/docs/index.md', 'project/drafts/Draft.md',
+        ])
+
+    def test_external_links_outside_code(self):
+        self.assertEqual(self.ls('external', '--external').splitlines(), [
+            'http://example.org/f?q=1&r=2#frag',
+            'https://en.wikipedia.org/wiki/Foo_(bar)',
+            'https://example.com/a',
+            'https://example.com/b',
+            'https://example.com/c',
+            'https://example.com/d',
+            'https://example.com/e',
+        ])
+        self.assertEqual(self.ls('external/my page.md', '--external'), 'https://example.com/c\n')
 
 
 class StatsTest(unittest.TestCase):

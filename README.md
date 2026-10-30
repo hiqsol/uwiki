@@ -26,6 +26,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 uwiki build <folder> [title] [--html] [--md] [-o <output-dir>] [--exclude GLOB] [--include GLOB]
 uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--exclude GLOB] [--include GLOB]
 uwiki llms <folder> [title] [-o <file>] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
+uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
 uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
 uwiki wrap [-w 70] [--check] <file>...
 ```
@@ -35,7 +36,7 @@ uwiki wrap [-w 70] [--check] <file>...
 Page title is front matter `title`, else the heading page starts with, else file name.
 Page header shows it after titles of all its folders, a leading heading repeating it is dropped.
 
-`build`, `check`, `llms` and `stats` skip hidden files and folders, `node_modules` and `vendor`.
+`build`, `check`, `llms`, `ls` and `stats` skip hidden files and folders, `node_modules` and `vendor`.
 `--exclude` skips more, `--include` takes back skipped or excluded ones, both repeatable.
 Glob with `/` matches path from vault root, without it any path segment, like in `.gitignore`,
 `**` matches across folders, a matching folder matches everything in it:
@@ -56,6 +57,16 @@ Links count from every page of the vault, checked or not.
 listing its pages as `- [title](path): description`, links relative to the output file.
 Folder page goes first, then pages in the order it links them, then the rest by name.
 `--check` exits 1 if the file is out of date instead of writing it.
+
+`ls` lists markdown files the other commands take, one per line, `-z` ends them with NUL instead.
+`--external` lists unique http and https links outside front matter and code instead.
+So other tools check the same files, e.g. with versions pinned by [mise](https://mise.jdx.dev) tasks:
+
+```
+uwiki ls -z docs | xargs -0 markdownlint-cli2
+uwiki ls -z docs | xargs -0 typos
+uwiki ls --external docs | lychee -
+```
 
 `stats` counts pages, words, lines, headings, list items, wiki and external links and images
 outside code, grouped by folder or frontmatter key, e.g. `--by status`.
