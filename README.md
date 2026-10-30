@@ -9,7 +9,7 @@ Links resolve the same way in every command. I use it for Obsidian vaults.
 With [mise](https://mise.jdx.dev):
 
 ```
-mise use -g pipx:hiqsol/uwiki
+mise use -g pipx:hiqsol/uwiki@v0.2.0
 ```
 
 Or with [uv](https://docs.astral.sh/uv/):
