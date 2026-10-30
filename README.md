@@ -1,9 +1,8 @@
 # uWiki -  micro wiki
 
-Renders folder of markdown files to single HTML file.
-With `--check-only` checks it instead: unresolved wiki links and headings, missing images,
-frontmatter syntax and list numbering, resolving links the same way rendering does.
-I use it for Obsidian vaults.
+Markdown utility for wikis: builds folder of markdown files into single HTML or markdown file,
+checks it, counts statistics and rewraps long lines.
+Links resolve the same way in every command. I use it for Obsidian vaults.
 
 ## Installation
 
@@ -22,12 +21,25 @@ uv tool install git+https://github.com/hiqsol/uwiki
 ## Usage
 
 ```
-uwiki <folder> [title] [--html] [--md] [-o <output-dir>]
-uwiki --check-only <folder|file>...
+uwiki build <folder> [title] [--html] [--md] [-o <output-dir>]
+uwiki check <folder|file>...
+uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json]
+uwiki wrap [-w 70] [--check] <file>...
 ```
 
-Writes `<title>.html` and `<title>.md` (title defaults to folder name),
+`build` writes `<title>.html` and `<title>.md` (title defaults to folder name),
 `--html` or `--md` to write only one of them.
+
+`check` reports unresolved wiki links and headings, missing images,
+frontmatter syntax and list numbering as `path:line: message`, exits 1 if any.
+
+`stats` counts pages, words, lines, headings, list items, wiki and external links and images
+outside code, grouped by folder or frontmatter key, e.g. `--by status`.
+It lists the largest pages and orphans: pages not linked from the counted ones, folder pages excepted.
+
+`wrap` rewraps paragraphs and list items with lines longer than width (tab counts as 4),
+leaving frontmatter, code, tables and headings as is, never splitting wiki links and inline code.
+`--check` reports such lines instead and exits 1 if any.
 
 Supported Obsidian syntax:
 
@@ -43,6 +55,20 @@ The HTML page is self-contained, light or dark by system preference:
 - sidebar with collapsible contents following the page being read
 - fuzzy full text search: press `/` or `Ctrl+K`, tolerates typos and abbreviations,
   `↑` `↓` `Enter` to open a result with matched words highlighted in text, `Esc` to clear
+
+## Library
+
+Project specific checks can build on uwiki, e.g. a script run by `uv run --script`:
+
+```python
+# /// script
+# dependencies = ["uwiki @ git+https://github.com/hiqsol/uwiki@v0.2.0"]
+# ///
+import uwiki
+
+problems = uwiki.check(['docs'])         # same lines as `uwiki check docs`
+data = uwiki.stats(['docs'], by='status')  # same data as `uwiki stats --json`
+```
 
 ## Tests
 

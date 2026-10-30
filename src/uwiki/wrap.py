@@ -1,0 +1,98 @@
+"""Rewraps markdown lines longer than width (tab counts as 4).
+
+Only paragraphs and list items containing an overlong line are rewrapped,
+together with their continuation lines. Frontmatter, code blocks, tables
+and headings are left as is. Wiki links and inline code are not split.
+"""
+
+import re
+
+WIDTH = 70
+TOKEN = re.compile(r'(?:\[\[[^\]]*\]\]|`[^`]*`|[^\s`\[]+|\[)+')
+ITEM = re.compile(r'^(\t*)((?:[-*+]|\d+[.)]|>) +|[a-z]\) +)?')
+BLOCK = re.compile(r'^\s*(?:[-*+>#|]|\d+[.)])(?:\s|$)')
+
+
+def columns(s):
+    return len(s.expandtabs(4))
+
+
+def is_plain(line):
+    return line.strip() and not line.lstrip().startswith(('#', '|', '```'))
+
+
+def wrap(head, cont, words, width):
+    # Glue a word that would start a list or heading to the previous one
+    glued = []
+    for w in words:
+        if glued and BLOCK.match(w + ' '):
+            glued[-1] += ' ' + w
+        else:
+            glued.append(w)
+    lines, cur = [], head
+    for w in glued:
+        sep = '' if cur in (head, cont) else ' '
+        nxt = cur + sep + w
+        if columns(nxt) > width and cur not in (head, cont):
+            lines.append(cur)
+            cur = cont + w
+        else:
+            cur = nxt
+    lines.append(cur)
+    return lines
+
+
+def rewrap(text, width=WIDTH):
+    """Returns rewrapped text and numbers of the overlong lines it rewrapped."""
+    src = text.split('\n')
+    out, long, i, fence = [], [], 0, False
+    if src and src[0] == '---':
+        end = src.index('---', 1) + 1
+        out, i = src[:end], end
+    while i < len(src):
+        line = src[i]
+        if line.lstrip().startswith('```'):
+            fence = not fence
+        if fence or line.lstrip().startswith('```') or not is_plain(line):
+            out.append(line)
+            i += 1
+            continue
+        m = ITEM.match(line)
+        head = line[:m.end()]
+        cont = m.group(1) + (' ' * len(m.group(2)) if m.group(2) else '')
+        if m.group(2) and m.group(2).startswith('>'):
+            cont = m.group(1) + m.group(2)
+        group = [line]
+        j = i + 1
+        while j < len(src) and is_plain(src[j]) and not ITEM.match(src[j]).group(2):
+            nl = src[j]
+            if cont and nl.startswith(cont) and not nl[len(cont):].startswith((' ', '\t')):
+                group.append(nl)
+            elif not cont and nl[:1].islower():
+                group.append(nl)
+            else:
+                break
+            j += 1
+        if all(columns(g) <= width for g in group):
+            out.extend(group)
+        else:
+            long += [i + 1 + k for k, g in enumerate(group) if columns(g) > width]
+            words = TOKEN.findall(' '.join([line[m.end():]] + [g.strip() for g in group[1:]]))
+            out.extend(wrap(head, cont, words, width))
+        i = j
+    return '\n'.join(out), long
+
+
+def wrap_files(paths, width=WIDTH, check=False):
+    """Rewraps files in place, with check only reports overlong lines as `path:line: message`."""
+    problems = []
+    for path in paths:
+        with open(path, encoding='utf-8') as f:
+            text = f.read()
+        new, long = rewrap(text, width)
+        if check:
+            problems += [f'{path}:{n}: longer than {width} columns' for n in long]
+        elif new != text:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(new)
+    return problems

@@ -1,9 +1,10 @@
-"""End-to-end tests: run uwiki.py on fixture vaults and check generated files.
+"""End-to-end tests: run uwiki commands on fixture vaults and check results.
 
 Run with: python3 -m unittest discover tests
 """
 
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -13,7 +14,7 @@ import unittest
 from urllib.parse import quote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCRIPT = os.path.join(ROOT, 'src', 'uwiki', 'uwiki.py')
+SRC = os.path.join(ROOT, 'src')
 FIXTURES = os.path.join(ROOT, 'tests', 'fixtures')
 VAULT = os.path.join(FIXTURES, 'vault')
 BROKEN = os.path.join(FIXTURES, 'broken')
@@ -21,10 +22,10 @@ BROKEN = os.path.join(FIXTURES, 'broken')
 HAS_MARKDOWN = importlib.util.find_spec('markdown') is not None
 
 
-def run(*args, cwd=None, python_args=()):
+def run(*args, cwd=None):
     return subprocess.run(
-        [sys.executable, *python_args, SCRIPT, *args],
-        cwd=cwd, capture_output=True, text=True,
+        [sys.executable, '-m', 'uwiki', *args],
+        cwd=cwd, capture_output=True, text=True, env={**os.environ, 'PYTHONPATH': SRC},
     )
 
 
@@ -46,7 +47,7 @@ class RenderTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.out = cls.tmp.name
-        res = run(VAULT, '-o', cls.out)
+        res = run('build', VAULT, '-o', cls.out)
         assert res.returncode == 0, res.stderr
         cls.html = read(os.path.join(cls.out, 'vault.html'))
         cls.md = read(os.path.join(cls.out, 'vault.md'))
@@ -90,7 +91,7 @@ class RenderTest(unittest.TestCase):
         self.assertIn('<h4 id="my-page--deeper">Deeper</h4>', page)
 
     def test_only_page_headers_go_to_toc(self):
-        js = read(os.path.join(ROOT, 'src', 'uwiki', 'uwiki.js'))
+        js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
         self.assertIn('h2.page', js)
         self.assertNotIn('console.log', js)
 
@@ -181,29 +182,29 @@ class CliTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_default_writes_both_to_current_dir(self):
-        res = run(VAULT, cwd=self.out)
+        res = run('build', VAULT, cwd=self.out)
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertEqual(sorted(os.listdir(self.out)), ['vault.html', 'vault.md'])
 
     def test_title_and_output_dir(self):
-        res = run(VAULT + '/', 'My Wiki', '-o', os.path.join(self.out, 'sub'))
+        res = run('build', VAULT + '/', 'My Wiki', '-o', os.path.join(self.out, 'sub'))
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertEqual(sorted(os.listdir(os.path.join(self.out, 'sub'))), ['My Wiki.html', 'My Wiki.md'])
         self.assertIn('<title>My Wiki</title>', read(os.path.join(self.out, 'sub', 'My Wiki.html')))
 
     def test_html_only(self):
-        run(VAULT, '--html', '-o', self.out)
+        run('build', VAULT, '--html', '-o', self.out)
         self.assertEqual(os.listdir(self.out), ['vault.html'])
 
     def test_md_only(self):
-        run(VAULT, '--md', '-o', self.out)
+        run('build', VAULT, '--md', '-o', self.out)
         self.assertEqual(os.listdir(self.out), ['vault.md'])
 
     def test_bad_arguments(self):
-        res = run(os.path.join(self.out, 'missing'))
+        res = run('build', os.path.join(self.out, 'missing'))
         self.assertEqual(res.returncode, 2)
         self.assertIn('not a directory', res.stderr)
-        res = run(VAULT, 'title', 'extra')
+        res = run('build', VAULT, 'title', 'extra')
         self.assertEqual(res.returncode, 2)
         res = run()
         self.assertEqual(res.returncode, 2)
@@ -213,9 +214,9 @@ class CheckTest(unittest.TestCase):
     def check(self, *paths):
         # hide markdown package: checking must work without it
         code = (
-            'import sys, runpy; sys.modules["markdown"] = None; '
-            f'sys.argv = {[SCRIPT, "--check-only", *paths]!r}; '
-            f'runpy.run_path({SCRIPT!r}, run_name="__main__")'
+            f'import sys, runpy; sys.modules["markdown"] = None; sys.path.insert(0, {SRC!r}); '
+            f'sys.argv = {["uwiki", "check", *paths]!r}; '
+            'runpy.run_module("uwiki", run_name="__main__")'
         )
         res = subprocess.run([sys.executable, '-c', code], cwd=FIXTURES, capture_output=True, text=True)
         return res.returncode, res.stdout.splitlines(), res.stderr
@@ -259,6 +260,79 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn('broken/Good.md', '\n'.join(lines))
         code, lines, err = self.check('vault/Archive')
         self.assertEqual((code, lines), (0, []), err)
+
+
+class StatsTest(unittest.TestCase):
+    def stats(self, *args):
+        res = run('stats', *args, cwd=FIXTURES)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        return res.stdout
+
+    def test_counts(self):
+        data = json.loads(self.stats('vault', '--json'))
+        pages = {p['path']: p for p in data['pages']}
+        page = pages['vault/MyPage.md']
+        self.assertEqual((page['headings'], page['items'], page['links']), (2, 1, 2))
+        self.assertEqual(page['meta'], {'tags': '[a, b]', 'title': 'ignored'})
+        notes = pages['vault/my notes.md']
+        self.assertEqual((notes['links'], notes['images']), (4, 2))
+        self.assertEqual(data['total']['pages'], 9)
+        self.assertEqual(data['total']['words'], sum(p['words'] for p in data['pages']))
+
+    def test_orphans_and_folder_pages(self):
+        data = json.loads(self.stats('vault', '--json'))
+        self.assertEqual(data['orphans'], ['vault/R&D <x>.md', 'vault/root.md'])
+        self.assertEqual(sorted(data['groups']), ['vault', 'vault/Archive', 'vault/Projects', 'vault/Projects/Alpha'])
+
+    def test_group_by_frontmatter_key(self):
+        data = json.loads(self.stats('vault', '--by', 'tags', '--json'))
+        self.assertEqual(data['groups']['[a, b]']['pages'], 1)
+        self.assertEqual(data['groups']['-']['pages'], 8)
+
+    def test_report(self):
+        lines = self.stats('vault', '--top', '1').splitlines()
+        self.assertEqual(lines[0].split(), ['folder', 'pages', 'words', 'lines', 'headings', 'items',
+                                            'links', 'external', 'images'])
+        self.assertEqual(lines[5].split()[:2], ['total', '9'])
+        self.assertEqual(lines[7:9], ['largest:', '      33  vault/MyPage.md'])
+
+
+class WrapTest(unittest.TestCase):
+    TEXT = (
+        '---\ntitle: a very long frontmatter line that is not wrapped at all, never\n---\n'
+        '1. a long numbered rule with [[Some Link]] and `inline code` that goes beyond\n'
+        '\t- nested\n'
+        '| table | row that is long enough to exceed the width of seventy columns |\n'
+    )
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.file = os.path.join(self.tmp.name, 'Page.md')
+        with open(self.file, 'w', encoding='utf-8') as f:
+            f.write(self.TEXT)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_check_reports_and_keeps_file(self):
+        res = run('wrap', '--check', '-w', '40', self.file)
+        self.assertEqual(res.returncode, 1)
+        self.assertEqual(res.stdout, f'{self.file}:4: longer than 40 columns\n')
+        self.assertEqual(read(self.file), self.TEXT)
+
+    def test_wrap(self):
+        res = run('wrap', '-w', '40', self.file)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        lines = read(self.file).splitlines()
+        self.assertEqual(lines[3:7], [
+            '1. a long numbered rule with',
+            '   [[Some Link]] and `inline code` that',
+            '   goes beyond',
+            '\t- nested',
+        ])
+        self.assertEqual(lines[1], self.TEXT.splitlines()[1])
+        self.assertEqual(lines[-1], self.TEXT.splitlines()[-1])
+        self.assertEqual(run('wrap', '--check', '-w', '40', self.file).returncode, 0)
 
 
 if __name__ == '__main__':
