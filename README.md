@@ -81,7 +81,7 @@ Folder page is `README.md` (any case), `index.md` or file named as folder, e.g. 
 
 The HTML page is self-contained, light or dark by system preference:
 
-- sidebar with collapsible contents following the page being read
+- sidebar with collapsible contents following the page being read, expand or collapse all at once
 - fuzzy full text search: press `/` or `Ctrl+K`, tolerates typos and abbreviations,
   `↑` `↓` `Enter` to open a result with matched words highlighted in text, `Esc` to clear
 

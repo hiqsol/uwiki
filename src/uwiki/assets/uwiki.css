@@ -113,6 +113,24 @@ a:hover {
     display: none;
 }
 
+#fold {
+    align-self: flex-end;
+    margin: -4px 14px 0;
+    padding: 0 4px;
+    border: 0;
+    background: none;
+    color: var(--fg-muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+#fold:hover {
+    color: var(--accent);
+}
+#fold[hidden], #sidebar:has(#results:not([hidden])) #fold {
+    display: none;
+}
+
 #toc, #results {
     flex: 1;
     overflow-y: auto;

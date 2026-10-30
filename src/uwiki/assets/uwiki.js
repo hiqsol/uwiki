@@ -10,6 +10,7 @@
   var toc = document.getElementById("toc");
   var query = document.getElementById("query");
   var results = document.getElementById("results");
+  var fold = document.getElementById("fold");
   var pages = Array.prototype.slice.call(document.querySelectorAll(".content .page"));
   var tocLinks = {};
   var active = null;
@@ -82,8 +83,26 @@
     button.addEventListener("click", function () {
       li.classList.toggle("collapsed");
       delete li.dataset.auto;
+      updateFold();
     });
     return button;
+  }
+
+  // one button for the whole tree: expands all when any branch is collapsed, else collapses all
+  function updateFold() {
+    var branches = toc.querySelectorAll("li > .toggle");
+    fold.hidden = !branches.length;
+    fold.textContent = toc.querySelector("li.collapsed") ? "Expand all" : "Collapse all";
+  }
+
+  function foldAll() {
+    var collapse = !toc.querySelector("li.collapsed");
+    toc.querySelectorAll("li > .toggle").forEach(function (button) {
+      var li = button.parentNode;
+      li.classList.toggle("collapsed", collapse);
+      delete li.dataset.auto;
+    });
+    updateFold();
   }
 
   // highlights TOC entry of the page being read, unfolds its branch
@@ -108,14 +127,17 @@
         delete li.dataset.auto;
       }
     });
-    if (!a) return;
-    a.classList.add("active");
-    for (var li = a.parentNode.parentNode.closest("li"); li && toc.contains(li); li = li.parentNode.closest("li")) {
-      if (li.classList.contains("collapsed")) {
-        li.classList.remove("collapsed");
-        li.dataset.auto = "";
+    if (a) {
+      for (var li = a.parentNode.parentNode.closest("li"); li && toc.contains(li); li = li.parentNode.closest("li")) {
+        if (li.classList.contains("collapsed")) {
+          li.classList.remove("collapsed");
+          li.dataset.auto = "";
+        }
       }
     }
+    updateFold();
+    if (!a) return;
+    a.classList.add("active");
     var r = a.getBoundingClientRect(), t = toc.getBoundingClientRect();
     if (r.top < t.top || r.bottom > t.bottom) {
       toc.scrollTop += r.top - t.top - t.height / 3;
@@ -442,6 +464,8 @@
         query.select();
       }
     });
+
+    fold.addEventListener("click", foldAll);
 
     document.getElementById("menu").addEventListener("click", function () {
       document.body.classList.toggle("nav-open");
