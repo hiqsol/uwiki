@@ -21,16 +21,25 @@ uv tool install git+https://github.com/hiqsol/uwiki
 ## Usage
 
 ```
-uwiki build <folder> [title] [--html] [--md] [-o <output-dir>]
-uwiki check <folder|file>...
-uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json]
+uwiki build <folder> [title] [--html] [--md] [-o <output-dir>] [--exclude GLOB] [--include GLOB]
+uwiki check <folder|file>... [--exclude GLOB] [--include GLOB]
+uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
 uwiki wrap [-w 70] [--check] <file>...
 ```
 
 `build` writes `<title>.html` and `<title>.md` (title defaults to folder name),
 `--html` or `--md` to write only one of them.
+Page title is front matter `title`, else the heading page starts with, else file name.
+Page header shows it after titles of all its folders, a leading heading repeating it is dropped.
 
-`check` reports unresolved wiki links and headings, missing images,
+`build`, `check` and `stats` skip hidden files and folders, `node_modules` and `vendor`.
+`--exclude` skips more, `--include` takes back skipped or excluded ones, both repeatable.
+Glob with `/` matches path from vault root, without it any path segment, like in `.gitignore`,
+`**` matches across folders, a matching folder matches everything in it:
+`--exclude 'docs/**' --include 'docs/adr/**'`.
+Symlinked page pointing into the vault is skipped, links to it lead to its target.
+
+`check` reports unresolved wiki and markdown links and headings, missing images,
 frontmatter syntax and list numbering as `path:line: message`, exits 1 if any.
 
 `stats` counts pages, words, lines, headings, list items, wiki and external links and images
@@ -48,7 +57,11 @@ Supported Obsidian syntax:
 - callouts `> [!note] Title`, foldable `> [!note]-`
 - YAML front matter is stripped
 
-Folder page is `index.md` or file named as folder, e.g. `Projects/Project.md`.
+Markdown links `[text](../folder/Page.md#heading)` resolve by path relative to the page,
+heading by its GitHub/GitLab anchor, so the vault can be plain markdown docs as well.
+
+Folder page is `README.md` (any case), `index.md` or file named as folder, e.g. `Projects/Project.md`.
+`README.md` wins over `index.md`, `build` warns and `check` reports when both are present.
 
 The HTML page is self-contained, light or dark by system preference:
 

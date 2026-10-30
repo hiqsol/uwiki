@@ -1,8 +1,39 @@
 """Vault model: pages, folders and Obsidian-like link resolution."""
 
 import os
+import posixpath
 import re
 from pathlib import Path
+
+FRONT_MATTER = re.compile(r'\A---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)', re.DOTALL | re.MULTILINE)
+FRONT_MATTER_TITLE = re.compile(r'^title:[ \t]*(.*?)[ \t]*$', re.MULTILINE)
+TITLE = re.compile(r'\A(\s*)(#{1,6})[ \t]+(.*?)[ \t]*(?:\r?\n|\Z)')
+
+def read_text(path):
+    """Returns file text without front matter and number of its first line."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            text = f.read()
+    except UnicodeDecodeError as e:
+        raise ValueError(f'Error reading {path}') from e
+    m = FRONT_MATTER.match(text)
+    if not m:
+        return text, 1
+    return text[m.end():], m[0].count('\n') + 1
+
+def read_title(path):
+    """Front matter title, else heading the file starts with, if any."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            text = f.read()
+    except (OSError, TypeError, UnicodeDecodeError):
+        return None
+    m = FRONT_MATTER.match(text)
+    title = m and FRONT_MATTER_TITLE.search(m[0])
+    if title and title[1].strip('\'"'):
+        return title[1].strip('\'"')
+    heading = TITLE.match(text[m.end():] if m else text)
+    return heading[3] if heading else None
 
 def titleize(name):
     words = camel_split(name, r'[\s_-]+')
@@ -38,8 +69,20 @@ class Page:
         self.path = path
         self.fullpath = fullpath
         self.is_folder = False
-        self.title = titleize(name)
+        self.default_title = titleize(name)
+        self._title = None
         self.anchor = cebabize(name)
+
+    @property
+    def file(self):
+        return self.fullpath
+
+    @property
+    def title(self):
+        """Front matter title or leading heading of the page, else its name."""
+        if self._title is None:
+            self._title = read_title(self.file) or self.default_title
+        return self._title
 
     def __str__(self):
         return f'Page(name={self.name}, title={self.title}, path={self.path})'
@@ -53,6 +96,10 @@ class Folder(Page):
         self.children = {}
         self.page = None
 
+    @property
+    def file(self):
+        return self.page.fullpath if self.page else None
+
     def build_child(self, is_folder, name, path, fullpath):
         if is_folder:
             return Folder(self, name, path, fullpath)
@@ -62,7 +109,11 @@ class Folder(Page):
     def child(self, is_folder, name, path, fullpath):
         res = self.build_child(is_folder, name, path, fullpath)
         res.depth = self.depth + 1
-        if not is_folder and self.page is None and self.is_index(name):
+        if not is_folder and self.is_index(name) and (
+            self.page is None or self.is_readme(name) and not self.is_readme(self.page.name)
+        ):
+            if self.page:
+                self.children[self.page.name + '.md'] = self.page
             self.page = res
         else:
             # page `Name.md` and folder `Name/` can sit side by side
@@ -71,7 +122,17 @@ class Folder(Page):
 
     def is_index(self, name):
         name = name.lower()
-        return name in [self.name.lower(), self.singularize(self.name.lower()), 'index']
+        return name in [self.name.lower(), self.singularize(self.name.lower()), 'index', 'readme']
+
+    @staticmethod
+    def is_readme(name):
+        return name.lower() == 'readme'
+
+    def shadowed_index(self):
+        """Index page that README took folder page place from, if any."""
+        if self.page and self.is_readme(self.page.name):
+            return next((c for c in self.children.values() if not c.is_folder and c.name.lower() == 'index'), None)
+        return None
 
     def is_empty(self):
         return self.page is None and not self.children
@@ -89,37 +150,123 @@ class Folder(Page):
     def __repr__(self):
         return self.__str__()
 
+class Filter:
+    """Takes vault paths: skip list and excludes drop them, includes take them back.
+
+    Glob with `/` matches path from vault root, without it any path segment, like gitignore;
+    matching folder matches everything in it.
+    """
+    SKIP = ('.*', 'node_modules', 'vendor')
+
+    def __init__(self, include=(), exclude=()):
+        self.include = [self.compile(p) for p in include]
+        self.include_prefixes = [self.prefix(p) for p in include]
+        self.drop = [self.compile(p) for p in (*self.SKIP, *exclude)]
+
+    @staticmethod
+    def compile(glob):
+        glob = glob.strip('/')
+        res = '' if '/' in glob else '(?:.*/)?'
+        i = 0
+        while i < len(glob):
+            if glob.startswith('**/', i):
+                res += '(?:.*/)?'
+                i += 3
+            elif glob.startswith('**', i):
+                res += '.*'
+                i += 2
+            else:
+                res += {'*': '[^/]*', '?': '[^/]'}.get(glob[i], re.escape(glob[i]))
+                i += 1
+        return re.compile(res + '(?:/.*)?')
+
+    @staticmethod
+    def prefix(glob):
+        """Literal start of anchored glob, empty for one matching anywhere."""
+        glob = glob.strip('/')
+        return re.split(r'[*?]', glob)[0] if '/' in glob else ''
+
+    def takes(self, path):
+        if any(p.fullmatch(path) for p in self.include):
+            return True
+        return not any(p.fullmatch(path) for p in self.drop)
+
+    def enters(self, path):
+        """Folder is scanned when taken or an include can take something in it."""
+        path += '/'
+        return self.takes(path[:-1]) or any(p.startswith(path) or path.startswith(p) for p in self.include_prefixes)
+
 class Scanner:
-    def __init__(self, path, title):
+    def __init__(self, path, title, filter=None):
         self.path = path
         self.root = Folder(None, Path(path).name, '', self.path)
-        self.root.title = title
+        self.root.default_title = title
         self.root.anchor = 'root'
+        self.filter = filter or Filter()
         self.targets = {}
         self.attachments = {}
+        self.symlinks = []
+        self.warnings = []
 
     def scan(self):
         self._scan_dir(self.root)
         self._index(self.root)
+        self._alias_symlinks()
         self._assign_anchors()
 
     def _scan_dir(self, folder):
         base = folder.fullpath
         o = sorted(os.scandir(base), key=lambda e: e.name)
         for entry in o:
-            if entry.name.startswith('.'):
-                continue
             fullpath = os.path.join(base, entry.name)
+            path = fullpath[len(self.path):]
             if entry.is_dir():
-                item = folder.child(True, entry.name, fullpath[len(self.path):], fullpath)
+                if not self.filter.enters(path.lstrip('/')):
+                    continue
+                item = folder.child(True, entry.name, path, fullpath)
                 self._scan_dir(item)
                 if item.is_empty():
                     del folder.children[item.name]
+            elif not self.filter.takes(path.lstrip('/')):
+                continue
             elif entry.name.endswith('.md'):
-                name = Path(entry.name).stem
-                folder.child(False, name, fullpath[len(self.path):-3], fullpath)
+                if entry.is_symlink() and self.inside(os.path.realpath(fullpath)):
+                    self.symlinks.append((path[:-3], os.path.realpath(fullpath)))
+                    continue
+                folder.child(False, Path(entry.name).stem, path[:-3], fullpath)
             else:
                 self.attachments.setdefault(entry.name.lower(), []).append(fullpath)
+        index = folder.shadowed_index()
+        if index:
+            self.warnings.append(f'{index.path.lstrip("/")}.md: {self.shadowed_message(folder)}')
+
+    @staticmethod
+    def shadowed_message(folder):
+        return f'both index.md and {folder.page.name}.md in folder, {folder.page.name}.md is folder page'
+
+    def inside(self, path):
+        return path.startswith(os.path.join(os.path.realpath(self.path), ''))
+
+    def _alias_symlinks(self):
+        """Symlinks to vault pages are skipped, links to them resolve to those pages."""
+        pages = {os.path.realpath(file): node for file, node in self.pages().items()}
+        for path, real in self.symlinks:
+            if real in pages:
+                self._add_target(path, pages[real])
+
+    def pages(self):
+        """Pages by file path, folder pages give folders."""
+        res = {}
+        def collect(folder):
+            if folder.page:
+                res[folder.page.fullpath] = folder
+            for child in folder.children.values():
+                if child.is_folder:
+                    collect(child)
+                else:
+                    res[child.fullpath] = child
+        collect(self.root)
+        return res
 
     def _index(self, folder):
         """Registers link targets: pages, folders and folder pages, the latter resolve to the folder."""
@@ -191,12 +338,23 @@ class Scanner:
         ]
         return min(candidates, key=lambda c: c[:3])[3] if candidates else None
 
+    def resolve_path(self, path, source=''):
+        """Finds link target by path relative to the source page, as markdown links give it."""
+        path = posixpath.normpath(posixpath.join(posixpath.dirname(source).lstrip('/'), path)).lower()
+        if path.startswith('..'):
+            return None
+        if path.endswith('.md'):
+            path = path[:-3]
+        path = '/' + path
+        return next((node for p, node in self.targets.get(Path(path).name, []) if p == path), None)
+
 
 class Vaults:
     """Markdown files under given paths, each with the vault it links in, paths in one vault share it."""
 
-    def __init__(self, paths):
+    def __init__(self, paths, filter=None):
         self.paths = paths
+        self.filter = filter
         self.vaults = {}
 
     def files(self):
@@ -229,18 +387,9 @@ class Vaults:
     def vault(self, root):
         """Scanned vault and its pages by file path, folder pages give folders."""
         if root not in self.vaults:
-            scanner = Scanner(root, '')
+            scanner = Scanner(root, '', self.filter)
             scanner.scan()
-            pages = {}
-            def collect(folder):
-                if folder.page:
-                    pages[folder.page.fullpath] = folder
-                for child in folder.children.values():
-                    if child.is_folder:
-                        collect(child)
-                    else:
-                        pages[child.fullpath] = child
-            collect(scanner.root)
+            pages = scanner.pages()
             self.vaults[root] = scanner, pages
         return self.vaults[root]
 

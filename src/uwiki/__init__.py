@@ -2,13 +2,13 @@
 
 from .check import Checker
 from .stats import Stats
-from .vault import Folder, Page, Scanner, Vaults
+from .vault import Filter, Folder, Page, Scanner, Vaults
 from .wrap import rewrap, wrap_files
 
-def check(paths):
+def check(paths, include=(), exclude=()):
     """Problems of given folders or files as `path:line: message` lines."""
-    return Checker(paths).check()
+    return Checker(paths, include, exclude).check()
 
-def stats(paths, by='folder', top=5):
+def stats(paths, by='folder', top=5, include=(), exclude=()):
     """Statistics of given folders or files as data, see `uwiki stats --json`."""
-    return Stats(paths, by).collect().data(top)
+    return Stats(paths, by, include, exclude).collect().data(top)

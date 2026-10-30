@@ -4,18 +4,20 @@ import html
 import os
 import re
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
-from .vault import cebabize, titleize
+from .vault import FRONT_MATTER, TITLE, cebabize, read_text, titleize
 
 class Converter:
     FENCE = re.compile(r'^\s*(```|~~~)')
     HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$')
     CODE = re.compile(r'(`+).*?\1')
+    TITLE = TITLE
     CALLOUT = re.compile(r'^>\s*\[!([\w-]+)\]([+-]?)[ \t]*(.*?)\s*$')
+    MD_LINK = re.compile(r'(`+).*?\1|(?<!!)\[([^\]]*)\]\(([^)\s]+)\)')
     EMBED_LINE = re.compile(r'^\s*!\[\[([^\]]+)\]\]\s*$')
     IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.avif'}
-    FRONT_MATTER = re.compile(r'\A---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)', re.DOTALL | re.MULTILINE)
+    FRONT_MATTER = FRONT_MATTER
 
     def __init__(self, page, scanner, outdir='.', stack=(), source=None):
         self.page = page
@@ -28,13 +30,26 @@ class Converter:
         self.heading_ids = set()
         self.line = 0
         self._title = ''
+        self.shift = 0
 
     def read(self):
-        if self.page.is_folder:
-            if self.page.page is None:
-                return ''
-            return self.read_file(self.page.page)
-        return self.read_file(self.page)
+        node = self.page.page if self.page.is_folder else self.page
+        if node is None:
+            return ''
+        text, start = self.read_text(node)
+        m = self.title_heading(text, self.page)
+        if m:
+            text = m[1] + '\n' + text[m.end():]
+            level = len(m[2])
+            if all(not h or len(h[1]) > level for _, h in self.headings(text)):
+                self.shift = level
+        return self.process(text, start)
+
+    @classmethod
+    def title_heading(cls, text, page):
+        """Leading heading that is or repeats page title, page header replaces it."""
+        m = cls.TITLE.match(text)
+        return m if m and cebabize(m[3]) == cebabize(page.title) else None
 
     def read_file(self, page, heading=''):
         text, start = self.read_text(page)
@@ -42,18 +57,9 @@ class Converter:
             text = self.section(text, heading)
         return self.process(text, start)
 
-    @classmethod
-    def read_text(cls, page):
-        """Returns page text without front matter and number of its first line."""
-        try:
-            with open(page.fullpath, 'r', encoding='utf-8') as f:
-                text = f.read()
-        except UnicodeDecodeError as e:
-            raise ValueError(f'Error reading {page.fullpath}') from e
-        m = cls.FRONT_MATTER.match(text)
-        if not m:
-            return text, 1
-        return text[m.end():], m[0].count('\n') + 1
+    @staticmethod
+    def read_text(page):
+        return read_text(page.fullpath)
 
     @classmethod
     def headings(cls, text):
@@ -112,7 +118,7 @@ class Converter:
 
     def callout(self, kind, fold, title, body, start=1):
         kind = kind.lower()
-        title = self.outside_code(title, self.process_links) if title else html.escape(kind.title())
+        title = self.links(title) if title else html.escape(kind.title())
         body = self.process(body, start).strip()
         tag, title_tag = ('details', 'summary') if fold else ('div', 'div')
         open = ' open' if fold == '+' else ''
@@ -129,11 +135,11 @@ class Converter:
         m = self.EMBED_LINE.match(line)
         if m and not self.attachment(m[1]):
             return self.embed_note(m[1])
-        return self.outside_code(line, self.process_links)
+        return self.links(line)
 
     def heading(self, level, text):
-        level = min(level + self.page.depth + 1, 6)
-        text = self.outside_code(text, self.process_links)
+        level = min(level - self.shift + self.page.depth + 1, 6)
+        text = self.links(text)
         if self.embedded:
             return f"{'#' * level} {text}\n"
         id = self.heading_id(text)
@@ -154,6 +160,52 @@ class Converter:
     @staticmethod
     def heading_anchor(page, heading):
         return f'{page.anchor}--{cebabize(heading)}'
+
+    def links(self, text):
+        return self.outside_code(self.MD_LINK.sub(self.markdown_link, text), self.process_links)
+
+    def markdown_link(self, match):
+        if match[1] or not self.is_local(match[3]):
+            return match[0]
+        target, heading = self.resolve_href(match[3])
+        if target is None:
+            return match[0]
+        anchor = self.anchor(target, heading) if heading else target.anchor
+        return f'[{match[2]}](#{anchor})'
+
+    def anchor(self, target, heading):
+        """Heading anchor in target, page anchor for the title heading it drops."""
+        node = target.page if target.is_folder else target
+        m = node and self.title_heading(self.read_text(node)[0], target)
+        if m and cebabize(m[3]) == cebabize(heading):
+            return target.anchor
+        return self.heading_anchor(target, heading)
+
+    @staticmethod
+    def is_local(href):
+        path = href.partition('#')[0]
+        return ':' not in path and (path == '' or path.lower().endswith('.md'))
+
+    def resolve_href(self, href):
+        """Finds target of relative markdown link and heading its fragment slug names, if any."""
+        path, _, fragment = unquote(href).partition('#')
+        target = self.scanner.resolve_path(path, self.source.path) if path else self.page
+        if target is None or not fragment:
+            return target, ''
+        node = (target.page if target.is_folder else target) if path else self.source
+        return target, node and self.find_heading(node, fragment)
+
+    @classmethod
+    def find_heading(cls, page, slug):
+        for _, m in cls.headings(cls.read_text(page)[0]):
+            if m and slug.lower() in (cls.slug(m[2]), cebabize(m[2])):
+                return m[2]
+        return None
+
+    @staticmethod
+    def slug(heading):
+        """Heading anchor as GitHub and GitLab make it."""
+        return re.sub(r'[^\w\- ]', '', heading.lower()).replace(' ', '-')
 
     def outside_code(self, line, func):
         res = ''
@@ -223,7 +275,7 @@ class Converter:
             target = self.page
             title = ''
         if heading and not heading.startswith('^'):
-            anchor = self.heading_anchor(target, heading) if target else cebabize(heading)
+            anchor = self.anchor(target, heading) if target else cebabize(heading)
             title = f'{title} > {heading}' if title else heading
         else:
             anchor = target.anchor if target else cebabize(Path(name).name)
@@ -240,17 +292,17 @@ class Converter:
     def title(self):
         if self._title:
             return self._title
-        title = self.page.title
-        if self.page.folder:
-            pretitle = self.page.folder.title
-            if pretitle != '' and self.page.folder.folder is not None:
-                title = f'{pretitle} / {title}'
-        self._title = title
-        return title
+        titles = [self.page.title]
+        folder = self.page.folder
+        while folder and folder.folder:
+            titles.insert(0, folder.title)
+            folder = folder.folder
+        self._title = ' / '.join(titles)
+        return self._title
 
     def html_header(self):
         tag = f'h{min(self.page.depth + 1, 6)}'
-        return f'<{tag} id="{self.page.anchor}" class="page">{html.escape(self.title)}</{tag}>\n\n'
+        return f'<{tag} id="{self.page.anchor}" class="page" data-title="{html.escape(self.page.title)}">{html.escape(self.title)}</{tag}>\n\n'
 
     def html(self):
         self.mode = 'html'

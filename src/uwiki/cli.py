@@ -9,7 +9,7 @@ from pathlib import Path
 from .build import MDRenderer, Renderer
 from .check import Checker
 from .stats import Stats
-from .vault import Scanner
+from .vault import Filter, Scanner
 from .wrap import WIDTH, wrap_files
 
 def build(args, parser):
@@ -21,8 +21,10 @@ def build(args, parser):
     os.makedirs(args.output, exist_ok=True)
     output = os.path.join(args.output, title)
 
-    scanner = Scanner(path, title)
+    scanner = Scanner(path, title, Filter(args.include, args.exclude))
     scanner.scan()
+    for warning in scanner.warnings:
+        print(f'warning: {os.path.join(args.folder, warning)}', file=sys.stderr)
     if args.html or both:
         Renderer(scanner, args.output).write(f'{output}.html', title)
     if args.md or both:
@@ -34,14 +36,20 @@ def report(problems):
     return 1 if problems else 0
 
 def check(args, parser):
-    return report(Checker(args.paths).check())
+    return report(Checker(args.paths, args.include, args.exclude).check())
 
 def stats(args, parser):
-    res = Stats(args.paths, args.by).collect()
+    res = Stats(args.paths, args.by, args.include, args.exclude).collect()
     print(json.dumps(res.data(args.top), indent=2, ensure_ascii=False) if args.json else res.report(args.top))
 
 def wrap(args, parser):
     return report(wrap_files(args.files, args.width, args.check))
+
+def add_filter(p):
+    p.add_argument('--exclude', action='append', default=[], metavar='GLOB',
+                   help='skip matching files and folders, besides hidden, node_modules and vendor; repeatable')
+    p.add_argument('--include', action='append', default=[], metavar='GLOB',
+                   help='take matching ones even if skipped or excluded; repeatable')
 
 def main():
     parser = argparse.ArgumentParser(prog='uwiki', description='Markdown utility for Obsidian vaults and other wikis.')
@@ -53,11 +61,13 @@ def main():
     p.add_argument('--html', action='store_true', help='write HTML only (default: both HTML and markdown)')
     p.add_argument('--md', action='store_true', help='write single markdown file only')
     p.add_argument('-o', '--output', default='.', help='output directory, default: current')
+    add_filter(p)
     p.set_defaults(func=build)
 
     p = commands.add_parser('check', help='check unresolved wiki links and headings, missing images, '
                                           'frontmatter syntax and list numbering')
     p.add_argument('paths', nargs='+', metavar='path', help='folders or files to check')
+    add_filter(p)
     p.set_defaults(func=check)
 
     p = commands.add_parser('stats', help='count pages, words, headings, list items and links')
@@ -65,6 +75,7 @@ def main():
     p.add_argument('--by', default='folder', metavar='KEY', help='group by folder (default) or frontmatter key')
     p.add_argument('--top', type=int, default=5, help='list N largest pages, default: 5')
     p.add_argument('--json', action='store_true', help='print JSON with every page')
+    add_filter(p)
     p.set_defaults(func=stats)
 
     p = commands.add_parser('wrap', help='rewrap long lines of paragraphs and list items in place')

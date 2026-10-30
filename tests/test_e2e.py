@@ -18,6 +18,8 @@ SRC = os.path.join(ROOT, 'src')
 FIXTURES = os.path.join(ROOT, 'tests', 'fixtures')
 VAULT = os.path.join(FIXTURES, 'vault')
 BROKEN = os.path.join(FIXTURES, 'broken')
+MDLINKS = os.path.join(FIXTURES, 'mdlinks')
+PROJECT = os.path.join(FIXTURES, 'project')
 
 HAS_MARKDOWN = importlib.util.find_spec('markdown') is not None
 
@@ -86,7 +88,7 @@ class RenderTest(unittest.TestCase):
 
     def test_headings_are_shifted_below_page_header(self):
         page = section(self.content, 'my-page')
-        self.assertIn('<h2 id="my-page" class="page">', self.content)
+        self.assertIn('<h2 id="my-page" class="page" data-title="My Page">', self.content)
         self.assertIn('<h3 id="my-page--second-section">Second Section</h3>', page)
         self.assertIn('<h4 id="my-page--deeper">Deeper</h4>', page)
 
@@ -109,14 +111,14 @@ class RenderTest(unittest.TestCase):
         self.assertIn('<a href="#root--intro">Intro</a>', root)
 
     def test_duplicate_names_get_path_anchors(self):
-        self.assertIn('id="archive-readme" class="page"', self.content)
-        self.assertIn('id="projects-alpha-readme" class="page"', self.content)
+        self.assertIn('id="archive-notes" class="page"', self.content)
+        self.assertIn('id="projects-alpha-notes" class="page"', self.content)
         root = section(self.content, 'root')
-        self.assertIn('<a href="#archive-readme">Readme</a>', root)
-        self.assertIn('<a href="#projects-alpha-readme">alpha readme</a>', root)
+        self.assertIn('<a href="#archive-notes">Notes</a>', root)
+        self.assertIn('<a href="#projects-alpha-notes">alpha readme</a>', root)
 
     def test_ambiguous_link_resolves_to_nearest(self):
-        self.assertIn('<a href="#projects-alpha-readme">Readme</a>', section(self.content, 'projects'))
+        self.assertIn('<a href="#projects-alpha-notes">Notes</a>', section(self.content, 'projects'))
 
     def test_folder_page_and_root_named_page(self):
         self.assertIn('Projects folder page', section(self.content, 'projects'))
@@ -170,6 +172,89 @@ class RenderTest(unittest.TestCase):
     def src(self, name):
         """Attachment path relative to output dir."""
         return quote(os.path.relpath(os.path.join(VAULT, 'attachments', name), self.out).replace(os.sep, '/'))
+
+
+@unittest.skipUnless(HAS_MARKDOWN, 'markdown package is not installed')
+class MarkdownLinksTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', MDLINKS, '--html', '-o', out)
+            assert res.returncode == 0, res.stderr
+            cls.html = read(os.path.join(out, 'mdlinks.html'))
+            res = run('build', VAULT, '--html', '-o', out)
+            assert res.returncode == 0, res.stderr
+            cls.vault = read(os.path.join(out, 'vault.html'))
+
+    def test_relative_links_become_anchors(self):
+        root = section(self.html, 'root')
+        self.assertIn('<a href="#guide">the guide</a>', root)
+        self.assertIn('<a href="#guide--first-steps-hi-api">first steps</a>', root)
+        self.assertIn('<a href="#docs">docs</a>', root)
+        self.assertIn('<a href="#root--intro">intro</a>', root)
+        self.assertIn('<a href="#guide"><code>code text</code></a>', root)
+        self.assertIn('<a href="#root--intro">home</a>', section(self.html, 'guide'))
+
+    def test_title_heading_is_replaced_by_page_header(self):
+        setup = section(self.html, 'setup')
+        self.assertNotIn('<h3', setup)
+        self.assertIn('<h4 id="setup--setup-steps">Setup steps</h4>', setup)
+        root = section(self.html, 'root')
+        self.assertIn('<a href="#setup">setup title</a>', root)
+        self.assertIn('<a href="#setup">Setup &gt; Setup</a>', root)
+
+    def test_title_is_leading_heading_else_name(self):
+        self.assertIn('<h2 id="docs" class="page" data-title="Documentation">Documentation</h2>', self.html)
+        self.assertIn('class="page" data-title="Guide">Documentation / Guide</h3>', self.html)
+        self.assertIn('<h4 id="guide--first-steps-hi-api">First steps: HiAPI</h4>', self.html)
+        self.assertIn('data-title="Broken">Documentation / Broken</h3>', self.html)
+        self.assertIn('data-title="Use plain links">Documentation / Use plain links</h3>', self.html)
+        self.assertIn('<h4 id="decision--context">Context</h4>', self.html)
+        self.assertIn('<a href="#docs">Documentation</a>', section(self.html, 'docs'))
+
+    def test_breadcrumbs_show_every_folder(self):
+        self.assertIn('data-title="Notes">Projects / Alpha / Notes</h4>', self.vault)
+
+    def test_external_code_and_unresolved_links_are_kept(self):
+        self.assertIn('<a href="https://example.com/a.md">site</a>', self.html)
+        self.assertIn('<code>[x](docs/Guide.md)</code>', self.html)
+        self.assertIn('<a href="../../Outside.md">out</a>', self.html)
+        self.assertIn('<a href="#guide">bad heading</a>', self.html)
+
+
+@unittest.skipUnless(HAS_MARKDOWN, 'markdown package is not installed')
+class ProjectTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', PROJECT, '--html', '-o', out)
+            assert res.returncode == 0, res.stderr
+            cls.html, cls.stderr = read(os.path.join(out, 'project.html')), res.stderr
+            res = run('build', PROJECT, '--html', '-o', out, '--include', 'vendor/**', '--exclude', 'drafts')
+            assert res.returncode == 0, res.stderr
+            cls.filtered = read(os.path.join(out, 'project.html'))
+
+    def test_readme_is_folder_page_before_index(self):
+        self.assertIn('id="root" class="page" data-title="Project">', self.html)
+        self.assertIn('id="docs" class="page" data-title="Docs readme">', self.html)
+        self.assertIn('data-title="Docs index">Docs readme / Docs index</h3>', self.html)
+        self.assertEqual(self.stderr, f'warning: {PROJECT}/docs/index.md: '
+                                      'both index.md and README.md in folder, README.md is folder page\n')
+
+    def test_symlink_to_page_is_alias(self):
+        self.assertNotIn('id="claude"', self.html)
+        self.assertEqual(self.html.count('Agent rules.'), 1)
+        root = section(self.html, 'root')
+        self.assertEqual(root.count('<a href="#agents">Agents</a>'), 2)
+        self.assertIn('<a href="#agents">claude</a>', root)
+
+    def test_skip_list_include_and_exclude(self):
+        self.assertNotIn('Package', self.html)
+        self.assertNotIn('Vendored', self.html)
+        self.assertIn('data-title="Draft"', self.html)
+        self.assertIn('data-title="Vendored"', self.filtered)
+        self.assertNotIn('Package', self.filtered)
+        self.assertNotIn('data-title="Draft"', self.filtered)
 
 
 @unittest.skipUnless(HAS_MARKDOWN, 'markdown package is not installed')
@@ -247,6 +332,24 @@ class CheckTest(unittest.TestCase):
         ], err)
         self.assertEqual(code, 1)
 
+    def test_markdown_links(self):
+        code, lines, err = self.check('mdlinks')
+        self.assertEqual(lines, [
+            'mdlinks/docs/Broken.md:1: unresolved link: ../../Outside.md',
+            'mdlinks/docs/Broken.md:1: unresolved link: Nope.md',
+            'mdlinks/docs/Broken.md:1: missing heading: Guide.md#nope',
+        ], err)
+        self.assertEqual(code, 1)
+
+    def test_index_next_to_readme(self):
+        code, lines, err = self.check('project')
+        self.assertEqual(lines, [
+            'project/docs/index.md:1: both index.md and README.md in folder, README.md is folder page',
+        ], err)
+        self.assertEqual(code, 1)
+        code, lines, err = self.check('project', '--exclude', 'docs/index.md')
+        self.assertEqual((code, lines), (0, []), err)
+
     def test_paths_share_vault(self):
         code, lines, err = self.check('shared/docs', 'shared/ideas', 'shared/Review.md')
         self.assertEqual((code, lines), (0, []), err)
@@ -273,7 +376,7 @@ class StatsTest(unittest.TestCase):
         pages = {p['path']: p for p in data['pages']}
         page = pages['vault/MyPage.md']
         self.assertEqual((page['headings'], page['items'], page['links']), (2, 1, 2))
-        self.assertEqual(page['meta'], {'tags': '[a, b]', 'title': 'ignored'})
+        self.assertEqual(page['meta'], {'tags': '[a, b]', 'summary': 'ignored'})
         notes = pages['vault/my notes.md']
         self.assertEqual((notes['links'], notes['images']), (4, 2))
         self.assertEqual(data['total']['pages'], 9)
