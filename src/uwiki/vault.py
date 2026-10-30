@@ -6,7 +6,6 @@ import re
 from pathlib import Path
 
 FRONT_MATTER = re.compile(r'\A---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)', re.DOTALL | re.MULTILINE)
-FRONT_MATTER_TITLE = re.compile(r'^title:[ \t]*(.*?)[ \t]*$', re.MULTILINE)
 TITLE = re.compile(r'\A(\s*)(#{1,6})[ \t]+(.*?)[ \t]*(?:\r?\n|\Z)')
 
 def read_text(path):
@@ -23,17 +22,45 @@ def read_text(path):
 
 def read_title(path):
     """Front matter title, else heading the file starts with, if any."""
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            text = f.read()
-    except (OSError, TypeError, UnicodeDecodeError):
-        return None
+    text = read_file(path)
     m = FRONT_MATTER.match(text)
-    title = m and FRONT_MATTER_TITLE.search(m[0])
-    if title and title[1].strip('\'"'):
-        return title[1].strip('\'"')
+    title = front_matter_value(m[0] if m else '', 'title')
+    if title:
+        return title
     heading = TITLE.match(text[m.end():] if m else text)
     return heading[3] if heading else None
+
+def read_description(path):
+    m = FRONT_MATTER.match(read_file(path))
+    return front_matter_value(m[0], 'description') if m else None
+
+def read_file(path):
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except (OSError, TypeError, UnicodeDecodeError):
+        return ''
+
+def front_matter_value(front, key):
+    """Top level scalar of front matter: plain, quoted, folded or literal, lines joined; None if missing."""
+    lines = front.splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(rf'{re.escape(key)}:(?:[ \t]+(.*?))?[ \t]*$', line)
+        if not m:
+            continue
+        value = m[1] or ''
+        more = []
+        for line in lines[i + 1:]:
+            if line.strip() and not line[0].isspace():
+                break
+            more.append(line.strip())
+        if value[:1] in ('>', '|'):
+            return ('\n' if value[0] == '|' else ' ').join(more).strip() or None
+        value = ' '.join([value, *filter(None, more)])
+        if value[:1] in ('"', "'") and value[-1:] == value[0] and len(value) > 1:
+            return value[1:-1].replace("''", "'") if value[0] == "'" else value[1:-1]
+        return re.sub(r'\s+#.*$', '', value).strip() or None
+    return None
 
 def titleize(name):
     words = camel_split(name, r'[\s_-]+')
@@ -220,6 +247,12 @@ class Scanner:
         for entry in o:
             fullpath = os.path.join(base, entry.name)
             path = fullpath[len(self.path):]
+            if entry.is_symlink() and self.inside(os.path.realpath(fullpath)) and (
+                    entry.is_dir() or entry.name.endswith('.md')):
+                if self.filter.takes(path.lstrip('/')):
+                    self.symlinks.append((os.path.splitext(path)[0] if entry.is_file() else path,
+                                          os.path.realpath(fullpath)))
+                continue
             if entry.is_dir():
                 if not self.filter.enters(path.lstrip('/')):
                     continue
@@ -230,9 +263,6 @@ class Scanner:
             elif not self.filter.takes(path.lstrip('/')):
                 continue
             elif entry.name.endswith('.md'):
-                if entry.is_symlink() and self.inside(os.path.realpath(fullpath)):
-                    self.symlinks.append((path[:-3], os.path.realpath(fullpath)))
-                    continue
                 folder.child(False, Path(entry.name).stem, path[:-3], fullpath)
             else:
                 self.attachments.setdefault(entry.name.lower(), []).append(fullpath)
@@ -248,11 +278,18 @@ class Scanner:
         return path.startswith(os.path.join(os.path.realpath(self.path), ''))
 
     def _alias_symlinks(self):
-        """Symlinks to vault pages are skipped, links to them resolve to those pages."""
+        """Symlinks to vault pages and folders are skipped, links through them resolve to what they point at."""
         pages = {os.path.realpath(file): node for file, node in self.pages().items()}
+        targets = [entry for entries in self.targets.values() for entry in entries]
+        root = os.path.realpath(self.path)
         for path, real in self.symlinks:
             if real in pages:
                 self._add_target(path, pages[real])
+            elif os.path.isdir(real):
+                prefix = '/' + os.path.relpath(real, root).replace(os.sep, '/').lower()
+                for target, node in targets:
+                    if target == prefix or target.startswith(prefix + '/'):
+                        self._add_target(path + target[len(prefix):], node)
 
     def pages(self):
         """Pages by file path, folder pages give folders."""

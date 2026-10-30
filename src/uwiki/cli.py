@@ -8,7 +8,8 @@ from pathlib import Path
 
 from . import __version__
 from .build import MDRenderer, Renderer
-from .check import Checker
+from .check import Checker, CheckOptions
+from .llms import Llms
 from .stats import Stats
 from .vault import Filter, Scanner
 from .wrap import WIDTH, wrap_files
@@ -37,7 +38,30 @@ def report(problems):
     return 1 if problems else 0
 
 def check(args, parser):
-    return report(Checker(args.paths, args.include, args.exclude).check())
+    options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked)
+    checker = Checker(args.paths, args.include, args.exclude, options)
+    code = report(checker.check())
+    for warning in checker.warnings:
+        print(warning)
+    return code
+
+def llms(args, parser):
+    path = os.path.abspath(args.folder)
+    if not os.path.isdir(path):
+        parser.error(f'not a directory: {args.folder}')
+    output = args.output or os.path.join(args.folder, 'llms.txt')
+    scanner = Scanner(path, args.title or Path(path).name, Filter(args.include, args.exclude))
+    scanner.scan()
+    text = Llms(scanner, output, args.title or Path(path).name, args.summary).text()
+    if args.check:
+        try:
+            with open(output, encoding='utf-8') as f:
+                current = f.read()
+        except FileNotFoundError:
+            current = None
+        return report([] if current == text else [f'{output}: out of date, rerun without --check'])
+    with open(output, 'w', encoding='utf-8') as f:
+        f.write(text)
 
 def stats(args, parser):
     res = Stats(args.paths, args.by, args.include, args.exclude).collect()
@@ -66,11 +90,25 @@ def main():
     add_filter(p)
     p.set_defaults(func=build)
 
-    p = commands.add_parser('check', help='check unresolved wiki links and headings, missing images, '
+    p = commands.add_parser('check', help='check unresolved links and headings, missing images, '
                                           'frontmatter syntax and list numbering')
     p.add_argument('paths', nargs='+', metavar='path', help='folders or files to check')
+    p.add_argument('--no-folder-links', action='store_true', help='report links to folders, not files')
+    p.add_argument('--orphans', action='store_true',
+                   help='report pages no links lead to from the root folder page')
+    p.add_argument('--unlinked', action='store_true',
+                   help='warn about pages no other page links to, exit code stays as is')
     add_filter(p)
     p.set_defaults(func=check)
+
+    p = commands.add_parser('llms', help='write llms.txt: every page with its description, one section per folder')
+    p.add_argument('folder', help='folder with markdown files')
+    p.add_argument('title', nargs='?', help='default: folder name')
+    p.add_argument('-o', '--output', help='default: llms.txt in the folder, links are relative to it')
+    p.add_argument('--summary', help='quote under the title, default: description of root folder page')
+    p.add_argument('--check', action='store_true', help='report if output is out of date instead, exit 1 if so')
+    add_filter(p)
+    p.set_defaults(func=llms)
 
     p = commands.add_parser('stats', help='count pages, words, headings, list items and links')
     p.add_argument('paths', nargs='+', metavar='path', help='folders or files to count')

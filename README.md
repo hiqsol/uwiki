@@ -3,7 +3,7 @@
 [![test](https://github.com/hiqsol/uwiki/actions/workflows/test.yml/badge.svg)](https://github.com/hiqsol/uwiki/actions/workflows/test.yml)
 
 Markdown utility for wikis: builds folder of markdown files into single HTML or markdown file,
-checks it, counts statistics and rewraps long lines.
+checks it, lists its pages for LLMs, counts statistics and rewraps long lines.
 Links resolve the same way in every command. I use it for Obsidian vaults.
 
 ## Installation
@@ -24,7 +24,8 @@ uv tool install git+https://github.com/hiqsol/uwiki
 
 ```
 uwiki build <folder> [title] [--html] [--md] [-o <output-dir>] [--exclude GLOB] [--include GLOB]
-uwiki check <folder|file>... [--exclude GLOB] [--include GLOB]
+uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--exclude GLOB] [--include GLOB]
+uwiki llms <folder> [title] [-o <file>] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
 uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
 uwiki wrap [-w 70] [--check] <file>...
 ```
@@ -34,15 +35,27 @@ uwiki wrap [-w 70] [--check] <file>...
 Page title is front matter `title`, else the heading page starts with, else file name.
 Page header shows it after titles of all its folders, a leading heading repeating it is dropped.
 
-`build`, `check` and `stats` skip hidden files and folders, `node_modules` and `vendor`.
+`build`, `check`, `llms` and `stats` skip hidden files and folders, `node_modules` and `vendor`.
 `--exclude` skips more, `--include` takes back skipped or excluded ones, both repeatable.
 Glob with `/` matches path from vault root, without it any path segment, like in `.gitignore`,
 `**` matches across folders, a matching folder matches everything in it:
 `--exclude 'docs/**' --include 'docs/adr/**'`.
-Symlinked page pointing into the vault is skipped, links to it lead to its target.
+Symlinked page or folder pointing into the vault is skipped, links through it lead to its target.
 
 `check` reports unresolved wiki and markdown links and headings, missing images,
 frontmatter syntax and list numbering as `path:line: message`, exits 1 if any.
+Every relative markdown link, inline or reference, must name an existing file or folder
+inside the vault, spelled as on disk, absolute links are reported.
+`--no-folder-links` reports links to folders, `--orphans` reports pages
+no chain of links leads to from the root folder page (any link, without one),
+`--unlinked` warns about pages no other page links to, without changing exit code.
+Links count from every page of the vault, checked or not.
+
+`llms` writes [llms.txt](https://llmstxt.org): title, `--summary` as quote
+(default: root folder page front matter `description`), then a section per folder
+listing its pages as `- [title](path): description`, links relative to the output file.
+Folder page goes first, then pages in the order it links them, then the rest by name.
+`--check` exits 1 if the file is out of date instead of writing it.
 
 `stats` counts pages, words, lines, headings, list items, wiki and external links and images
 outside code, grouped by folder or frontmatter key, e.g. `--by status`.
@@ -74,7 +87,9 @@ Supported Obsidian syntax:
 - YAML front matter is stripped
 
 Markdown links `[text](../folder/Page.md#heading)` resolve by path relative to the page,
-heading by its GitHub/GitLab anchor, so the vault can be plain markdown docs as well.
+heading by its GitHub/GitLab anchor (repeated heading gets `-1`, `-2`...),
+so the vault can be plain markdown docs as well.
+Link text may wrap across lines, reference links `[text][ref]` resolve via their `[ref]: path.md`.
 
 Folder page is `README.md` (any case), `index.md` or file named as folder, e.g. `Projects/Project.md`.
 `README.md` wins over `index.md`, `build` warns and `check` reports when both are present.
@@ -96,6 +111,7 @@ Project specific checks can build on uwiki, e.g. a script run by `uv run --scrip
 import uwiki
 
 problems = uwiki.check(['docs'])         # same lines as `uwiki check docs`
+problems = uwiki.check(['docs'], options=uwiki.CheckOptions(orphans=True))
 data = uwiki.stats(['docs'], by='status')  # same data as `uwiki stats --json`
 ```
 

@@ -21,6 +21,7 @@ VAULT = os.path.join(FIXTURES, 'vault')
 BROKEN = os.path.join(FIXTURES, 'broken')
 MDLINKS = os.path.join(FIXTURES, 'mdlinks')
 PROJECT = os.path.join(FIXTURES, 'project')
+LINKCHECK = os.path.join(FIXTURES, 'linkcheck')
 
 
 def run(*args, cwd=None):
@@ -244,6 +245,11 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual(root.count('<a href="#agents">Agents</a>'), 2)
         self.assertIn('<a href="#agents">claude</a>', root)
 
+    def test_symlink_to_folder_is_alias(self):
+        self.assertNotIn('id="notes"', self.html)
+        self.assertEqual(self.html.count('data-title="Draft"'), 1)
+        self.assertIn('<a href="#drafts">through symlink</a>', self.html)
+
     def test_skip_list_include_and_exclude(self):
         self.assertNotIn('Package', self.html)
         self.assertNotIn('Vendored', self.html)
@@ -335,7 +341,7 @@ class CheckTest(unittest.TestCase):
     def test_markdown_links(self):
         code, lines, err = self.check('mdlinks')
         self.assertEqual(lines, [
-            'mdlinks/docs/Broken.md:1: unresolved link: ../../Outside.md',
+            'mdlinks/docs/Broken.md:1: link leaves vault: ../../Outside.md',
             'mdlinks/docs/Broken.md:1: unresolved link: Nope.md',
             'mdlinks/docs/Broken.md:1: missing heading: Guide.md#nope',
         ], err)
@@ -358,11 +364,83 @@ class CheckTest(unittest.TestCase):
         code, lines, err = self.check('shared')
         self.assertEqual((code, lines), (0, []), err)
 
+    def test_relative_links(self):
+        code, lines, err = self.check('linkcheck')
+        self.assertEqual(lines, [
+            'linkcheck/index.md:9: unresolved link: nope.txt',
+            'linkcheck/index.md:9: link differs from file name: A.md',
+            'linkcheck/index.md:10: absolute link: /a.md',
+            'linkcheck/index.md:10: missing heading: a.md#dup-2',
+            'linkcheck/index.md:13: unresolved link: sub/nope.md',
+            'linkcheck/index.md:15: unresolved link: gone.md',
+        ], err)
+        self.assertEqual(code, 1)
+
+    def test_folder_links_and_orphans(self):
+        code, lines, err = self.check('linkcheck', '--no-folder-links', '--orphans')
+        self.assertIn('linkcheck/index.md:9: folder link: sub/', lines)
+        self.assertEqual([line for line in lines if 'orphan' in line],
+                         ['linkcheck/orphan.md:1: orphan page: no page links here'])
+
+    def test_unlinked_pages_are_warnings(self):
+        code, lines, err = self.check('linkcheck/sub', 'linkcheck/orphan.md', '--unlinked')
+        self.assertEqual((code, lines), (0, ['linkcheck/orphan.md:1: warning: no page links here']), err)
+        code, lines, err = self.check('linkcheck/sub/c.md', '--orphans')
+        self.assertEqual(lines, [], err)
+
     def test_clean(self):
         code, lines, err = self.check('broken/Good.md', 'broken/Bad.md')
         self.assertNotIn('broken/Good.md', '\n'.join(lines))
         code, lines, err = self.check('vault/Archive')
         self.assertEqual((code, lines), (0, []), err)
+
+
+class LinkBuildTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', LINKCHECK, '--md', '-o', out)
+            assert res.returncode == 0, res.stderr
+            cls.md = read(os.path.join(out, 'linkcheck.md'))
+
+    def test_wrapped_reference_folder_and_titled_links(self):
+        self.assertIn('[wrapped\npage](#b) and [ref page][r] and [titled](#a).', self.md)
+        self.assertIn('[r]: #b--section\n[bad]: sub/nope.md\n', self.md)
+        self.assertIn('[folder](#sub) [file](notes.txt)', self.md)
+
+    def test_heading_anchors_as_hosts_make_them(self):
+        self.assertIn('[heading](#a) [repeated](#a--dup) [none](#a) [em](#a--em-u)', self.md)
+
+
+class LlmsTest(unittest.TestCase):
+    def test_pages_with_descriptions_by_folder(self):
+        with tempfile.TemporaryDirectory() as out:
+            output = os.path.join(out, 'llms.txt')
+            res = run('llms', LINKCHECK, 'Links', '-o', output)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            rel = os.path.relpath(LINKCHECK, out)
+            self.assertEqual(read(output), '\n'.join([
+                '# Links', '',
+                '> Every kind of relative link.', '',
+                '## Home', '',
+                f'- [Home]({rel}/index.md): Every kind of relative link.',
+                f'- [One -- Two]({rel}/a.md): Quoted: with colon',
+                f'- [Orphan]({rel}/orphan.md)', '',
+                '## sub/', '',
+                f'- [Sub]({rel}/sub/index.md)',
+                f'- [C]({rel}/sub/c.md)',
+                f'- [Bee]({rel}/sub/b.md): Folded over lines.', '',
+            ]))
+
+    def test_check(self):
+        with tempfile.TemporaryDirectory() as out:
+            output = os.path.join(out, 'llms.txt')
+            res = run('llms', LINKCHECK, '-o', output, '--check')
+            self.assertEqual((res.returncode, res.stdout), (1, f'{output}: out of date, rerun without --check\n'))
+            run('llms', LINKCHECK, '-o', output, '--summary', 'Line one.\nLine two.')
+            self.assertIn('# linkcheck\n\n> Line one.\n> Line two.\n\n## Home', read(output))
+            res = run('llms', LINKCHECK, '-o', output, '--summary', 'Line one.\nLine two.', '--check')
+            self.assertEqual((res.returncode, res.stdout), (0, ''))
 
 
 class StatsTest(unittest.TestCase):
