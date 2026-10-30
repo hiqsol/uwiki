@@ -362,18 +362,19 @@ class Scanner:
     def resolve(self, name, source=''):
         """Finds link target by name or path like Obsidian does.
 
-        Prefers targets near the source page, then shortest path.
+        Prefers pages to folders without folder page, as Obsidian links no folders,
+        then targets near the source page, then shortest path.
         """
         near = str(Path(source).parent).lower().rstrip('/') + '/'
         name = name.strip().strip('/').lower()
         if name.endswith('.md'):
             name = name[:-3]
         candidates = [
-            (not path.startswith(near), path.count('/'), path, node)
+            (node.is_folder and not node.page, not path.startswith(near), path.count('/'), path, node)
             for path, node in self.targets.get(Path(name).name, [])
             if path.endswith('/' + name)
         ]
-        return min(candidates, key=lambda c: c[:3])[3] if candidates else None
+        return min(candidates, key=lambda c: c[:4])[4] if candidates else None
 
     def resolve_path(self, path, source=''):
         """Finds link target by path relative to the source page, as markdown links give it."""

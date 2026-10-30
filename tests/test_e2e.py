@@ -377,6 +377,10 @@ class CheckTest(unittest.TestCase):
         ], err)
         self.assertEqual(code, 1)
 
+    def test_page_wins_over_folder_without_page(self):
+        code, lines, err = self.check('folderclash', '--orphans')
+        self.assertEqual((code, lines), (0, []), err)
+
     def test_folder_links_and_orphans(self):
         code, lines, err = self.check('linkcheck', '--no-folder-links', '--orphans')
         self.assertIn('linkcheck/index.md:9: folder link: sub/', lines)

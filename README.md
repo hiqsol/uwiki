@@ -98,6 +98,9 @@ Supported Obsidian syntax:
 - callouts `> [!note] Title`, foldable `> [!note]-`
 - YAML front matter is stripped
 
+Wiki link name resolves to a page before a folder without folder page,
+then to one nearer the linking page, then to the shortest path.
+
 Markdown links `[text](../folder/Page.md#heading)` resolve by path relative to the page,
 heading by its GitHub/GitLab anchor (repeated heading gets `-1`, `-2`...),
 so the vault can be plain markdown docs as well.
