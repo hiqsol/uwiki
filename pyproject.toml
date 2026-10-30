@@ -1,7 +1,7 @@
 [project]
 name = "uwiki"
 dynamic = ["version"]
-description = "Builds, checks, counts and wraps markdown wikis, e.g. Obsidian vaults"
+description = "Micro wiki - tools for markdown wikis"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
