@@ -3,6 +3,7 @@
 import os
 import re
 from pathlib import Path
+from urllib.parse import unquote
 
 from .convert import Converter
 from .vault import Filter, Vaults
@@ -49,6 +50,8 @@ class Stats:
                 self.wikilink(scanner, source, embed, target, res)
             for embed, url in self.MDLINK.findall(line):
                 res['images' if embed else 'external' if '://' in url else 'links'] += 1
+                if not embed and Converter.is_local(url):
+                    self.mdlink(scanner, source, url)
         return res
 
     def wikilink(self, scanner, source, embed, text, res):
@@ -59,7 +62,13 @@ class Stats:
             res['images' if embed and image else 'links'] += 1
             return
         res['links'] += 1
-        target = scanner.resolve(name, source.path) if name else None
+        self.link(scanner.resolve(name, source.path) if name else None, source)
+
+    def mdlink(self, scanner, source, url):
+        path = unquote(url).partition('#')[0]
+        self.link(scanner.resolve_path(path, source.path) if path else None, source)
+
+    def link(self, target, source):
         node = target.page if target and target.is_folder else target
         if node and node.fullpath != source.fullpath:
             self.incoming[node.fullpath] = self.incoming.get(node.fullpath, 0) + 1

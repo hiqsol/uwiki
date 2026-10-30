@@ -496,6 +496,10 @@ class StatsTest(unittest.TestCase):
         self.assertEqual(data['orphans'], ['vault/R&D <x>.md', 'vault/root.md'])
         self.assertEqual(sorted(data['groups']), ['vault', 'vault/Archive', 'vault/Projects', 'vault/Projects/Alpha'])
 
+    def test_markdown_links_count_for_orphans(self):
+        data = json.loads(self.stats('linkcheck', '--json'))
+        self.assertEqual(data['orphans'], ['linkcheck/orphan.md'])
+
     def test_group_by_frontmatter_key(self):
         data = json.loads(self.stats('vault', '--by', 'tags', '--json'))
         self.assertEqual(data['groups']['[a, b]']['pages'], 1)
