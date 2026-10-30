@@ -1,4 +1,4 @@
-"""Command line: uwiki build|check|stats|wrap."""
+"""Command line: uwiki build|check|llms|ls|stats|wrap."""
 
 import argparse
 import json
@@ -10,6 +10,7 @@ from . import __version__
 from .build import MDRenderer, Renderer
 from .check import Checker, CheckOptions
 from .llms import Llms
+from .ls import Listing
 from .stats import Stats
 from .vault import Filter, Scanner
 from .wrap import WIDTH, wrap_files
@@ -63,6 +64,11 @@ def llms(args, parser):
     with open(output, 'w', encoding='utf-8') as f:
         f.write(text)
 
+def ls(args, parser):
+    listing = Listing(args.paths, args.include, args.exclude)
+    for line in listing.urls() if args.external else listing.files():
+        print(line, end='\0' if args.null else '\n')
+
 def stats(args, parser):
     res = Stats(args.paths, args.by, args.include, args.exclude).collect()
     print(json.dumps(res.data(args.top), indent=2, ensure_ascii=False) if args.json else res.report(args.top))
@@ -109,6 +115,14 @@ def main():
     p.add_argument('--check', action='store_true', help='report if output is out of date instead, exit 1 if so')
     add_filter(p)
     p.set_defaults(func=llms)
+
+    p = commands.add_parser('ls', help='list markdown files, or external links in them, one per line')
+    p.add_argument('paths', nargs='+', metavar='path', help='folders or files to list')
+    p.add_argument('--external', action='store_true',
+                   help='list unique http and https links outside front matter and code instead')
+    p.add_argument('-z', '--null', action='store_true', help='end lines with NUL, for xargs -0')
+    add_filter(p)
+    p.set_defaults(func=ls)
 
     p = commands.add_parser('stats', help='count pages, words, headings, list items and links')
     p.add_argument('paths', nargs='+', metavar='path', help='folders or files to count')

@@ -40,7 +40,7 @@ class Stats:
         res = dict.fromkeys(self.COLUMNS, 0)
         res.update(path=shown, file=source.fullpath, meta=meta, pages=1,
                    lines=len(body.splitlines()), is_index=page.is_folder)
-        for line in self.prose(body):
+        for line in Converter.prose(body):
             line = Converter.CODE.sub('', self.QUOTE.sub('', line))
             res['words'] += len(line.split())
             res['headings'] += bool(Converter.HEADING.match(line))
@@ -63,20 +63,6 @@ class Stats:
         node = target.page if target and target.is_folder else target
         if node and node.fullpath != source.fullpath:
             self.incoming[node.fullpath] = self.incoming.get(node.fullpath, 0) + 1
-
-    @staticmethod
-    def prose(text):
-        """Lines outside fenced code."""
-        fence = None
-        for line in text.splitlines():
-            f = Converter.FENCE.match(line)
-            if fence:
-                if f and line.lstrip().startswith(fence):
-                    fence = None
-            elif f:
-                fence = f[1]
-            else:
-                yield line
 
     def group(self, page):
         if self.by == 'folder':

@@ -65,6 +65,20 @@ class Converter:
         return read_text(page.fullpath)
 
     @classmethod
+    def prose(cls, text):
+        """Lines outside fenced code."""
+        fence = None
+        for line in text.splitlines():
+            f = cls.FENCE.match(line)
+            if fence:
+                if f and line.lstrip().startswith(fence):
+                    fence = None
+            elif f:
+                fence = f[1]
+            else:
+                yield line
+
+    @classmethod
     def headings(cls, text):
         """Yields lines with their heading matches, None for non headings and fenced code."""
         fence = None
