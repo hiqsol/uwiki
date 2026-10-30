@@ -7,15 +7,23 @@ I use it for Obsidian vaults.
 
 ## Installation
 
+With [mise](https://mise.jdx.dev):
+
 ```
-pip3 install -r requirements.txt
+mise use -g pipx:hiqsol/uwiki
+```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```
+uv tool install git+https://github.com/hiqsol/uwiki
 ```
 
 ## Usage
 
 ```
-./uwiki.py <folder> [title] [--html] [--md] [-o <output-dir>]
-./uwiki.py --check-only <folder|file>...
+uwiki <folder> [title] [--html] [--md] [-o <output-dir>]
+uwiki --check-only <folder|file>...
 ```
 
 Writes `<title>.html` and `<title>.md` (title defaults to folder name),

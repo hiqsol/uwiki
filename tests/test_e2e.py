@@ -13,7 +13,7 @@ import unittest
 from urllib.parse import quote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCRIPT = os.path.join(ROOT, 'src', 'uwiki.py')
+SCRIPT = os.path.join(ROOT, 'src', 'uwiki', 'uwiki.py')
 FIXTURES = os.path.join(ROOT, 'tests', 'fixtures')
 VAULT = os.path.join(FIXTURES, 'vault')
 BROKEN = os.path.join(FIXTURES, 'broken')
@@ -90,7 +90,7 @@ class RenderTest(unittest.TestCase):
         self.assertIn('<h4 id="my-page--deeper">Deeper</h4>', page)
 
     def test_only_page_headers_go_to_toc(self):
-        js = read(os.path.join(ROOT, 'src', 'uwiki.js'))
+        js = read(os.path.join(ROOT, 'src', 'uwiki', 'uwiki.js'))
         self.assertIn('h2.page', js)
         self.assertNotIn('console.log', js)
 
