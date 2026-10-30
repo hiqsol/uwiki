@@ -1,9 +1,8 @@
 """End-to-end tests: run uwiki commands on fixture vaults and check results.
 
-Run with: python3 -m unittest discover tests
+Run with: make test (needs the markdown package)
 """
 
-import importlib.util
 import json
 import os
 import re
@@ -13,6 +12,8 @@ import tempfile
 import unittest
 from urllib.parse import quote
 
+import markdown  # noqa: F401 -- required, build tests must not be skipped
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'src')
 FIXTURES = os.path.join(ROOT, 'tests', 'fixtures')
@@ -20,8 +21,6 @@ VAULT = os.path.join(FIXTURES, 'vault')
 BROKEN = os.path.join(FIXTURES, 'broken')
 MDLINKS = os.path.join(FIXTURES, 'mdlinks')
 PROJECT = os.path.join(FIXTURES, 'project')
-
-HAS_MARKDOWN = importlib.util.find_spec('markdown') is not None
 
 
 def run(*args, cwd=None):
@@ -43,7 +42,6 @@ def section(html, id):
     return html[start:end if end > 0 else len(html)]
 
 
-@unittest.skipUnless(HAS_MARKDOWN, 'markdown package is not installed')
 class RenderTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -174,7 +172,6 @@ class RenderTest(unittest.TestCase):
         return quote(os.path.relpath(os.path.join(VAULT, 'attachments', name), self.out).replace(os.sep, '/'))
 
 
-@unittest.skipUnless(HAS_MARKDOWN, 'markdown package is not installed')
 class MarkdownLinksTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -222,7 +219,6 @@ class MarkdownLinksTest(unittest.TestCase):
         self.assertIn('<a href="#guide">bad heading</a>', self.html)
 
 
-@unittest.skipUnless(HAS_MARKDOWN, 'markdown package is not installed')
 class ProjectTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -257,7 +253,6 @@ class ProjectTest(unittest.TestCase):
         self.assertNotIn('data-title="Draft"', self.filtered)
 
 
-@unittest.skipUnless(HAS_MARKDOWN, 'markdown package is not installed')
 class CliTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
