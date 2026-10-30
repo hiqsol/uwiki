@@ -380,7 +380,13 @@ class CheckTest(unittest.TestCase):
         code, lines, err = self.check('linkcheck', '--no-folder-links', '--orphans')
         self.assertIn('linkcheck/index.md:9: folder link: sub/', lines)
         self.assertEqual([line for line in lines if 'orphan' in line],
-                         ['linkcheck/orphan.md:1: orphan page: no links lead here from index.md'])
+                         ['linkcheck/orphan.md:1: orphan page: no page links here'])
+
+    def test_unlinked_pages_are_warnings(self):
+        code, lines, err = self.check('linkcheck/sub', 'linkcheck/orphan.md', '--unlinked')
+        self.assertEqual((code, lines), (0, ['linkcheck/orphan.md:1: warning: no page links here']), err)
+        code, lines, err = self.check('linkcheck/sub/c.md', '--orphans')
+        self.assertEqual(lines, [], err)
 
     def test_clean(self):
         code, lines, err = self.check('broken/Good.md', 'broken/Bad.md')

@@ -24,7 +24,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 
 ```
 uwiki build <folder> [title] [--html] [--md] [-o <output-dir>] [--exclude GLOB] [--include GLOB]
-uwiki check <folder|file>... [--no-folder-links] [--orphans] [--exclude GLOB] [--include GLOB]
+uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--exclude GLOB] [--include GLOB]
 uwiki llms <folder> [title] [-o <file>] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
 uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
 uwiki wrap [-w 70] [--check] <file>...
@@ -47,7 +47,9 @@ frontmatter syntax and list numbering as `path:line: message`, exits 1 if any.
 Every relative markdown link, inline or reference, must name an existing file or folder
 inside the vault, spelled as on disk, absolute links are reported.
 `--no-folder-links` reports links to folders, `--orphans` reports pages
-no chain of links leads to from the root folder page (any link, without one).
+no chain of links leads to from the root folder page (any link, without one),
+`--unlinked` warns about pages no other page links to, without changing exit code.
+Links count from every page of the vault, checked or not.
 
 `llms` writes [llms.txt](https://llmstxt.org): title, `--summary` as quote
 (default: root folder page front matter `description`), then a section per folder

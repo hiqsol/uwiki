@@ -14,6 +14,7 @@ from .vault import Filter, Scanner, Vaults
 class CheckOptions:
     folder_links: bool = True
     orphans: bool = False
+    unlinked: bool = False
 
 class CheckConverter(Converter):
     """Converts page like renderer does, reports what would render broken."""
@@ -123,6 +124,7 @@ class Checker:
         self.vaults = Vaults(paths, Filter(include, exclude))
         self.options = options or CheckOptions()
         self.problems = []
+        self.warnings = []
         self.links = {}  # checked page: pages it links to
         self.checked = {}  # checked page: (scanner, path to show)
 
@@ -130,31 +132,47 @@ class Checker:
         for scanner, page, shown in self.vaults.files():
             self.checked[page] = scanner, shown
             self.check_file(scanner, page, shown)
-        if self.options.orphans:
+        if self.options.orphans or self.options.unlinked:
             self.check_orphans()
         return self.problems
 
     def check_orphans(self):
-        """Pages links from root folder page do not lead to, without root page, pages no other page links."""
+        """Pages links from root folder page do not lead to, pages no other page links, warnings for the latter."""
         vaults = {}
         for page, (scanner, shown) in self.checked.items():
             if scanner not in vaults:
-                vaults[scanner] = self.reached(scanner), set(scanner.pages().values())
-            reached, pages = vaults[scanner]
-            if page not in reached and page in pages:
-                reason = f'no links lead here from {scanner.root.page.name}.md' if scanner.root.page else 'no page links here'
+                vaults[scanner] = self.vault_links(scanner)
+            pages, linked, reached = vaults[scanner]
+            if page not in pages or page is scanner.root:
+                continue
+            if self.options.orphans and page not in reached:
+                reason = f'not reachable from {scanner.root.page.name}.md' if page in linked else 'no page links here'
                 self.problems.append(f'{shown}:1: orphan page: {reason}')
+            elif self.options.unlinked and page not in linked:
+                self.warnings.append(f'{shown}:1: warning: no page links here')
 
-    def reached(self, scanner):
-        if scanner.root not in self.links:
-            return {t for page, targets in self.links.items() for t in targets if t is not page}
-        res, todo = {scanner.root}, [scanner.root]
+    def vault_links(self, scanner):
+        """Vault pages, ones other pages link to, ones links from root folder page lead to, all pages read."""
+        links = {page: self.links[page] if page in self.links else self.page_links(scanner, page)
+                 for page in scanner.pages().values()}
+        linked = {target for page, targets in links.items() for target in targets if target is not page}
+        if not scanner.root.page:
+            return set(links), linked, linked
+        reached, todo = {scanner.root}, [scanner.root]
         while todo:
-            for target in self.links.get(todo.pop(), ()):
-                if target not in res:
-                    res.add(target)
+            for target in links.get(todo.pop(), ()):
+                if target not in reached:
+                    reached.add(target)
                     todo.append(target)
-        return res
+        return set(links), linked, reached
+
+    def page_links(self, scanner, page):
+        converter = CheckConverter(page, scanner, lambda line, message: None, self.options)
+        try:
+            converter.read()
+        except ValueError:
+            pass
+        return converter.targets
 
     def check_file(self, scanner, page, shown):
         report = lambda line, msg: self.problems.append(f'{shown}:{line}: {msg}')

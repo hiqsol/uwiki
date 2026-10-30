@@ -38,8 +38,12 @@ def report(problems):
     return 1 if problems else 0
 
 def check(args, parser):
-    options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans)
-    return report(Checker(args.paths, args.include, args.exclude, options).check())
+    options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked)
+    checker = Checker(args.paths, args.include, args.exclude, options)
+    code = report(checker.check())
+    for warning in checker.warnings:
+        print(warning)
+    return code
 
 def llms(args, parser):
     path = os.path.abspath(args.folder)
@@ -92,6 +96,8 @@ def main():
     p.add_argument('--no-folder-links', action='store_true', help='report links to folders, not files')
     p.add_argument('--orphans', action='store_true',
                    help='report pages no links lead to from the root folder page')
+    p.add_argument('--unlinked', action='store_true',
+                   help='warn about pages no other page links to, exit code stays as is')
     add_filter(p)
     p.set_defaults(func=check)
 
