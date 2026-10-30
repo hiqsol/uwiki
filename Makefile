@@ -2,8 +2,6 @@
 
 INIT = src/uwiki/__init__.py
 VERSION = $(shell sed -n 's/^__version__ = "\(.*\)"/\1/p' $(INIT))
-# mise reads releases from GitHub directly, its versions host and cache lag new releases
-MISE_FRESH = MISE_USE_VERSIONS_HOST=false MISE_FETCH_REMOTE_VERSIONS_CACHE=0s
 
 test:
 	python3 -m unittest discover tests
@@ -32,12 +30,9 @@ release:
 	@test "$$(git tag --points-at HEAD)" = "v$(VERSION)" || { echo 'HEAD is not tagged v$(VERSION), make patch first' >&2; exit 1; }
 	git push --atomic origin master v$(VERSION)
 
-# wait for GitHub release of current version, then upgrade the mise installed uwiki
+# install current tag with mise, it becomes `latest` locally without GitHub API or versions host lag
 up:
-	@for i in $$(seq 30); do \
-		curl -fsS -o /dev/null https://api.github.com/repos/hiqsol/uwiki/releases/tags/v$(VERSION) 2>/dev/null && break; \
-		[ $$i = 30 ] && { echo 'no release v$(VERSION) yet, see GitHub Actions' >&2; exit 1; }; \
-		sleep 10; \
-	done
-	$(MISE_FRESH) mise up pipx:hiqsol/uwiki
-	uwiki --help >/dev/null
+	mise install pipx:hiqsol/uwiki@v$(VERSION)
+	mise prune --yes pipx:hiqsol/uwiki
+	@uwiki --version | grep -qx 'uwiki $(VERSION)' || { echo "uwiki on PATH is not $(VERSION)" >&2; exit 1; }
+	@uwiki --version

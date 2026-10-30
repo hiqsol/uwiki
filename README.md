@@ -92,7 +92,7 @@ data = uwiki.stats(['docs'], by='status')  # same data as `uwiki stats --json`
 make test                    # run tests
 make patch|minor|major       # test, bump version, commit and tag it
 make release                 # push master and the tag
-make up                      # wait for GitHub release, upgrade mise installed uwiki
+make up                      # install the tagged version with mise
 ```
 
 The release workflow runs tests on the pushed tag and creates GitHub release,
