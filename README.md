@@ -9,7 +9,7 @@ Links resolve the same way in every command. I use it for Obsidian vaults.
 With [mise](https://mise.jdx.dev):
 
 ```
-mise use -g pipx:hiqsol/uwiki@v0.2.0
+mise use -g pipx:hiqsol/uwiki
 ```
 
 Or with [uv](https://docs.astral.sh/uv/):
@@ -75,3 +75,8 @@ data = uwiki.stats(['docs'], by='status')  # same data as `uwiki stats --json`
 ```
 python3 -m unittest discover tests
 ```
+
+## Release
+
+Bump `version` in `pyproject.toml`, commit, tag `v<version>` and push the tag:
+the release workflow runs tests and creates GitHub release, `mise up` picks it up.
