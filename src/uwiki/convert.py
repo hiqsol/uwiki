@@ -2,6 +2,7 @@
 
 import html
 import os
+import posixpath
 import re
 from pathlib import Path
 from urllib.parse import quote, unquote
@@ -14,7 +15,9 @@ class Converter:
     CODE = re.compile(r'(`+).*?\1')
     TITLE = TITLE
     CALLOUT = re.compile(r'^>\s*\[!([\w-]+)\]([+-]?)[ \t]*(.*?)\s*$')
-    MD_LINK = re.compile(r'(`+).*?\1|(?<!!)\[([^\]]*)\]\(([^)\s]+)\)')
+    MD_LINK = re.compile(r"""(`+).*?\1|(?<!!)\[([^\]]*)\]\(([^)\s]+)(?:[ \t]+(?:"[^"]*"|'[^']*'))?\)""")
+    LINK_DEF = re.compile(r'^ {0,3}\[[^\]]+\]:[ \t]*(<[^>\s]*>|\S+)')
+    BLOCK_START = re.compile(r'^\s*(?:[-*+] |\d+[.)] |>|#{1,6}\s|```|~~~)')
     EMBED_LINE = re.compile(r'^\s*!\[\[([^\]]+)\]\]\s*$')
     IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.avif'}
     FRONT_MATTER = FRONT_MATTER
@@ -113,8 +116,18 @@ class Converter:
                     i += 1
                 res += self.callout(*callout.groups(), body, body_start)
             else:
+                while (self.open_bracket(line) and not self.HEADING.match(line) and i < len(lines)
+                       and lines[i].strip() and not self.BLOCK_START.match(lines[i])):
+                    line += lines[i]
+                    i += 1
                 res += self.process_line(line)
         return res
+
+    @classmethod
+    def open_bracket(cls, text):
+        """Whether text leaves link text open, as link text wrapped to the next line does."""
+        text = cls.CODE.sub('', text.replace('\\[', '').replace('\\]', ''))
+        return text.count('[') > text.count(']')
 
     def callout(self, kind, fold, title, body, start=1):
         kind = kind.lower()
@@ -135,6 +148,8 @@ class Converter:
         m = self.EMBED_LINE.match(line)
         if m and not self.attachment(m[1]):
             return self.embed_note(m[1])
+        if self.LINK_DEF.match(line):
+            return self.LINK_DEF.sub(self.link_definition, line, count=1)
         return self.links(line)
 
     def heading(self, level, text):
@@ -165,13 +180,22 @@ class Converter:
         return self.outside_code(self.MD_LINK.sub(self.markdown_link, text), self.process_links)
 
     def markdown_link(self, match):
-        if match[1] or not self.is_local(match[3]):
-            return match[0]
-        target, heading = self.resolve_href(match[3])
+        href = None if match[1] else self.local_href(match[3])
+        return match[0] if href is None else f'[{match[2]}]({href})'
+
+    def link_definition(self, match):
+        """Reference link definition `[ref]: path.md#heading` points where inline link would."""
+        href = self.local_href(match[1].strip('<>'))
+        return match[0] if href is None else match[0][:match.start(1) - match.start()] + href
+
+    def local_href(self, href):
+        """Anchor of vault page or heading relative link points at, None for other links."""
+        if not self.is_local(href):
+            return None
+        target, heading = self.resolve_href(href)
         if target is None:
-            return match[0]
-        anchor = self.anchor(target, heading) if heading else target.anchor
-        return f'[{match[2]}](#{anchor})'
+            return None
+        return '#' + (self.anchor(target, heading) if heading else target.anchor)
 
     def anchor(self, target, heading):
         """Heading anchor in target, page anchor for the title heading it drops."""
@@ -183,8 +207,9 @@ class Converter:
 
     @staticmethod
     def is_local(href):
+        """Whether href is path relative to the page, or just fragment."""
         path = href.partition('#')[0]
-        return ':' not in path and (path == '' or path.lower().endswith('.md'))
+        return ':' not in path and not path.startswith('/')
 
     def resolve_href(self, href):
         """Finds target of relative markdown link and heading its fragment slug names, if any."""
@@ -197,15 +222,23 @@ class Converter:
 
     @classmethod
     def find_heading(cls, page, slug):
+        """Heading GitHub and GitLab anchor as slug, repeated ones as slug-1, slug-2..., or uwiki does."""
+        seen = {}
         for _, m in cls.headings(cls.read_text(page)[0]):
-            if m and slug.lower() in (cls.slug(m[2]), cebabize(m[2])):
-                return m[2]
+            if m:
+                base = cls.slug(m[2])
+                anchor = f'{base}-{seen[base]}' if base in seen else base
+                seen[base] = seen.get(base, 0) + 1
+                if slug.lower() in (anchor, cebabize(m[2])):
+                    return m[2]
         return None
 
     @staticmethod
     def slug(heading):
-        """Heading anchor as GitHub and GitLab make it."""
-        return re.sub(r'[^\w\- ]', '', heading.lower()).replace(' ', '-')
+        """Heading anchor as GitHub and GitLab make it from rendered heading text."""
+        text = re.sub(r'!?\[([^\]]*)\]\([^)]*\)', r'\1', heading)
+        text = re.sub(r'<[^>]*>|(?<!\w)_+|_+(?!\w)', '', text)
+        return re.sub(r'[^\w\- ]', '', text.lower()).replace(' ', '-')
 
     def outside_code(self, line, func):
         res = ''
