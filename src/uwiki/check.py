@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from .convert import Converter
-from .vault import Vaults
+from .vault import Filter, Scanner, Vaults
 
 class CheckConverter(Converter):
     """Converts page like renderer does, reports what would render broken."""
@@ -30,6 +30,15 @@ class CheckConverter(Converter):
             if '://' not in src and not (Path(self.source.fullpath).parent / src).exists():
                 self.report(self.line, f'missing image: {src}')
         return res
+
+    def markdown_link(self, match):
+        if not match[1] and self.is_local(match[3]):
+            target, heading = self.resolve_href(match[3])
+            if target is None:
+                self.report(self.line, f'unresolved link: {match[3]}')
+            elif heading is None:
+                self.report(self.line, f'missing heading: {match[3]}')
+        return super().markdown_link(match)
 
     def link(self, text):
         self.check_link(text)
@@ -74,8 +83,8 @@ class Checker:
 
     FRONT_MATTER_START = re.compile(r'\A---[ \t]*\r?\n')
 
-    def __init__(self, paths):
-        self.vaults = Vaults(paths)
+    def __init__(self, paths, include=(), exclude=()):
+        self.vaults = Vaults(paths, Filter(include, exclude))
         self.problems = []
 
     def check(self):
@@ -98,5 +107,7 @@ class Checker:
                     report(n, f'malformed frontmatter: {line}')
         elif self.FRONT_MATTER_START.match(text):
             report(1, 'unclosed frontmatter')
+        if page.folder and page.folder.shadowed_index() is page:
+            report(1, Scanner.shadowed_message(page.folder))
         CheckConverter(page, scanner, report).read()
 

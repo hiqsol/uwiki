@@ -1,6 +1,6 @@
 ---
 tags: [a, b]
-title: ignored
+summary: ignored
 ---
 First paragraph is **bold**.
 

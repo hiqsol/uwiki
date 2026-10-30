@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from .convert import Converter
-from .vault import Vaults
+from .vault import Filter, Vaults
 
 class Stats:
     """Statistics of markdown files grouped by folder or frontmatter key."""
@@ -17,8 +17,8 @@ class Stats:
     META = re.compile(r'^([\w-]+):[ \t]*(.*?)\s*$', re.MULTILINE)
     QUOTE = re.compile(r'^(?:[ \t]*>)+ ?')
 
-    def __init__(self, paths, by='folder'):
-        self.vaults = Vaults(paths)
+    def __init__(self, paths, by='folder', include=(), exclude=()):
+        self.vaults = Vaults(paths, Filter(include, exclude))
         self.by = by
         self.pages = []
         self.incoming = {}

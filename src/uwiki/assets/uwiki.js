@@ -25,16 +25,14 @@
   bindEvents();
   spy();
 
-  // page header "Folder / Page" shows folder as a crumb above page title
+  // page header "Folder / Subfolder / Page" shows folders as a crumb above page title
   function addCrumbs() {
     pages.forEach(function (h) {
       var text = h.textContent;
-      var k = text.lastIndexOf(" / ");
-      h.dataset.title = k < 0 ? text : text.slice(k + 3);
-      if (k < 0) return;
+      if (!h.dataset.title || h.dataset.title === text) return;
       var crumb = document.createElement("span");
       crumb.className = "crumb";
-      crumb.textContent = text.slice(0, k);
+      crumb.textContent = text.slice(0, text.length - h.dataset.title.length - 3);
       h.textContent = h.dataset.title;
       h.insertBefore(crumb, h.firstChild);
     });

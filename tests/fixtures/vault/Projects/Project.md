@@ -1,1 +1,1 @@
-Projects folder page, see [[Readme]].
+Projects folder page, see [[Notes]].
