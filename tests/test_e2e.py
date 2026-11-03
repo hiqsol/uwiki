@@ -98,6 +98,13 @@ class RenderTest(unittest.TestCase):
         self.assertIn('h2.page', js)
         self.assertNotIn('console.log', js)
 
+    def test_previews_clone_page_for_mouse_only(self):
+        js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
+        self.assertIn('cloneNode(true)', js)
+        self.assertIn('e.pointerType !== "mouse"', js)
+        self.assertNotIn('fetch(', js)
+        self.assertNotIn('XMLHttpRequest', js)
+
     def test_code_is_left_alone(self):
         self.assertIn('<pre><code># not a heading\n[[NotALink]]\n</code></pre>', self.content)
         self.assertIn('<code>[[NotALink]]</code>', self.content)

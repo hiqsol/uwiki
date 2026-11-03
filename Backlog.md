@@ -4,15 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P5 Hover preview
-
-- a) Hovering a vault link in HTML shows a popover with the target page, or its section for `#heading`
-- b) Content is cloned from the same HTML page, nothing is fetched, so it works from `file://`
-- c) Opens after a short delay, stays while the pointer is over it, closes on leave and `Esc`
-- d) Links inside a popover preview too, nested up to 3 levels
-- e) Long targets are cut to a fixed height with a fade, a click on the popover title follows the link
-- f) Touch devices: no popover, a tap follows the link as now
-
 ## P6 watch command
 
 - a) `uwiki watch <folder|file>... [build options]` builds once, then rebuilds on change of any file

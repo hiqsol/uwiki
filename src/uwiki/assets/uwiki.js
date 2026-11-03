@@ -24,6 +24,7 @@
   processHeaders(toc, document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page"), 0);
   buildIndex();
   bindEvents();
+  bindPreviews();
   spy();
 
   // page header "Folder / Subfolder / Page" shows folders as a crumb above page title,
@@ -428,6 +429,148 @@
       parent.replaceChild(document.createTextNode(mark.textContent), mark);
       parent.normalize();
     });
+  }
+
+  // hover preview: a vault link shows its page or section in a popover, cloned from this page,
+  // links in it preview too, up to MAX_PREVIEWS deep; mouse only, touch taps follow links
+
+  var PREVIEW_DELAY = 350;
+  var CLOSE_DELAY = 300;
+  var MAX_PREVIEWS = 3;
+  var previews = [];
+  var openTimer = null;
+
+  function bindPreviews() {
+    document.addEventListener("pointerover", function (e) {
+      if (e.pointerType !== "mouse") return;
+      var a = previewLink(e.target);
+      if (!a || a.contains(e.relatedTarget)) return;
+      var level = levelOf(a);
+      clearTimeout(openTimer);
+      if (level >= MAX_PREVIEWS || (previews[level] && previews[level].link === a)) {
+        if (previews[level]) cancelClose(level);
+        return;
+      }
+      openTimer = setTimeout(function () { openPreview(a, level); }, PREVIEW_DELAY);
+    });
+    document.addEventListener("pointerout", function (e) {
+      if (e.pointerType !== "mouse") return;
+      var a = previewLink(e.target);
+      if (!a || a.contains(e.relatedTarget)) return;
+      clearTimeout(openTimer);
+      var level = levelOf(a);
+      if (previews[level] && previews[level].link === a) scheduleClose(level);
+    });
+    document.addEventListener("click", function (e) {
+      // after the click, so a link in a popover is still there to follow
+      if (previews.length && (!e.target.closest(".preview") || e.target.closest("a"))) {
+        setTimeout(function () { closePreviews(0); });
+      }
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key == "Escape" && previews.length) closePreviews(0);
+    });
+  }
+
+  function previewLink(el) {
+    var a = el.closest && el.closest("a[href^='#']");
+    if (!a || !a.closest("main.content, .preview") || a.closest(".preview-title")) return null;
+    var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
+    return target && /^H[1-6]$/.test(target.tagName) && content.contains(target) ? a : null;
+  }
+
+  // popover the link is in, 0 for links in the page
+  function levelOf(a) {
+    var box = a.closest(".preview");
+    for (var i = 0; i < previews.length; i++) {
+      if (previews[i].el === box) return i + 1;
+    }
+    return 0;
+  }
+
+  function openPreview(a, level) {
+    closePreviews(level);
+    var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
+    var el = document.createElement("div");
+    el.className = "preview";
+    var title = document.createElement("a");
+    title.className = "preview-title";
+    title.href = "#" + target.id;
+    title.textContent = previewTitle(target);
+    el.appendChild(title);
+    var body = document.createElement("div");
+    body.className = "content preview-body";
+    sectionOf(target).forEach(function (node) {
+      var copy = node.cloneNode(true);
+      copy.removeAttribute("id");
+      copy.querySelectorAll("[id]").forEach(function (n) { n.removeAttribute("id"); });
+      body.appendChild(copy);
+    });
+    el.appendChild(body);
+    document.body.appendChild(el);
+    if (el.scrollHeight > el.clientHeight + 1) el.classList.add("long");
+    place(el, a);
+    var p = { el: el, link: a, timer: null };
+    previews[level] = p;
+    el.addEventListener("pointerenter", function () { cancelClose(previews.indexOf(p)); });
+    el.addEventListener("pointerleave", function (e) {
+      if (e.pointerType === "mouse") scheduleClose(previews.indexOf(p));
+    });
+  }
+
+  // page: its text till next page; section: till next heading of same or higher level
+  function sectionOf(target) {
+    var nodes = [];
+    var page = target.classList.contains("page");
+    var level = +target.tagName[1];
+    for (var n = target.nextElementSibling; n; n = n.nextElementSibling) {
+      if (n.classList.contains("page")) break;
+      if (!page && /^H[1-6]$/.test(n.tagName) && +n.tagName[1] <= level) break;
+      if (!n.classList.contains("backlinks")) nodes.push(n);
+    }
+    return nodes;
+  }
+
+  function previewTitle(target) {
+    if (target.classList.contains("page")) return titleOf(target);
+    var page = null;
+    for (var i = 0; i < pages.length && pages[i].compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING; i++) {
+      page = pages[i];
+    }
+    return (page ? titleOf(page) + " › " : "") + target.textContent;
+  }
+
+  // under the link, above it when there is no room below, inside the window
+  function place(el, a) {
+    var r = a.getClientRects()[0] || a.getBoundingClientRect();
+    var h = el.offsetHeight, w = el.offsetWidth;
+    var top = r.bottom + 6;
+    if (top + h > window.innerHeight && r.top - h - 6 > 0) top = r.top - h - 6;
+    var left = Math.max(8, Math.min(r.left, document.documentElement.clientWidth - w - 8));
+    el.style.top = top + window.scrollY + "px";
+    el.style.left = left + window.scrollX + "px";
+  }
+
+  function scheduleClose(level) {
+    var p = previews[level];
+    if (!p) return;
+    clearTimeout(p.timer);
+    p.timer = setTimeout(function () { closePreviews(level); }, CLOSE_DELAY);
+  }
+
+  // pointer over a popover keeps it and the ones it opened from
+  function cancelClose(level) {
+    for (var i = 0; i <= level && i < previews.length; i++) {
+      clearTimeout(previews[i].timer);
+    }
+  }
+
+  function closePreviews(level) {
+    while (previews.length > level) {
+      var p = previews.pop();
+      clearTimeout(p.timer);
+      p.el.remove();
+    }
   }
 
   // events

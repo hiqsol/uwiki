@@ -136,6 +136,9 @@ Folder page is `README.md` (any case), `index.md` or file named as folder, e.g. 
 The HTML page is self-contained, light or dark by system preference:
 
 - sidebar with collapsible contents following the page being read, expand or collapse all at once
+- hover preview of a link target: its page or `#heading` section in a popover, cloned from the page,
+  so it works from `file://`; links in it preview too, 3 levels deep; `Esc` closes, the title follows the link;
+  touch devices get no popover, a tap follows the link
 - front matter in a block right of page title, folded into one line of values, `▸` unfolds a table
   of all keys and values the text flows around, under the title on narrow screens;
   `--no-front-matter` leaves it out

@@ -462,6 +462,51 @@ details.callout:not([open]) > summary {
     --callout-color: #9e9e9e;
 }
 
+/* hover preview of a link target */
+
+.preview {
+    position: absolute;
+    z-index: 30;
+    width: min(32rem, calc(100vw - 16px));
+    max-height: 22rem;
+    overflow: hidden;
+    padding: 10px 16px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+    font-size: 14px;
+    line-height: 1.5;
+}
+.preview.long::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 3.5rem;
+    background: linear-gradient(transparent, var(--bg));
+    pointer-events: none;
+}
+.preview-title {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--fg);
+    font-size: 15px;
+    font-weight: 650;
+}
+.content.preview-body {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+.content.preview-body > :first-child {
+    margin-top: 0;
+}
+.content.preview-body h1, .content.preview-body h2, .content.preview-body h3,
+.content.preview-body h4, .content.preview-body h5, .content.preview-body h6 {
+    margin: 0.8em 0 0.3em;
+    font-size: 1.05em;
+}
+
 /* narrow screens: sidebar slides in */
 
 @media (max-width: 800px) {
@@ -514,7 +559,7 @@ details.callout:not([open]) > summary {
 }
 
 @media print {
-    #sidebar, #menu {
+    #sidebar, #menu, .preview {
         display: none;
     }
     .content {
