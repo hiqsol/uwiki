@@ -8,7 +8,7 @@ Links resolve the same way in every command. I use it for Obsidian vaults.
 
 ## Installation
 
-With [mise](https://mise.jdx.dev):
+Needs Python 3.11 or later. With [mise](https://mise.jdx.dev):
 
 ```
 mise use -g pipx:hiqsol/uwiki
@@ -125,6 +125,32 @@ status  pages  words  lines  headings  items  links  external  images
 draft      42   9120   1310        58    412    530         3       4
 done       17   2804    401        19    150    211         0       1
 total      59  11924   1711        77    562    741         3       5
+```
+
+## Config
+
+`uwiki.toml` in the vault root, or `[tool.uwiki]` in its `pyproject.toml`, holds defaults of command options:
+top level ones for every command taking them, a command table for that command,
+`[build]` also for `watch` and `serve`. Command line adds to lists and overrides the rest.
+`--no-x` flags are given as `x = false`. Schema of front matter is `[schema]`, `check` reports
+unknown keys, missing required keys and values out of the schema:
+
+```toml
+exclude = ["drafts"]
+
+[check]
+unlisted = true
+
+[build]
+backlinks = false
+
+[schema]
+"status!" = ["stub", "draft", "stable"]   # ! makes the key required, a list gives allowed values
+date = "date"                             # or a type: string, number, bool, date, list, any
+aliases = "list"
+
+[schema."docs/**"]                        # folder rules add to the top level ones, glob as --exclude
+"owner!" = "string"
 ```
 
 Supported Obsidian syntax:

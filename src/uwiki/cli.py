@@ -10,12 +10,13 @@ from pathlib import Path
 from . import __version__
 from .build import Build, BuildOptions, UsageError
 from .check import Checker, CheckOptions
+from .config import Config, ConfigError
 from .llms import Llms
 from .ls import Listing
 from .stats import Stats
 from .watch import Watcher
 from . import serve as served
-from .vault import Filter, Selection
+from .vault import Filter, Selection, Vaults
 from .wrap import WIDTH, wrap_files
 
 FILTER_USAGE = '[--exclude GLOB] [--include GLOB]'
@@ -225,14 +226,45 @@ def parser():
     parser.commands = commands.choices
     return parser
 
+TAKES = {'watch': ('build',), 'serve': ('build',)}
+NOT_OPTIONS = {'paths', 'func', 'command', 'help', 'version'}
+
+def config_defaults(top, args):
+    """Defaults of command options from the config of the vault given paths are in."""
+    folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in map(os.path.abspath, args.paths)]
+    config = Config.load(Vaults.vault_root(os.path.abspath(args.paths[0]), os.path.commonpath(folders)))
+    p = top.commands[args.command]
+    dests = {a.dest: a for a in p._actions if a.dest not in NOT_OPTIONS}
+    known = {a.dest for sub in top.commands.values() for a in sub._actions}
+    tables = (*TAKES.get(args.command, ()), args.command)
+    res = {}
+    for key, value in config.options(args.command, TAKES.get(args.command, ())).items():
+        name = key.replace('-', '_')
+        if name in dests:
+            action = dests[name]
+            if isinstance(action, argparse._AppendAction):
+                value = list(value) if isinstance(value, list) else [value]
+            res[name] = value
+        elif f'no_{name}' in dests and isinstance(value, bool):
+            res[f'no_{name}'] = not value
+        elif any(isinstance(config.data.get(t), dict) and key in config.data[t] for t in tables) \
+                or name not in known and f'no_{name}' not in known:
+            raise ConfigError(f'{config.path}: unknown option {key} of {args.command}')
+    return res
+
 def main():
-    args = parser().parse_args()
-    p = parser().commands[args.command]
+    top = parser()
+    args = top.parse_args()
+    p = top.commands[args.command]
     for path in getattr(args, 'paths', []):
         if not os.path.exists(path):
             p.error(f'no such file or folder: {path}')
     try:
+        defaults = config_defaults(top, args)
+        if defaults:
+            p.set_defaults(**defaults)
+            args = top.parse_args()
         code = args.func(args, p)
-    except UsageError as e:
+    except (UsageError, ConfigError) as e:
         p.error(str(e))
     sys.exit(code or 0)

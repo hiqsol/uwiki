@@ -16,7 +16,7 @@ classifiers = [
     "Topic :: Text Processing :: Markup :: Markdown",
     "Topic :: Documentation",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["markdown"]
 
 [project.urls]

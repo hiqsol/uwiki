@@ -1,0 +1,13 @@
+exclude = ["drafts"]
+
+[check]
+unlisted = true
+
+[schema]
+"status!" = ["stub", "draft", "stable"]
+date = "date"
+tags = "list"
+title = "string"
+
+[schema."docs/**"]
+"owner!" = "string"

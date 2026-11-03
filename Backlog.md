@@ -4,15 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P8 Front matter schema
-
-- a) Config `uwiki.toml` in the vault root, or `[tool.uwiki]` in `pyproject.toml`, read by every command
-- b) Schema declares allowed keys, required keys and allowed values or a value type per key:
-  `status = ["stub", "draft", "stable"]`, `date = "date"`, `aliases = "list"`
-- c) Rules can apply to folders: `[schema."docs/**"]`
-- d) `check` reports unknown keys, missing required keys and values out of the schema
-- e) Config can also hold defaults of command options, e.g. `exclude`, used by P6 and P7
-
 ## P9 Aliases
 
 - a) Front matter `aliases: [VP, VPs]` makes `[[VP]]` resolve to the page, in every command

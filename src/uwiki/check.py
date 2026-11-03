@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
+from .config import Config
 from .convert import Converter
-from .vault import Filter, Scanner, Vaults
+from .vault import Filter, Scanner, Vaults, front_matter_items
 
 @dataclass
 class CheckOptions:
@@ -128,6 +129,7 @@ class Checker:
         self.warnings = []
         self.links = {}  # checked page: pages it links to
         self.checked = {}  # checked page: (scanner, path to show)
+        self.schemas = {}  # scanner: front matter schema of its vault config
 
     def check(self):
         for scanner, page, shown in self.vaults.files():
@@ -188,6 +190,23 @@ class Checker:
             pass
         return converter.targets
 
+    def schema(self, scanner):
+        if scanner not in self.schemas:
+            self.schemas[scanner] = Config.load(scanner.path).schema
+        return self.schemas[scanner]
+
+    def check_schema(self, scanner, source, front, report):
+        """Front matter keys and values the vault config schema allows, required ones present."""
+        schema = self.schema(scanner)
+        if schema.empty:
+            return
+        lines = front.splitlines()
+        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
+        for key, message in schema.problems(front_matter_items(front) if front else [], path):
+            line = next((n for n, text in enumerate(lines, 1)
+                         if key is not None and re.match(rf'[\'"]?{re.escape(key)}[\'"]?:', text)), 1)
+            report(line, message)
+
     def check_file(self, scanner, page, shown):
         report = lambda line, msg: self.problems.append(f'{shown}:{line}: {msg}')
         source = page.page if page.is_folder else page
@@ -203,6 +222,7 @@ class Checker:
                     report(n, f'malformed frontmatter: {line}')
         elif self.FRONT_MATTER_START.match(text):
             report(1, 'unclosed frontmatter')
+        self.check_schema(scanner, source, m[0] if m else '', report)
         if page.folder and page.folder.shadowed_index() is page:
             report(1, Scanner.shadowed_message(page.folder))
         converter = CheckConverter(page, scanner, report, self.options)

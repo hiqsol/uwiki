@@ -509,6 +509,57 @@ class CheckTest(unittest.TestCase):
         self.assertEqual((code, lines), (0, []), err)
 
 
+class ConfigTest(unittest.TestCase):
+    def check(self, *args, cwd=FIXTURES):
+        res = run('check', *args, cwd=cwd)
+        return res.returncode, res.stdout.splitlines(), res.stderr
+
+    def test_schema(self):
+        code, lines, err = self.check('schema')
+        self.assertEqual(lines, [
+            'schema/Bad.md:2: front matter status: wip, expected one of stub, draft, stable',
+            'schema/Bad.md:3: front matter date: soon, expected date',
+            'schema/Bad.md:4: front matter tags: x, expected list',
+            'schema/Bad.md:5: unknown front matter key: color',
+            'schema/None.md:1: missing front matter key: status',
+            'schema/docs/Guide.md:1: missing front matter key: owner',
+        ], err)
+        self.assertEqual(code, 1)
+
+    def test_option_defaults(self):
+        code, lines, err = self.check('schema', '--include', 'drafts')
+        self.assertEqual(lines[-2:], [
+            'schema/drafts/Draft.md:1: missing front matter key: status',
+            'schema/drafts/Draft.md:1: warning: not listed in index.md',
+        ], err)
+        code, lines, err = self.check('schema/docs/Unlisted.md')
+        self.assertEqual((code, lines), (0, []), err)
+
+    def test_pyproject_and_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'Page.md'), '---\ntitle: x\n---\nText.\n')
+            write(os.path.join(tmp, 'pyproject.toml'), '[project]\nname = "x"\n[tool.uwiki.schema]\n"owner!" = "string"\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(lines, ['./Page.md:2: unknown front matter key: title',
+                                     './Page.md:1: missing front matter key: owner'], err)
+            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\nowner = "person"\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(code, 2)
+            self.assertIn("schema.owner: 'person' is no list of values nor type", err)
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nnope = true\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(code, 2)
+            self.assertIn('unknown option nope of check', err)
+            write(os.path.join(tmp, 'uwiki.toml'), 'title = "Mine"\n[build]\nbacklinks = false\n')
+            write(os.path.join(tmp, 'Other.md'), 'See [[Page]].\n')
+            self.assertEqual(self.check('.', cwd=tmp)[:2], (0, []))
+            res = run('build', '.', '-o', 'out/', cwd=tmp)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertEqual(sorted(os.listdir(os.path.join(tmp, 'out'))), ['Mine.html', 'Mine.md'])
+            self.assertIn('<title>Mine</title>', read(os.path.join(tmp, 'out', 'Mine.html')))
+            self.assertNotIn('Linked from', read(os.path.join(tmp, 'out', 'Mine.md')))
+
+
 class LinkBuildTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
