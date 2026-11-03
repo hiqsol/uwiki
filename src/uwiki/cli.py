@@ -15,6 +15,7 @@ from .llms import Llms
 from .ls import Listing
 from .stats import Stats
 from .watch import Watcher
+from .mv import Move, MoveError
 from . import serve as served
 from .vault import Filter, Selection, Vaults
 from .wrap import WIDTH, wrap_files
@@ -63,6 +64,22 @@ def serve(args, parser):
     finally:
         if tmp:
             tmp.cleanup()
+
+def mv(args, parser):
+    try:
+        move = Move(args.source, args.target)
+        move.plan()
+    except MoveError as e:
+        raise UsageError(str(e)) from e
+    shown = lambda path: os.path.relpath(path)
+    if args.dry_run:
+        for line in move.diff(shown):
+            print(line)
+        return
+    move.run()
+    print(f'mv {shown(move.source)} {shown(move.target)}')
+    for rel in sorted(move.changes):
+        print(f'updated links in {shown(move.full(rel))}')
 
 def build_options(args):
     return BuildOptions(backlinks=not args.no_backlinks, front_matter=not args.no_front_matter)
@@ -233,6 +250,12 @@ def parser():
     p.add_argument('--check', action='store_true', help='report lines to rewrap instead, exit 1 if any')
     add_filter(p)
     p.set_defaults(func=wrap)
+    p = commands.add_parser('mv', prog='uwiki mv', usage='%(prog)s <from> <to> [--dry-run]',
+                            help='move or rename a page, folder or attachment, rewriting every link to it')
+    p.add_argument('source', metavar='from', help='page, folder or attachment in the vault')
+    p.add_argument('target', metavar='to', help='new path, or existing folder to move into')
+    p.add_argument('--dry-run', action='store_true', help='print the move and every changed line instead')
+    p.set_defaults(func=mv)
     parser.commands = commands.choices
     return parser
 
@@ -241,6 +264,8 @@ NOT_OPTIONS = {'paths', 'func', 'command', 'help', 'version'}
 
 def config_defaults(top, args):
     """Defaults of command options from the config of the vault given paths are in."""
+    if not getattr(args, 'paths', None):
+        return {}
     folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in map(os.path.abspath, args.paths)]
     config = Config.load(Vaults.vault_root(os.path.abspath(args.paths[0]), os.path.commonpath(folders)))
     p = top.commands[args.command]

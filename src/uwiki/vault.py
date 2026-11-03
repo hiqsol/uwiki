@@ -306,6 +306,40 @@ class Scanner:
         self._alias_symlinks()
         self._assign_anchors()
 
+    @classmethod
+    def from_files(cls, path, files):
+        """Vault of given vault relative files as if scanned, for files not on disk yet, e.g. after a move."""
+        scanner = cls(path, '')
+        tree = {}
+        for file in files:
+            *folders, name = file.split('/')
+            node = tree
+            for folder in folders:
+                node = node.setdefault(folder, {})
+            node[name] = None
+        def build(folder, tree):
+            for name in sorted(tree):
+                fullpath = os.path.join(folder.fullpath, name)
+                rel = fullpath[len(scanner.path):]
+                if tree[name] is not None:
+                    item = folder.child(True, name, rel, fullpath)
+                    build(item, tree[name])
+                    if item.is_empty():
+                        del folder.children[item.name]
+                elif name.endswith('.md'):
+                    folder.child(False, Path(name).stem, rel[:-3], fullpath)
+                else:
+                    scanner.attachments.setdefault(name.lower(), []).append(fullpath)
+        build(scanner.root, tree)
+        scanner._index(scanner.root)
+        scanner._assign_anchors()
+        return scanner
+
+    def files(self):
+        """Vault relative paths of pages and attachments."""
+        res = [*self.pages(), *(f for files in self.attachments.values() for f in files)]
+        return sorted(os.path.relpath(f, self.path).replace(os.sep, '/') for f in res)
+
     def _scan_dir(self, folder):
         base = folder.fullpath
         o = sorted(os.scandir(base), key=lambda e: e.name)

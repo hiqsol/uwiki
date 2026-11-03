@@ -6,6 +6,7 @@ Run with: make test (needs the markdown package)
 import json
 import os
 import queue
+import shutil
 import re
 import subprocess
 import sys
@@ -841,6 +842,82 @@ class ServeTest(unittest.TestCase):
             html = read(os.path.join(out, 'wiki.html'))
         self.assertNotIn('__uwiki', html)
         self.assertNotIn('uwiki-reload', html)
+
+
+class MoveTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        for name in ['vault', 'mdlinks']:
+            shutil.copytree(os.path.join(FIXTURES, name), os.path.join(self.tmp.name, name), symlinks=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_in(self, *args):
+        return run(*args, cwd=self.tmp.name)
+
+    def test_dry_run_prints_move_and_changed_lines(self):
+        res = self.run_in('mv', 'vault/MyPage.md', 'vault/Archive/Renamed.md', '--dry-run')
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(res.stdout.splitlines()[:3], [
+            'mv vault/MyPage.md vault/Archive/Renamed.md',
+            'vault/Archive/Renamed.md:24: - > [!tip]+ Open with [[MyPage#Deeper]]',
+            'vault/Archive/Renamed.md:24: + > [!tip]+ Open with [[Renamed#Deeper]]',
+        ])
+        self.assertIn('vault/my notes.md:3: + ![[Renamed#Second Section]]', res.stdout.splitlines())
+        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, 'vault', 'MyPage.md')))
+
+    def test_check_passes_after_moves(self):
+        self.assertEqual(self.run_in('check', 'vault').returncode, 0)
+        for args in [('vault/MyPage.md', 'vault/Archive/Renamed.md'), ('vault/Projects', 'vault/Work'),
+                     ('vault/attachments/pic.png', 'vault/images/pic.png'), ('vault/my notes.md', 'vault/Work')]:
+            res = self.run_in('mv', *args)
+            self.assertEqual(res.returncode, 0, res.stderr)
+        res = self.run_in('check', 'vault')
+        self.assertEqual((res.returncode, res.stdout), (0, ''))
+        index = read(os.path.join(self.tmp.name, 'vault', 'index.md'))
+        self.assertIn('See [[Renamed]], [[my notes]], [[2024Plans]] and [[Project]].', index)
+        self.assertIn('[[Work/Alpha/Notes|alpha readme]]', index)
+        self.assertIn('![[pic.png]]', read(os.path.join(self.tmp.name, 'vault', 'Work', 'my notes.md')))
+
+    def test_links_that_would_lead_elsewhere_change(self):
+        res = self.run_in('mv', 'vault/Archive/Notes.md', 'vault/Projects/Notes.md', '--dry-run')
+        self.assertEqual(res.stdout.splitlines()[1:], [
+            'vault/Projects/Project.md:1: - Projects folder page, see [[Notes]].',
+            'vault/Projects/Project.md:1: + Projects folder page, see [[Alpha/Notes]].',
+            'vault/index.md:3: - Path links [[Archive/Notes]] and [[Projects/Alpha/Notes|alpha readme]].',
+            'vault/index.md:3: + Path links [[Projects/Notes]] and [[Projects/Alpha/Notes|alpha readme]].',
+        ])
+
+    def test_markdown_links_follow_and_moved_pages_are_fixed(self):
+        res = self.run_in('mv', 'mdlinks/docs/Guide.md', 'mdlinks/Guide.md')
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn('Back [home](index.md#intro).', read(os.path.join(self.tmp.name, 'mdlinks', 'Guide.md')))
+        index = read(os.path.join(self.tmp.name, 'mdlinks', 'index.md'))
+        self.assertIn('See [the guide](Guide.md), [first steps](Guide.md#first-steps-hiapi)', index)
+        self.assertIn('Code `[x](docs/Guide.md)` stays', index)
+        res = self.run_in('mv', 'mdlinks/docs', 'mdlinks/manual')
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn('and [docs](manual/index.md).', read(os.path.join(self.tmp.name, 'mdlinks', 'index.md')))
+        self.assertIn('[bad heading](../Guide.md#nope)',
+                      read(os.path.join(self.tmp.name, 'mdlinks', 'manual', 'Broken.md')))
+
+    def test_git_mv_and_errors(self):
+        vault = os.path.join(self.tmp.name, 'vault')
+        git = lambda *args: subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', *args], cwd=vault,
+                                           capture_output=True, text=True, check=True).stdout
+        git('init', '-q')
+        git('add', '.')
+        git('commit', '-qm', 'init')
+        res = run('mv', 'root.md', 'Base.md', cwd=vault)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn('R  root.md -> Base.md', git('status', '--porcelain'))
+        res = run('mv', 'Base.md', 'index.md', cwd=vault)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn('already exists', res.stderr)
+        res = run('mv', 'Base.md', 'Base.txt', cwd=vault)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn('keeps its .md extension', res.stderr)
 
 
 class LsTest(unittest.TestCase):

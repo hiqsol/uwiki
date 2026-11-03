@@ -3,7 +3,8 @@
 [![test](https://github.com/hiqsol/uwiki/actions/workflows/test.yml/badge.svg)](https://github.com/hiqsol/uwiki/actions/workflows/test.yml)
 
 Markdown utility for wikis: builds folder of markdown files into single HTML or markdown file,
-checks it, lists its pages for LLMs, counts statistics and rewraps long lines.
+rebuilds and serves it on change, checks it, lists its pages for LLMs, counts statistics,
+rewraps long lines and moves pages rewriting links to them.
 Links resolve the same way in every command. I use it for Obsidian vaults.
 
 ## Installation
@@ -31,6 +32,7 @@ uwiki llms <folder|file>... [--title TITLE] [-o FILE] [--summary TEXT] [--check]
 uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
 uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
 uwiki wrap <folder|file>... [-w 70] [--check] [--exclude GLOB] [--include GLOB]
+uwiki mv <from> <to> [--dry-run]
 ```
 
 Every command takes folders and files of one or more vaults.
@@ -114,6 +116,15 @@ It lists the largest pages and orphans: pages not linked from the counted ones, 
 leaving frontmatter, code, tables and headings as is, never splitting wiki links and inline code.
 `--check` reports such lines instead and exits 1 if any,
 a line rewrapping leaves as is, e.g. a long URL or inline code, is not reported.
+
+`mv` moves or renames a page, folder or attachment inside the vault, `<to>` may be a folder to move into,
+and rewrites every link to it: wiki links, embeds, markdown links and reference definitions.
+Vault root is the nearest folder with `.obsidian`, else the current folder.
+Relative markdown links in moved pages are fixed for their new folder.
+A wiki link changes only when it would no longer lead where it did, to the shortest name leading right,
+so a name only link stays name only when the name is still unique.
+Inside a git work tree it moves with `git mv`, else renames.
+`--dry-run` prints the move and every changed line instead, `-` before and `+` after.
 
 Example:
 
