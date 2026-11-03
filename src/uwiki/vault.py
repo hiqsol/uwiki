@@ -62,6 +62,62 @@ def front_matter_value(front, key):
         return re.sub(r'\s+#.*$', '', value).strip() or None
     return None
 
+def read_front_matter(path):
+    """Top level front matter of file as (key, value) pairs, see front_matter_items."""
+    m = FRONT_MATTER.match(read_file(path))
+    return front_matter_items(m[0]) if m else []
+
+def front_matter_items(front):
+    """Top level keys of front matter in order with values: scalar as text, list as list of texts.
+
+    Lists are inline `[a, b]` or `- a` lines, nested keys give `key: value` texts.
+    """
+    lines = front.splitlines()[1:-1]
+    res = []
+    for i, line in enumerate(lines):
+        m = re.match(r'([^\s#:][^:]*?):(?:[ \t]+(.*?))?[ \t]*$', line)
+        if not m:
+            continue
+        key, value = m[1].strip('\'"'), (m[2] or '').strip()
+        if value[:1] == '[' and value[-1:] == ']':
+            res.append((key, [unquote_scalar(v) for v in split_flow(value[1:-1])]))
+            continue
+        if not value:
+            nested = []
+            for line in lines[i + 1:]:
+                if line.strip() and not line[0].isspace() and not line.startswith('- '):
+                    break
+                item = line.strip()
+                if item and not item.startswith('#'):
+                    nested.append(unquote_scalar(item[2:]) if item.startswith('- ') or item == '-' else item)
+            if nested:
+                res.append((key, nested))
+                continue
+        res.append((key, front_matter_value(front, m[1]) or ''))
+    return res
+
+def split_flow(text):
+    """Splits `a, "b, c", d` by commas outside quotes."""
+    items, cur, quote = [], '', None
+    for c in text:
+        if quote:
+            quote = None if c == quote else quote
+        elif c in '"\'':
+            quote = c
+        elif c == ',':
+            items.append(cur)
+            cur = ''
+            continue
+        cur += c
+    items.append(cur)
+    return [item.strip() for item in items if item.strip()]
+
+def unquote_scalar(value):
+    value = value.strip()
+    if len(value) > 1 and value[0] in '"\'' and value[-1] == value[0]:
+        return value[1:-1]
+    return re.sub(r'\s+#.*$', '', value)
+
 def titleize(name):
     words = camel_split(name, r'[\s_-]+')
     if not words:

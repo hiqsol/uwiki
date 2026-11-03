@@ -4,16 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P4 Front matter block
-
-- a) `build` HTML shows front matter in a block floating right, its top level with the page title
-- b) Folded by default, one line as tall as the title: values in order, joined by ` · `, lists by `, `,
-  cut with an ellipsis, ▸ unfolds
-- c) Unfolded it grows down as needed into a table of all keys and values, title included,
-  the page text flows around it, ▾ folds back
-- d) Narrow screens: the block stops floating and sits under the title, folded too
-- e) Pages without front matter get no block, `--no-front-matter` turns it off
-
 ## P5 Hover preview
 
 - a) Hovering a vault link in HTML shows a popover with the target page, or its section for `#heading`

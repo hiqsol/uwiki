@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .convert import Converter
 from .order import Links, Order
-from .vault import Filter, Selection, cebabize
+from .vault import Filter, Selection, cebabize, read_front_matter
 
 ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
 
@@ -22,6 +22,7 @@ def read_asset(name):
 @dataclass
 class BuildOptions:
     backlinks: bool = True
+    front_matter: bool = True
 
 class Builder:
     """Renders selected pages in reading order, folders on the way to them by title only.
@@ -100,8 +101,26 @@ class Builder:
                  for source, heading in self.backlinks(node)]
         return f'Linked from: {", ".join(links)}\n\n' if links else ''
 
+    def html_front_matter(self, node):
+        """Front matter as folded line of values unfolding into a table of keys and values, none for title only."""
+        if not self.options.front_matter or node.file is None:
+            return ''
+        items = read_front_matter(node.file)
+        if not items:
+            return ''
+        text = lambda value: ', '.join(value) if isinstance(value, list) else value
+        line = ' · '.join(text(value) for key, value in items if key != 'title' and text(value))
+        if not line:
+            return ''
+        rows = ''.join(f'<tr><th>{html.escape(key)}</th><td>{html.escape(text(value))}</td></tr>'
+                       for key, value in items)
+        return (f'<details class="front-matter"><summary><span>{html.escape(line)}</span></summary>'
+                f'<table>{rows}</table></details>')
+
     def html(self, title):
-        content = ''.join(self.converter(node).html(body) + self.html_backlinks(node) for node, body in self.nodes())
+        content = ''.join(
+            self.converter(node).html(body, self.html_front_matter(node) if body else '') + self.html_backlinks(node)
+            for node, body in self.nodes())
         return self.render('uwiki.html', {
             'title':    html.escape(title),
             'content':  content,

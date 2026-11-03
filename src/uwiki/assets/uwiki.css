@@ -267,6 +267,67 @@ a:hover {
     font-weight: 500;
     letter-spacing: 0.02em;
 }
+/* front matter floats right of the title, folded to one line of values */
+.content .front-matter {
+    float: right;
+    max-width: min(45%, 24rem);
+    margin: 0 0 0.6rem 1rem;
+    color: var(--fg-muted);
+    font-weight: 400;
+    letter-spacing: normal;
+    line-height: 1.5;
+}
+.content .front-matter[open] {
+    max-width: min(60%, 32rem);
+}
+.content .front-matter > summary {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    height: 1.3em;
+    list-style: none;
+    cursor: pointer;
+}
+.content .front-matter > summary::-webkit-details-marker {
+    display: none;
+}
+.content .front-matter > summary::before {
+    content: "▸";
+    font-size: 13px;
+}
+.content .front-matter[open] > summary::before {
+    content: "▾";
+}
+.content .front-matter > summary > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+}
+.content .front-matter[open] > summary > span {
+    display: none;
+}
+.content .front-matter table {
+    margin: 2px 0 0;
+    font-size: 14px;
+    background: var(--bg-alt);
+}
+.content .front-matter th, .content .front-matter td {
+    padding: 3px 10px;
+    vertical-align: top;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.content .front-matter th {
+    color: var(--fg-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.content .front-matter td {
+    color: var(--fg);
+}
 .content :target {
     animation: target 1.5s ease-out;
 }
@@ -435,6 +496,20 @@ details.callout:not([open]) > summary {
     }
     .content .page:first-child {
         padding-right: 48px;
+    }
+    /* front matter stops floating, sits under the title */
+    .content .page:has(> .front-matter) {
+        display: flex;
+        flex-direction: column;
+    }
+    .content .front-matter, .content .front-matter[open] {
+        float: none;
+        order: 1;
+        max-width: 100%;
+        margin: 4px 0 0;
+    }
+    .content .front-matter > summary {
+        justify-content: flex-start;
     }
 }
 

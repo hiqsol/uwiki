@@ -26,16 +26,22 @@
   bindEvents();
   spy();
 
-  // page header "Folder / Subfolder / Page" shows folders as a crumb above page title
+  // page header "Folder / Subfolder / Page" shows folders as a crumb above page title,
+  // front matter block goes between them, floating right of the title
   function addCrumbs() {
     pages.forEach(function (h) {
+      var block = h.querySelector(".front-matter");
+      if (block) h.removeChild(block);
       var text = h.textContent;
-      if (!h.dataset.title || h.dataset.title === text) return;
-      var crumb = document.createElement("span");
-      crumb.className = "crumb";
-      crumb.textContent = text.slice(0, text.length - h.dataset.title.length - 3);
-      h.textContent = h.dataset.title;
-      h.insertBefore(crumb, h.firstChild);
+      var crumb = null;
+      if (h.dataset.title && h.dataset.title !== text) {
+        crumb = document.createElement("span");
+        crumb.className = "crumb";
+        crumb.textContent = text.slice(0, text.length - h.dataset.title.length - 3);
+        h.textContent = h.dataset.title;
+        h.insertBefore(crumb, h.firstChild);
+      }
+      if (block) h.insertBefore(block, crumb ? crumb.nextSibling : h.firstChild);
     });
   }
 

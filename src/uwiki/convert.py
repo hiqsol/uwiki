@@ -363,14 +363,15 @@ class Converter:
         self._title = ' / '.join(titles)
         return self._title
 
-    def html_header(self):
+    def html_header(self, aside=''):
         tag = f'h{min(self.page.depth + 1, 6)}'
-        return f'<{tag} id="{self.page.anchor}" class="page" data-title="{html.escape(self.page.title)}">{html.escape(self.title)}</{tag}>\n\n'
+        return (f'<{tag} id="{self.page.anchor}" class="page" data-title="{html.escape(self.page.title)}">'
+                f'{html.escape(self.title)}{aside}</{tag}>\n\n')
 
-    def html(self, body=True):
-        """Page header and text as HTML, header only without body."""
+    def html(self, body=True, aside=''):
+        """Page header with aside HTML in it and text as HTML, header only without body."""
         self.mode = 'html'
-        text = self.html_header()
+        text = self.html_header(aside)
         if body:
             text += self.read()
         import markdown

@@ -23,7 +23,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 ## Usage
 
 ```
-uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--exclude GLOB] [--include GLOB]
+uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--no-front-matter] [--exclude GLOB] [--include GLOB]
 uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--exclude GLOB] [--include GLOB]
 uwiki llms <folder|file>... [--title TITLE] [-o FILE] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
 uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
@@ -120,7 +120,7 @@ Supported Obsidian syntax:
 - `[[Page]]`, `[[Page|text]]`, `[[folder/Page]]`, `[[Page#Heading]]`, `[[#Heading]]`
 - `![[Page]]`, `![[Page#Heading]]` embeds, `![[image.png]]`, `![[image.png|300]]`
 - callouts `> [!note] Title`, foldable `> [!note]-`
-- YAML front matter is stripped
+- YAML front matter is stripped from text, HTML shows it next to page title
 
 Wiki link name resolves to a page before a folder without folder page,
 then to one nearer the linking page, then to the shortest path.
@@ -136,6 +136,9 @@ Folder page is `README.md` (any case), `index.md` or file named as folder, e.g. 
 The HTML page is self-contained, light or dark by system preference:
 
 - sidebar with collapsible contents following the page being read, expand or collapse all at once
+- front matter in a block right of page title, folded into one line of values, `▸` unfolds a table
+  of all keys and values the text flows around, under the title on narrow screens;
+  `--no-front-matter` leaves it out
 - fuzzy full text search: press `/` or `Ctrl+K`, tolerates typos and abbreviations,
   `↑` `↓` `Enter` to open a result with matched words highlighted in text, `Esc` to clear
 

@@ -180,6 +180,24 @@ class RenderTest(unittest.TestCase):
         self.assertNotIn('backlinks', section(self.content, 'root'))
         self.assertNotIn('backlinks', section(self.content, 'r-d-x'))
 
+    def test_front_matter_block(self):
+        self.assertIn('data-title="My Page">My Page<details class="front-matter"><summary><span>a, b · ignored</span>'
+                      '</summary><table><tr><th>tags</th><td>a, b</td></tr><tr><th>summary</th><td>ignored</td></tr>'
+                      '</table></details></h2>', self.content)
+        self.assertEqual(self.content.count('class="front-matter"'), 1)
+        self.assertNotIn('front-matter', self.md)
+
+    def test_front_matter_values(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', LINKCHECK, '--html', '-o', out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            html = read(os.path.join(out, 'linkcheck.html'))
+            res = run('build', VAULT, '--no-front-matter', '-o', out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertNotIn('<details class="front-matter">', read(os.path.join(out, 'vault.html')))
+        self.assertIn('<summary><span>Folded over lines.</span></summary><table><tr><th>title</th><td>Bee</td></tr>'
+                      '<tr><th>description</th><td>Folded over lines.</td></tr></table>', html)
+
     def test_no_backlinks(self):
         with tempfile.TemporaryDirectory() as out:
             res = run('build', VAULT, '--no-backlinks', '-o', out)
