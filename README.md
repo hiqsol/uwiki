@@ -23,20 +23,30 @@ uv tool install git+https://github.com/hiqsol/uwiki
 ## Usage
 
 ```
-uwiki build <folder> [title] [--html] [--md] [-o <output-dir>] [--exclude GLOB] [--include GLOB]
+uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--exclude GLOB] [--include GLOB]
 uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--exclude GLOB] [--include GLOB]
-uwiki llms <folder> [title] [-o <file>] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
+uwiki llms <folder|file>... [--title TITLE] [-o FILE] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
 uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
 uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
-uwiki wrap [-w 70] [--check] <file>...
+uwiki wrap <folder|file>... [-w 70] [--check] [--exclude GLOB] [--include GLOB]
 ```
 
-`build` writes `<title>.html` and `<title>.md` (title defaults to folder name),
-`--html` or `--md` to write only one of them.
+Every command takes folders and files of one or more vaults.
+Vault root of a path is the nearest folder with `.obsidian`, else the folder all given paths share,
+pages keep their folders from it and links resolve in the whole vault.
+
+`build` writes given paths into one `<title>.html` and one `<title>.md`.
+`-o` is a folder to write them in, default: current, or a file name:
+`-o out/Wiki` writes both, `-o out/Wiki.html` or `-o out/Wiki.md` only one,
+`--html` or `--md` writes only one of them otherwise.
+Title defaults to the name of the one folder built, else to the `-o` file name,
+`-o` is required for several paths.
+Folders on the way to built pages show by their titles only,
+a link or embed from built pages to a vault page left out fails the build with `path:line: message`.
 Page title is front matter `title`, else the heading page starts with, else file name.
 Page header shows it after titles of all its folders, a leading heading repeating it is dropped.
 
-`build`, `check`, `llms`, `ls` and `stats` skip hidden files and folders, `node_modules` and `vendor`.
+Commands skip hidden files and folders, `node_modules` and `vendor`.
 `--exclude` skips more, `--include` takes back skipped or excluded ones, both repeatable.
 Glob with `/` matches path from vault root, without it any path segment, like in `.gitignore`,
 `**` matches across folders, a matching folder matches everything in it:
@@ -52,8 +62,9 @@ no chain of links leads to from the root folder page (any link, without one),
 `--unlinked` warns about pages no other page links to, without changing exit code.
 Links count from every page of the vault, checked or not.
 
-`llms` writes [llms.txt](https://llmstxt.org): title, `--summary` as quote
-(default: root folder page front matter `description`), then a section per folder
+`llms` writes [llms.txt](https://llmstxt.org) (default: in the one folder listed, else `-o` is required):
+title (default: the folder name), `--summary` as quote
+(default: front matter `description` of the folder page of the folder given paths share), then a section per folder
 listing its pages as `- [title](path): description`, links relative to the output file.
 Folder page goes first, then pages in the order it links them, then the rest by name.
 `--check` exits 1 if the file is out of date instead of writing it.
@@ -81,6 +92,7 @@ Example:
 
 ```
 $ uwiki build vault -o out     # out/vault.html and out/vault.md
+$ uwiki build vault/docs vault/adr -o out/Docs.html
 $ uwiki check vault
 vault/Ideas.md:12: unresolved link: [[Roadmap]]
 vault/Plans.md:7: list number 3, expected 2

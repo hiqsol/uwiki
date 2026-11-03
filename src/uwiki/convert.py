@@ -22,9 +22,10 @@ class Converter:
     IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.avif'}
     FRONT_MATTER = FRONT_MATTER
 
-    def __init__(self, page, scanner, outdir='.', stack=(), source=None):
+    def __init__(self, page, scanner, outdir='.', stack=(), source=None, scope=None):
         self.page = page
         self.scanner = scanner
+        self.scope = scope  # build scope: inside(node) tells links it can lead to, report(source, line, message)
         self.outdir = os.path.abspath(outdir)
         self.embedded = source is not None
         self.source = source or (page.page if page.is_folder and page.page else page)
@@ -194,22 +195,32 @@ class Converter:
         return self.outside_code(self.MD_LINK.sub(self.markdown_link, text), self.process_links)
 
     def markdown_link(self, match):
-        href = None if match[1] else self.local_href(match[3])
+        if match[1]:
+            return match[0]
+        href = self.local_href(match[3], self.line + match.string.count('\n', 0, match.start()))
         return match[0] if href is None else f'[{match[2]}]({href})'
 
     def link_definition(self, match):
         """Reference link definition `[ref]: path.md#heading` points where inline link would."""
-        href = self.local_href(match[1].strip('<>'))
+        href = self.local_href(match[1].strip('<>'), self.line)
         return match[0] if href is None else match[0][:match.start(1) - match.start()] + href
 
-    def local_href(self, href):
+    def local_href(self, href, line=None):
         """Anchor of vault page or heading relative link points at, None for other links."""
         if not self.is_local(href):
             return None
         target, heading = self.resolve_href(href)
         if target is None:
             return None
+        self.check_scope(target, href, line)
         return '#' + (self.anchor(target, heading) if heading else target.anchor)
+
+    def check_scope(self, target, link, line=None, embed=False):
+        """Reports link to vault page build leaves out."""
+        if self.scope and target is not None and not self.scope.inside(target):
+            kind = 'embed' if embed else 'link'
+            self.scope.report(self.source, self.line if line is None else line,
+                              f'{kind} outside built paths: {link}')
 
     def anchor(self, target, heading):
         """Heading anchor in target, page anchor for the title heading it drops."""
@@ -302,21 +313,26 @@ class Converter:
         name, heading, _ = self.parse_link(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.source
         node = target.page if target and target.is_folder else target
+        if node is not None and self.scope and not self.scope.inside(target):
+            self.check_scope(target, f'![[{text}]]', embed=True)
+            return self.link(text, checked=True) + '\n'
         if node is None or node.fullpath in self.stack:
             return self.link(text) + '\n'
-        sub = Converter(self.page, self.scanner, self.outdir, self.stack, node)
+        sub = Converter(self.page, self.scanner, self.outdir, self.stack, node, self.scope)
         sub.mode = self.mode
         content = sub.read_file(node, heading).strip()
         if self.mode == 'md':
             return f'\n{content}\n\n'
         return f'\n<div class="embed" markdown="1">\n\n{content}\n\n</div>\n\n'
 
-    def link(self, text):
+    def link(self, text, checked=False):
         name, heading, description = self.parse_link(text)
         if name:
             target = self.scanner.resolve(name, self.source.path)
             if not target and not heading and self.attachment(text):
                 return self.attachment_link(text)
+            if not checked:
+                self.check_scope(target, f'[[{text}]]')
             title = target.title if target else titleize(Path(name).name)
         else:
             target = self.page
@@ -351,10 +367,12 @@ class Converter:
         tag = f'h{min(self.page.depth + 1, 6)}'
         return f'<{tag} id="{self.page.anchor}" class="page" data-title="{html.escape(self.page.title)}">{html.escape(self.title)}</{tag}>\n\n'
 
-    def html(self):
+    def html(self, body=True):
+        """Page header and text as HTML, header only without body."""
         self.mode = 'html'
         text = self.html_header()
-        text += self.read()
+        if body:
+            text += self.read()
         import markdown
         return markdown.markdown(text, extensions=['tables', 'fenced_code', 'attr_list', 'md_in_html'])
 
@@ -362,7 +380,8 @@ class Converter:
         tag = '#' * min(self.page.depth + 1, 6)
         return f'<a id="{self.page.anchor}"></a>\n\n{tag} {self.title}\n\n'
 
-    def md(self):
+    def md(self, body=True):
+        """Page header and text as markdown, header only without body."""
         self.mode = 'md'
-        return self.md_header() + self.read().strip() + '\n\n'
+        return self.md_header() + (self.read().strip() + '\n\n' if body else '')
 

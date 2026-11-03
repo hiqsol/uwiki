@@ -75,9 +75,9 @@ class CheckConverter(Converter):
         elif target is not None and heading is None:
             self.report(line, f'missing heading: {href}')
 
-    def link(self, text):
+    def link(self, text, checked=False):
         self.check_link(text)
-        return super().link(text)
+        return super().link(text, checked)
 
     def embed_note(self, text):
         self.check_link(text)

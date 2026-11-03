@@ -274,10 +274,62 @@ class CliTest(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(self.out)), ['vault.html', 'vault.md'])
 
     def test_title_and_output_dir(self):
-        res = run('build', VAULT + '/', 'My Wiki', '-o', os.path.join(self.out, 'sub'))
+        res = run('build', VAULT + '/', '--title', 'My Wiki', '-o', os.path.join(self.out, 'sub') + '/')
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertEqual(sorted(os.listdir(os.path.join(self.out, 'sub'))), ['My Wiki.html', 'My Wiki.md'])
         self.assertIn('<title>My Wiki</title>', read(os.path.join(self.out, 'sub', 'My Wiki.html')))
+
+    def test_output_file_name(self):
+        res = run('build', VAULT, '-o', os.path.join(self.out, 'sub', 'Wiki'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(sorted(os.listdir(os.path.join(self.out, 'sub'))), ['Wiki.html', 'Wiki.md'])
+        self.assertIn('<title>vault</title>', read(os.path.join(self.out, 'sub', 'Wiki.html')))
+        res = run('build', VAULT, '-o', os.path.join(self.out, 'one', 'Wiki.md'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(os.listdir(os.path.join(self.out, 'one')), ['Wiki.md'])
+        res = run('build', VAULT, '--html', '-o', os.path.join(self.out, 'Wiki.md'))
+        self.assertEqual(res.returncode, 2)
+        self.assertIn('--html and --md do not go with -o', res.stderr)
+
+    def test_several_paths_into_one_output(self):
+        res = run('build', VAULT + '/Projects', VAULT + '/Archive', cwd=self.out)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn('-o is required for several paths', res.stderr)
+        res = run('build', VAULT + '/Projects', VAULT + '/Archive', '-o', self.out)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn('--title is required', res.stderr)
+        res = run('build', VAULT + '/Projects', VAULT + '/Archive', '-o', os.path.join(self.out, 'Work'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        html = read(os.path.join(self.out, 'Work.html'))
+        self.assertIn('<h1 id="root" class="page" data-title="Work">Work</h1>', html)
+        self.assertIn('id="projects" class="page"', html)
+        self.assertIn('Projects folder page', html)
+        self.assertIn('Archive readme.', html)
+        self.assertIn('data-title="Notes">Projects / Alpha / Notes</h4>', html)
+        self.assertNotIn('Root text.', html)
+        self.assertNotIn('id="my-page"', html)
+
+    def test_vault_root_keeps_folders(self):
+        res = run('build', VAULT + '/Projects/Alpha', '-o', self.out)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        html = read(os.path.join(self.out, 'Alpha.html'))
+        self.assertIn('<h2 id="projects" class="page" data-title="Projects">Projects</h2>', html)
+        self.assertNotIn('Projects folder page', html)
+        self.assertIn('data-title="Notes">Projects / Alpha / Notes</h4>', html)
+
+    def test_links_outside_built_paths_fail(self):
+        res = run('build', 'vault/my notes.md', 'vault/root.md', '-o', os.path.join(self.out, 'Notes'), cwd=FIXTURES)
+        self.assertEqual(res.returncode, 1)
+        self.assertEqual(res.stdout.splitlines(), [
+            'vault/my notes.md:3: embed outside built paths: ![[MyPage#Second Section]]',
+            'vault/my notes.md:5: embed outside built paths: ![[2024Plans]]',
+        ])
+        self.assertEqual(os.listdir(self.out), [])
+        res = run('build', 'vault/index.md', 'vault/Archive', '-o', os.path.join(self.out, 'Home'), cwd=FIXTURES)
+        self.assertEqual(res.returncode, 1)
+        lines = res.stdout.splitlines()
+        self.assertEqual(lines[0], 'vault/index.md:1: link outside built paths: [[MyPage]]')
+        self.assertNotIn('Archive', res.stdout)
 
     def test_html_only(self):
         run('build', VAULT, '--html', '-o', self.out)
@@ -290,9 +342,14 @@ class CliTest(unittest.TestCase):
     def test_bad_arguments(self):
         res = run('build', os.path.join(self.out, 'missing'))
         self.assertEqual(res.returncode, 2)
-        self.assertIn('not a directory', res.stderr)
-        res = run('build', VAULT, 'title', 'extra')
+        self.assertIn('uwiki build: error: no such file or folder', res.stderr)
+        res = run('build', VAULT, 'title')
         self.assertEqual(res.returncode, 2)
+        res = run('build')
+        self.assertEqual(res.returncode, 2)
+        res = run('build', VAULT, os.path.join(FIXTURES, 'broken'), '-o', os.path.join(self.out, 'x'))
+        self.assertEqual(res.returncode, 2)
+        self.assertIn('paths are in different vaults', res.stderr)
         res = run()
         self.assertEqual(res.returncode, 2)
 
@@ -421,7 +478,7 @@ class LlmsTest(unittest.TestCase):
     def test_pages_with_descriptions_by_folder(self):
         with tempfile.TemporaryDirectory() as out:
             output = os.path.join(out, 'llms.txt')
-            res = run('llms', LINKCHECK, 'Links', '-o', output)
+            res = run('llms', LINKCHECK, '--title', 'Links', '-o', output)
             self.assertEqual(res.returncode, 0, res.stderr)
             rel = os.path.relpath(LINKCHECK, out)
             self.assertEqual(read(output), '\n'.join([
@@ -553,6 +610,19 @@ class WrapTest(unittest.TestCase):
         self.assertEqual(lines[1], self.TEXT.splitlines()[1])
         self.assertEqual(lines[-1], self.TEXT.splitlines()[-1])
         self.assertEqual(run('wrap', '--check', '-w', '40', self.file).returncode, 0)
+
+    def test_folders_with_filters(self):
+        os.makedirs(os.path.join(self.tmp.name, 'node_modules'))
+        os.makedirs(os.path.join(self.tmp.name, 'sub'))
+        for name in ['node_modules/Skip.md', 'sub/Other.md']:
+            with open(os.path.join(self.tmp.name, name), 'w', encoding='utf-8') as f:
+                f.write(self.TEXT)
+        res = run('wrap', '--check', '-w', '40', '.', '--exclude', 'Other.md', cwd=self.tmp.name)
+        self.assertEqual((res.returncode, res.stdout), (1, './Page.md:4: longer than 40 columns\n'))
+        res = run('wrap', '-w', '40', '.', cwd=self.tmp.name)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertNotEqual(read(os.path.join(self.tmp.name, 'sub', 'Other.md')), self.TEXT)
+        self.assertEqual(read(os.path.join(self.tmp.name, 'node_modules', 'Skip.md')), self.TEXT)
 
     def test_unbreakable_line_not_reported(self):
         text = ('1. [Rules\n'

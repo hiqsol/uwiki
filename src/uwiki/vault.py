@@ -435,3 +435,64 @@ class Vaults:
     def loose_page(scanner, file):
         """Page for a file scanner skipped, e.g. hidden one."""
         return Page(None, Path(file).stem, os.path.splitext(file[len(scanner.path):])[0], file)
+
+
+class Selection:
+    """Pages under given paths in the one vault they share, as build and llms take them.
+
+    Vault root is found as Vaults does, pages keep their folders from it,
+    folders on the way to selected pages are shown by their titles only.
+    """
+
+    def __init__(self, paths, filter=None):
+        self.paths = [os.path.abspath(p) for p in paths]
+        self.vaults = Vaults(paths, filter)
+        folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in self.paths]
+        common = os.path.commonpath(folders)
+        roots = {Vaults.vault_root(p, common) for p in self.paths}
+        if len(roots) > 1:
+            raise ValueError('paths are in different vaults: ' + ', '.join(sorted(roots)))
+        self.root = roots.pop()
+        self.scanner, pages = self.vaults.vault(self.root)
+        nodes = set(pages.values())
+        self.shown = {}  # selected node: path to show
+        for scanner, page, shown in self.vaults.files():
+            if page in nodes:
+                self.shown[page] = shown
+        self.common = self.folder(common)
+        self.shown_root = next((arg for arg, p in zip(paths, self.paths) if p == self.root),
+                               os.path.relpath(self.root))
+        self.ancestors = set()
+        for node in self.shown:
+            folder = node.folder
+            while folder and folder not in self.ancestors:
+                self.ancestors.add(folder)
+                folder = folder.folder
+
+    def folder(self, path):
+        """Vault folder at given path, None if it is no folder of the vault."""
+        node = self.scanner.root
+        for name in Path(os.path.relpath(path, self.root)).parts:
+            node = node.children.get(name) if name != '.' else node
+            if node is None or not node.is_folder:
+                return None
+        return node
+
+    def selected(self, node):
+        return node in self.shown
+
+    def shows(self, node):
+        """Whether build shows node: selected one with its text, folder on the way to it by its title."""
+        return node in self.shown or node in self.ancestors
+
+    def inside(self, node):
+        """Whether links to node lead to something built: selected page or folder, or title only folder."""
+        return node in self.shown or node.is_folder and node.page is None and node in self.ancestors
+
+    def show(self, node):
+        """Path to show for page, folder or folder page file."""
+        if not node.is_folder and node.folder and node.folder.page is node:
+            node = node.folder
+        if node in self.shown:
+            return self.shown[node]
+        return os.path.relpath(node.file or node.fullpath)

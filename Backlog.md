@@ -4,22 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P1 Same command line form
-
-- a) Every command is `uwiki <command> <folder|file>... [options]`: paths are the only positionals,
-  at least one is required, options follow them in usage and README; `mv` (P12) is the exception
-- b) `build` and `llms` lose positional title, `--title` replaces it, no backward compatibility
-- c) `build`, `llms` and `watch` take several paths into one output, `-o` is then required,
-  `serve` writes to a temporary folder as before
-- d) Vault root for given paths is found as in `check`: nearest `.obsidian`, else their common folder,
-  pages keep their folders from that root
-- e) `build -o` is a folder, writing `<title>.html` and `<title>.md` in it, or a file name:
-  `out/Wiki` writes both, `out/Wiki.html` or `out/Wiki.md` only one, `--html` and `--md` stay for the first two;
-  title defaults to the folder name of a single folder path, else `--title` is required with an `-o` folder
-- f) A link or embed from built pages to a vault page outside the given paths fails `build` with
-  `path:line: message` for each, exit 1
-- g) `wrap` takes folders too, with the same skip list, `--exclude` and `--include` as other commands
-
 ## P2 Reading order of pages in a folder
 
 - a) One order for `build`, `llms` and the HTML sidebar, alphabetical order does not help a reader in a small folder
@@ -114,7 +98,7 @@ Dependencies stay `markdown` only: watching, serving and previews use the standa
 
 ## P12 mv command
 
-- a) `uwiki mv <from> <to>`, the one exception to P1 form, moves or renames a page, folder or attachment inside the vault and
+- a) `uwiki mv <from> <to>`, the one command not taking `<folder|file>...`, moves or renames a page, folder or attachment inside the vault and
   rewrites every link to it: wiki links, markdown links, embeds and reference definitions
 - b) Relative markdown links inside moved pages are rewritten for their new place
 - c) Wiki links change only when they stop resolving to the moved target or would resolve

@@ -1,4 +1,4 @@
-"""Command line: uwiki build|check|llms|ls|stats|wrap."""
+"""Command line: uwiki <command> <folder|file>... [options]."""
 
 import argparse
 import json
@@ -7,36 +7,27 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .build import MDRenderer, Renderer
+from .build import Build, UsageError
 from .check import Checker, CheckOptions
 from .llms import Llms
 from .ls import Listing
 from .stats import Stats
-from .vault import Filter, Scanner
+from .vault import Filter, Selection
 from .wrap import WIDTH, wrap_files
 
-def build(args, parser):
-    path = os.path.abspath(args.folder)
-    if not os.path.isdir(path):
-        parser.error(f'not a directory: {args.folder}')
-    title = args.title or Path(path).name
-    both = not args.html and not args.md
-    os.makedirs(args.output, exist_ok=True)
-    output = os.path.join(args.output, title)
-
-    scanner = Scanner(path, title, Filter(args.include, args.exclude))
-    scanner.scan()
-    for warning in scanner.warnings:
-        print(f'warning: {os.path.join(args.folder, warning)}', file=sys.stderr)
-    if args.html or both:
-        Renderer(scanner, args.output).write(f'{output}.html', title)
-    if args.md or both:
-        MDRenderer(scanner, args.output).write(f'{output}.md')
+FILTER_USAGE = '[--exclude GLOB] [--include GLOB]'
 
 def report(problems):
     for problem in problems:
         print(problem)
     return 1 if problems else 0
+
+def build(args, parser):
+    builder = Build(args.paths, args.output, args.title, args.html, args.md, args.include, args.exclude)
+    problems = builder.run()
+    for warning in builder.warnings:
+        print(f'warning: {warning}', file=sys.stderr)
+    return report(problems)
 
 def check(args, parser):
     options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked)
@@ -47,13 +38,19 @@ def check(args, parser):
     return code
 
 def llms(args, parser):
-    path = os.path.abspath(args.folder)
-    if not os.path.isdir(path):
-        parser.error(f'not a directory: {args.folder}')
-    output = args.output or os.path.join(args.folder, 'llms.txt')
-    scanner = Scanner(path, args.title or Path(path).name, Filter(args.include, args.exclude))
-    scanner.scan()
-    text = Llms(scanner, output, args.title or Path(path).name, args.summary).text()
+    single = args.paths[0] if len(args.paths) == 1 and os.path.isdir(args.paths[0]) else None
+    if not args.output and not single:
+        raise UsageError('-o is required unless one folder is listed')
+    if not args.title and not single:
+        raise UsageError('--title is required unless one folder is listed')
+    output = args.output or os.path.join(single, 'llms.txt')
+    title = args.title or Path(os.path.abspath(single)).name
+    try:
+        selection = Selection(args.paths, Filter(args.include, args.exclude))
+    except ValueError as e:
+        raise UsageError(str(e)) from e
+    selection.scanner.root.default_title = title
+    text = Llms(selection, output, title, args.summary).text()
     if args.check:
         try:
             with open(output, encoding='utf-8') as f:
@@ -74,7 +71,11 @@ def stats(args, parser):
     print(json.dumps(res.data(args.top), indent=2, ensure_ascii=False) if args.json else res.report(args.top))
 
 def wrap(args, parser):
-    return report(wrap_files(args.files, args.width, args.check))
+    files = Listing(args.paths, args.include, args.exclude).files()
+    return report(wrap_files(files, args.width, args.check))
+
+def add_paths(p, help):
+    p.add_argument('paths', nargs='+', metavar='path', help=help)
 
 def add_filter(p):
     p.add_argument('--exclude', action='append', default=[], metavar='GLOB',
@@ -82,23 +83,37 @@ def add_filter(p):
     p.add_argument('--include', action='append', default=[], metavar='GLOB',
                    help='take matching ones even if skipped or excluded; repeatable')
 
-def main():
-    parser = argparse.ArgumentParser(prog='uwiki', description='Markdown utility for Obsidian vaults and other wikis.')
+def add_build_options(p):
+    p.add_argument('--title', help='default: name of the one folder built, or of -o file')
+    p.add_argument('--html', action='store_true', help='write HTML only (default: both HTML and markdown)')
+    p.add_argument('--md', action='store_true', help='write single markdown file only')
+    p.add_argument('-o', '--output',
+                   help='folder to write <title>.html and <title>.md in, default: current; '
+                        'or file name: out/Wiki writes both, out/Wiki.html or out/Wiki.md one; '
+                        'required for several paths')
+    add_filter(p)
+
+BUILD_USAGE = f'[--title TITLE] [--html] [--md] [-o OUTPUT] {FILTER_USAGE}'
+
+def command(commands, name, help, usage):
+    return commands.add_parser(name, help=help, prog=f'uwiki {name}', usage=f'%(prog)s <folder|file>... {usage}'.rstrip())
+
+def parser():
+    parser = argparse.ArgumentParser(prog='uwiki', usage='%(prog)s <command> <folder|file>... [options]',
+                                     description='Markdown utility for Obsidian vaults and other wikis.')
     parser.add_argument('-V', '--version', action='version', version=f'%(prog)s {__version__}')
     commands = parser.add_subparsers(dest='command', required=True, metavar='command')
 
-    p = commands.add_parser('build', help='build folder of markdown files into single HTML and markdown file')
-    p.add_argument('folder', help='folder with markdown files, e.g. Obsidian vault')
-    p.add_argument('title', nargs='?', help='default: folder name')
-    p.add_argument('--html', action='store_true', help='write HTML only (default: both HTML and markdown)')
-    p.add_argument('--md', action='store_true', help='write single markdown file only')
-    p.add_argument('-o', '--output', default='.', help='output directory, default: current')
-    add_filter(p)
+    p = command(commands, 'build', 'build folders and files of markdown into single HTML and markdown file',
+                BUILD_USAGE)
+    add_paths(p, 'folders or files to build, e.g. Obsidian vault')
+    add_build_options(p)
     p.set_defaults(func=build)
 
-    p = commands.add_parser('check', help='check unresolved links and headings, missing images, '
-                                          'frontmatter syntax and list numbering')
-    p.add_argument('paths', nargs='+', metavar='path', help='folders or files to check')
+    p = command(commands, 'check', 'check unresolved links and headings, missing images, '
+                                   'frontmatter syntax and list numbering',
+                f'[--no-folder-links] [--orphans] [--unlinked] {FILTER_USAGE}')
+    add_paths(p, 'folders or files to check')
     p.add_argument('--no-folder-links', action='store_true', help='report links to folders, not files')
     p.add_argument('--orphans', action='store_true',
                    help='report pages no links lead to from the root folder page')
@@ -107,36 +122,53 @@ def main():
     add_filter(p)
     p.set_defaults(func=check)
 
-    p = commands.add_parser('llms', help='write llms.txt: every page with its description, one section per folder')
-    p.add_argument('folder', help='folder with markdown files')
-    p.add_argument('title', nargs='?', help='default: folder name')
-    p.add_argument('-o', '--output', help='default: llms.txt in the folder, links are relative to it')
-    p.add_argument('--summary', help='quote under the title, default: description of root folder page')
+    p = command(commands, 'llms', 'write llms.txt: every page with its description, one section per folder',
+                f'[--title TITLE] [-o FILE] [--summary TEXT] [--check] {FILTER_USAGE}')
+    add_paths(p, 'folders or files to list')
+    p.add_argument('--title', help='default: name of the one folder listed')
+    p.add_argument('-o', '--output', help='default: llms.txt in the one folder listed, links are relative to it')
+    p.add_argument('--summary', help='quote under the title, default: description of the folder page '
+                                     'of the folder given paths share')
     p.add_argument('--check', action='store_true', help='report if output is out of date instead, exit 1 if so')
     add_filter(p)
     p.set_defaults(func=llms)
 
-    p = commands.add_parser('ls', help='list markdown files, or external links in them, one per line')
-    p.add_argument('paths', nargs='+', metavar='path', help='folders or files to list')
+    p = command(commands, 'ls', 'list markdown files, or external links in them, one per line',
+                f'[--external] [-z] {FILTER_USAGE}')
+    add_paths(p, 'folders or files to list')
     p.add_argument('--external', action='store_true',
                    help='list unique http and https links outside front matter and code instead')
     p.add_argument('-z', '--null', action='store_true', help='end lines with NUL, for xargs -0')
     add_filter(p)
     p.set_defaults(func=ls)
 
-    p = commands.add_parser('stats', help='count pages, words, headings, list items and links')
-    p.add_argument('paths', nargs='+', metavar='path', help='folders or files to count')
+    p = command(commands, 'stats', 'count pages, words, headings, list items and links',
+                f'[--by folder|KEY] [--top N] [--json] {FILTER_USAGE}')
+    add_paths(p, 'folders or files to count')
     p.add_argument('--by', default='folder', metavar='KEY', help='group by folder (default) or frontmatter key')
     p.add_argument('--top', type=int, default=5, help='list N largest pages, default: 5')
     p.add_argument('--json', action='store_true', help='print JSON with every page')
     add_filter(p)
     p.set_defaults(func=stats)
 
-    p = commands.add_parser('wrap', help='rewrap long lines of paragraphs and list items in place')
-    p.add_argument('files', nargs='+', metavar='file')
+    p = command(commands, 'wrap', 'rewrap long lines of paragraphs and list items in place',
+                f'[-w {WIDTH}] [--check] {FILTER_USAGE}')
+    add_paths(p, 'folders or files to rewrap')
     p.add_argument('-w', '--width', type=int, default=WIDTH, help=f'default: {WIDTH}, tab counts as 4')
     p.add_argument('--check', action='store_true', help='report lines to rewrap instead, exit 1 if any')
+    add_filter(p)
     p.set_defaults(func=wrap)
+    parser.commands = commands.choices
+    return parser
 
-    args = parser.parse_args()
-    sys.exit(args.func(args, parser) or 0)
+def main():
+    args = parser().parse_args()
+    p = parser().commands[args.command]
+    for path in getattr(args, 'paths', []):
+        if not os.path.exists(path):
+            p.error(f'no such file or folder: {path}')
+    try:
+        code = args.func(args, p)
+    except UsageError as e:
+        p.error(str(e))
+    sys.exit(code or 0)
