@@ -528,6 +528,15 @@ class ConfigTest(unittest.TestCase):
         ], err)
         self.assertEqual(code, 1)
 
+    def test_schema_order(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', os.path.join(FIXTURES, 'schema'), '--html', '-o', out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            html = read(os.path.join(out, 'schema.html'))
+        self.assertIn('<summary><span>draft · 2024-01-02 · a, b</span></summary><table>'
+                      '<tr><th>status</th><td>draft</td></tr><tr><th>date</th><td>2024-01-02</td></tr>'
+                      '<tr><th>tags</th><td>a, b</td></tr><tr><th>title</th><td>Good: one</td></tr></table>', html)
+
     def test_option_defaults(self):
         code, lines, err = self.check('schema', '--include', 'drafts')
         self.assertEqual(lines[-2:], [
@@ -540,7 +549,8 @@ class ConfigTest(unittest.TestCase):
     def test_pyproject_and_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(os.path.join(tmp, 'Page.md'), '---\ntitle: x\n---\nText.\n')
-            write(os.path.join(tmp, 'pyproject.toml'), '[project]\nname = "x"\n[tool.uwiki.schema]\n"owner!" = "string"\n')
+            write(os.path.join(tmp, 'pyproject.toml'),
+                  '[project]\nname = "x"\n[tool.uwiki.schema]\n_required = ["owner"]\nowner = "string"\n')
             code, lines, err = self.check('.', cwd=tmp)
             self.assertEqual(lines, ['./Page.md:2: unknown front matter key: title',
                                      './Page.md:1: missing front matter key: owner'], err)
@@ -548,6 +558,14 @@ class ConfigTest(unittest.TestCase):
             code, lines, err = self.check('.', cwd=tmp)
             self.assertEqual(code, 2)
             self.assertIn("schema.owner: 'person' is no list of values nor type", err)
+            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\n"owner!" = "string"\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(code, 2)
+            self.assertIn('schema."owner!": list required keys in _required instead of !', err)
+            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\n_required = ["owner"]\n[schema."docs/**"]\nowner = "string"\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(code, 2)
+            self.assertIn('schema._required: owner is not in schema', err)
             write(os.path.join(tmp, 'uwiki.toml'), '[check]\nnope = true\n')
             code, lines, err = self.check('.', cwd=tmp)
             self.assertEqual(code, 2)

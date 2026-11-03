@@ -58,17 +58,19 @@ class Config:
         return self._schema
 
 class Schema:
-    """Front matter keys allowed, `!` after a key makes it required, value is allowed values or a type.
+    """Front matter keys allowed, value is allowed values or a type, `_required` lists required keys.
 
     ```
     [schema]
-    "status!" = ["stub", "draft", "stable"]
-    date = "date"
+    _required = ["status"]
+    status = ["stub", "draft", "stable"]
     aliases = "list"
     [schema."docs/**"]
-    "owner!" = "string"
+    _required = ["owner"]
+    owner = "string"
     ```
     Folder tables add to the top level rules, matching glob as `--exclude` does, later ones win.
+    Keys go in schema order, build shows front matter so.
     """
 
     TYPES = ('string', 'number', 'bool', 'date', 'list', 'any')
@@ -77,38 +79,51 @@ class Schema:
 
     def __init__(self, table, path=None):
         self.path = path
-        self.rules = []  # (glob regex or None, {key: (required, spec)})
+        self.rules = []  # (glob regex or None, {key: spec}, required keys)
         if not isinstance(table, dict):
             raise ConfigError(f'{path}: schema should be a table')
-        top = {}
+        top = {key: value for key, value in table.items() if not isinstance(value, dict)}
+        self.rules.append((None, *self.parse(top, 'schema')))
         for key, value in table.items():
             if isinstance(value, dict):
-                self.rules.append((Filter.compile(key), self.parse(value, f'schema."{key}"')))
-            else:
-                top[key] = value
-        self.rules.insert(0, (None, self.parse(top, 'schema')))
+                self.rules.append((Filter.compile(key), *self.parse(value, f'schema."{key}"', self.rules[0][1])))
         self.empty = not table
 
-    def parse(self, table, where):
-        res = {}
+    def parse(self, table, where, known=()):
+        """Specs of keys of table and its required keys, ones of known specs too."""
+        specs = {}
         for key, spec in table.items():
-            required = key.endswith('!')
-            key = key[:-1] if required else key
+            if key == '_required':
+                continue
+            if key.endswith('!'):
+                raise ConfigError(f'{self.path}: {where}."{key}": list required keys in _required instead of !')
             if isinstance(spec, dict):
                 raise ConfigError(f'{self.path}: {where}.{key}: nested tables are folder rules of schema only')
             if not isinstance(spec, list) and spec not in self.TYPES:
                 raise ConfigError(f'{self.path}: {where}.{key}: {spec!r} is no list of values '
                                   f'nor type: {", ".join(self.TYPES)}')
-            res[key] = required, spec
-        return res
+            specs[key] = spec
+        required = table.get('_required', [])
+        if not isinstance(required, list) or not all(isinstance(key, str) for key in required):
+            raise ConfigError(f'{self.path}: {where}._required should be a list of keys')
+        for key in required:
+            if key not in specs and key not in known:
+                raise ConfigError(f'{self.path}: {where}._required: {key} is not in schema')
+        return specs, set(required)
 
     def keys(self, path):
-        """Rules for page at vault relative path: key: (required, spec)."""
-        res = {}
-        for glob, rules in self.rules:
+        """Rules for page at vault relative path in schema order: key: (required, spec)."""
+        specs, required = {}, set()
+        for glob, rules, keys in self.rules:
             if glob is None or glob.fullmatch(path):
-                res.update(rules)
-        return res
+                specs.update(rules)
+                required |= keys
+        return {key: (key in required, spec) for key, spec in specs.items()}
+
+    def sort(self, items, path):
+        """Front matter items of page at path in schema order, keys out of schema after them as they come."""
+        order = {key: n for n, key in enumerate(self.keys(path))}
+        return sorted(items, key=lambda item: order.get(item[0], len(order)))
 
     def problems(self, items, path):
         """(key, message) for front matter items of page at path, key None for missing ones."""

@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .config import Config
 from .convert import Converter
 from .order import Links, Order
 from .vault import Filter, Selection, cebabize, read_front_matter
@@ -46,6 +47,7 @@ class Builder:
         self.links = Links(self.scanner)
         self.order = Order(self.scanner, self.links)
         self._backlinks = None
+        self._schema = None
 
     def inside(self, node):
         return self.selection.inside(node)
@@ -104,10 +106,14 @@ class Builder:
         return f'Linked from: {", ".join(links)}\n\n' if links else ''
 
     def html_front_matter(self, node):
-        """Front matter as folded line of values unfolding into a table of keys and values, none for title only."""
+        """Front matter in schema order as folded line of values unfolding into a table of keys and values,
+        none for title only."""
         if not self.options.front_matter or node.file is None:
             return ''
-        items = read_front_matter(node.file)
+        if self._schema is None:
+            self._schema = Config.load(self.scanner.path).schema
+        path = os.path.relpath(node.file, self.scanner.path).replace(os.sep, '/')
+        items = self._schema.sort(read_front_matter(node.file), path)
         if not items:
             return ''
         text = lambda value: ', '.join(value) if isinstance(value, list) else value

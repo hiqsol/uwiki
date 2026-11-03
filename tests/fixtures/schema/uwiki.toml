@@ -4,10 +4,12 @@ exclude = ["drafts"]
 unlisted = true
 
 [schema]
-"status!" = ["stub", "draft", "stable"]
+_required = ["status"]
+status = ["stub", "draft", "stable"]
 date = "date"
 tags = "list"
 title = "string"
 
 [schema."docs/**"]
-"owner!" = "string"
+_required = ["owner"]
+owner = "string"

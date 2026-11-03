@@ -162,13 +162,15 @@ mentions-min-length = 4
 [build]
 backlinks = false
 
-[schema]
-"status!" = ["stub", "draft", "stable"]   # ! makes the key required, a list gives allowed values
+[schema]                                  # keys in the order build shows them
+_required = ["status"]                    # required keys
+status = ["stub", "draft", "stable"]      # a list gives allowed values
 date = "date"                             # or a type: string, number, bool, date, list, any
 aliases = "list"
 
 [schema."docs/**"]                        # folder rules add to the top level ones, glob as --exclude
-"owner!" = "string"
+_required = ["owner"]
+owner = "string"
 ```
 
 Supported Obsidian syntax:
@@ -201,8 +203,9 @@ The HTML page is self-contained, light or dark by system preference:
 - hover preview of a link target: its page or `#heading` section in a popover, cloned from the page,
   so it works from `file://`; links in it preview too, 3 levels deep; `Esc` closes, the title follows the link;
   touch devices get no popover, a tap follows the link
-- front matter in a block right of page title, folded into one line of values, `▸` unfolds a table
-  of all keys and values the text flows around, under the title on narrow screens;
+- front matter in a block top right of page header, right of its folder crumb, keys in `[schema]` order,
+  folded into one line of values, `▸` unfolds a table of all keys and values the text flows around,
+  under the title on narrow screens;
   `--no-front-matter` leaves it out
 - fuzzy full text search: press `/` or `Ctrl+K`, tolerates typos and abbreviations,
   `↑` `↓` `Enter` to open a result with matched words highlighted in text, `Esc` to clear
