@@ -66,8 +66,9 @@ Folders on the way to built pages show by their titles only,
 a link or embed from built pages to a vault page left out fails the build with `path:line: message`.
 Page title is front matter `title`, else the heading page starts with, else file name.
 Page header shows it after titles of all its folders, a leading heading repeating it is dropped.
-Under every page "Linked from" lists built pages linking to it by title, in HTML and markdown,
-wiki and markdown links and embeds count, links from a page to itself and from code do not,
+"Linked from" lists built pages linking to a page by title: under the page in markdown,
+in HTML as a block top right of page header over front matter, folded into one line of their count and titles.
+Wiki and markdown links and embeds count, links from a page to itself and from code do not,
 a link to a heading shows it: `Rules › Phases`. `--no-backlinks` leaves the list out.
 
 `watch` builds, then builds again on change of any page or attachment the vault takes,

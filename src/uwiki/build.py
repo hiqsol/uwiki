@@ -93,11 +93,14 @@ class Builder:
         return source.title + (self.SEP + heading if heading else '')
 
     def html_backlinks(self, node):
-        links = [f'<a href="#{source.anchor}">{html.escape(self.backlink_text(source, heading))}</a>'
-                 for source, heading in self.backlinks(node)]
-        if not links:
+        """Backlinks as folded line of their count and titles unfolding into links."""
+        backlinks = self.backlinks(node)
+        if not backlinks:
             return ''
-        return f'<p class="backlinks"><span>Linked from:</span> {", ".join(links)}</p>\n'
+        texts = [html.escape(self.backlink_text(source, heading)) for source, heading in backlinks]
+        links = [f'<a href="#{source.anchor}">{text}</a>' for (source, _), text in zip(backlinks, texts)]
+        return (f'<details class="backlinks"><summary><b>Linked from ({len(links)}):</b>'
+                f'<span>{", ".join(texts)}</span></summary><div>{", ".join(links)}</div></details>')
 
     def md_backlinks(self, node):
         escape = lambda text: re.sub(r'([\\\[\]])', r'\\\1', text)
@@ -127,7 +130,7 @@ class Builder:
 
     def html(self, title):
         content = ''.join(
-            self.converter(node).html(body, self.html_front_matter(node) if body else '') + self.html_backlinks(node)
+            self.converter(node).html(body, self.html_backlinks(node) + (self.html_front_matter(node) if body else ''))
             for node, body in self.nodes())
         return self.render('uwiki.html', {
             'title':    html.escape(title),

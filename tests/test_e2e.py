@@ -82,8 +82,8 @@ class RenderTest(unittest.TestCase):
             self.assertIn(f'id="{id}" class="page"', self.content)
 
     def test_titles(self):
-        self.assertIn('>My Notes</h2>', self.content)
-        self.assertIn('>2024 Plans</h2>', self.content)
+        self.assertIn('>My Notes<details class="backlinks">', self.content)
+        self.assertIn('>2024 Plans<details class="backlinks">', self.content)
         self.assertIn('>R&amp;D &lt;x&gt;</h2>', self.content)
         self.assertIn('<title>vault</title>', self.html)
 
@@ -183,17 +183,20 @@ class RenderTest(unittest.TestCase):
             self.assertIn(f'<a id="{href}"></a>', self.md)
 
     def test_backlinks(self):
-        self.assertIn('<p class="backlinks"><span>Linked from:</span> <a href="#root">vault</a>, '
-                      '<a href="#root">vault › Second Section</a>, '
-                      '<a href="#my-notes">My Notes › Second Section</a></p>', section(self.content, 'my-page'))
-        self.assertIn('<p class="backlinks"><span>Linked from:</span> <a href="#root">vault</a>, '
-                      '<a href="#my-notes">My Notes</a></p>', section(self.content, '2024-plans'))
+        self.assertIn('data-title="My Page">My Page<details class="backlinks"><summary><b>Linked from (3):</b>'
+                      '<span>vault, vault › Second Section, My Notes › Second Section</span></summary>'
+                      '<div><a href="#root">vault</a>, <a href="#root">vault › Second Section</a>, '
+                      '<a href="#my-notes">My Notes › Second Section</a></div></details><details class="front-matter">',
+                      self.content)
+        self.assertIn('<details class="backlinks"><summary><b>Linked from (2):</b><span>vault, My Notes</span>'
+                      '</summary><div><a href="#root">vault</a>, <a href="#my-notes">My Notes</a></div></details>',
+                      section(self.content, '2024-plans'))
         self.assertIn('Linked from: [vault](#root), [My Notes](#my-notes)\n', self.md)
         self.assertNotIn('backlinks', section(self.content, 'root'))
         self.assertNotIn('backlinks', section(self.content, 'r-d-x'))
 
     def test_front_matter_block(self):
-        self.assertIn('data-title="My Page">My Page<details class="front-matter"><summary><span>a, b · ignored</span>'
+        self.assertIn('</details><details class="front-matter"><summary><span>a, b · ignored</span>'
                       '</summary><table><tr><th>tags</th><td>a, b</td></tr><tr><th>summary</th><td>ignored</td></tr>'
                       '</table></details></h2>', self.content)
         self.assertEqual(self.content.count('class="front-matter"'), 1)
@@ -214,7 +217,7 @@ class RenderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out:
             res = run('build', VAULT, '--no-backlinks', '-o', out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            self.assertNotIn('<p class="backlinks">', read(os.path.join(out, 'vault.html')))
+            self.assertNotIn('<details class="backlinks">', read(os.path.join(out, 'vault.html')))
             self.assertNotIn('Linked from', read(os.path.join(out, 'vault.md')))
 
     def src(self, name):
@@ -251,8 +254,8 @@ class MarkdownLinksTest(unittest.TestCase):
         self.assertIn('<a href="#setup">Setup &gt; Setup</a>', root)
 
     def test_title_is_leading_heading_else_name(self):
-        self.assertIn('<h2 id="docs" class="page" data-title="Documentation">Documentation</h2>', self.html)
-        self.assertIn('class="page" data-title="Guide">Documentation / Guide</h3>', self.html)
+        self.assertIn('<h2 id="docs" class="page" data-title="Documentation">Documentation<details class="backlinks">', self.html)
+        self.assertIn('class="page" data-title="Guide">Documentation / Guide<details class="backlinks">', self.html)
         self.assertIn('<h4 id="guide--first-steps-hi-api">First steps: HiAPI</h4>', self.html)
         self.assertIn('data-title="Broken">Documentation / Broken</h3>', self.html)
         self.assertIn('data-title="Use plain links">Documentation / Use plain links</h3>', self.html)
@@ -260,12 +263,13 @@ class MarkdownLinksTest(unittest.TestCase):
         self.assertIn('<a href="#docs">Documentation</a>', section(self.html, 'docs'))
 
     def test_breadcrumbs_show_every_folder(self):
-        self.assertIn('data-title="Notes">Projects / Alpha / Notes</h4>', self.vault)
+        self.assertIn('data-title="Notes">Projects / Alpha / Notes<details class="backlinks">', self.vault)
 
     def test_markdown_links_are_backlinks(self):
-        self.assertIn('<p class="backlinks"><span>Linked from:</span> <a href="#root">mdlinks</a>, '
+        self.assertIn('<b>Linked from (5):</b><span>mdlinks, mdlinks › First steps: HiAPI, Documentation, Broken, '
+                      'Broken › First steps: HiAPI</span></summary><div><a href="#root">mdlinks</a>, '
                       '<a href="#root">mdlinks › First steps: HiAPI</a>, <a href="#docs">Documentation</a>, '
-                      '<a href="#broken">Broken</a>, <a href="#broken">Broken › First steps: HiAPI</a></p>',
+                      '<a href="#broken">Broken</a>, <a href="#broken">Broken › First steps: HiAPI</a></div>',
                       section(self.html, 'guide'))
 
     def test_external_code_and_unresolved_links_are_kept(self):
@@ -359,7 +363,7 @@ class CliTest(unittest.TestCase):
         self.assertIn('id="projects" class="page"', html)
         self.assertIn('Projects folder page', html)
         self.assertIn('Archive readme.', html)
-        self.assertIn('data-title="Notes">Projects / Alpha / Notes</h4>', html)
+        self.assertIn('data-title="Notes">Projects / Alpha / Notes<details class="backlinks">', html)
         self.assertNotIn('Root text.', html)
         self.assertNotIn('id="my-page"', html)
 

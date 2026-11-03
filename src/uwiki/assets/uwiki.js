@@ -28,11 +28,11 @@
   spy();
 
   // page header "Folder / Subfolder / Page" shows folders as a crumb above page title,
-  // front matter block goes before them, floating right of the crumb, else of the title
+  // backlinks and front matter blocks go before them, floating right one over the other
   function addCrumbs() {
     pages.forEach(function (h) {
-      var block = h.querySelector(".front-matter");
-      if (block) h.removeChild(block);
+      var blocks = Array.prototype.slice.call(h.querySelectorAll(":scope > details"));
+      blocks.forEach(function (block) { h.removeChild(block); });
       var text = h.textContent;
       var crumb = null;
       if (h.dataset.title && h.dataset.title !== text) {
@@ -42,7 +42,7 @@
         h.textContent = h.dataset.title;
         h.insertBefore(crumb, h.firstChild);
       }
-      if (block) h.insertBefore(block, h.firstChild);
+      blocks.reverse().forEach(function (block) { h.insertBefore(block, h.firstChild); });
     });
   }
 

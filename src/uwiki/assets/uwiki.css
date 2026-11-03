@@ -267,9 +267,10 @@ a:hover {
     font-weight: 500;
     letter-spacing: 0.02em;
 }
-/* front matter floats right of the title, folded to one line of values */
-.content .front-matter {
+/* backlinks over front matter float right of the header, folded to one line each */
+.content .front-matter, .content .backlinks {
     float: right;
+    clear: right;
     max-width: min(45%, 24rem);
     margin: 0 0 0.6rem 1rem;
     color: var(--fg-muted);
@@ -277,10 +278,13 @@ a:hover {
     letter-spacing: normal;
     line-height: 1.5;
 }
-.content .front-matter[open] {
+.content .backlinks {
+    margin-bottom: 0;
+}
+.content .front-matter[open], .content .backlinks[open] {
     max-width: min(60%, 32rem);
 }
-.content .front-matter > summary {
+.content .front-matter > summary, .content .backlinks > summary {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -289,25 +293,37 @@ a:hover {
     list-style: none;
     cursor: pointer;
 }
-.content .front-matter > summary::-webkit-details-marker {
+.content .front-matter > summary::-webkit-details-marker,
+.content .backlinks > summary::-webkit-details-marker {
     display: none;
 }
-.content .front-matter > summary::before {
+.content .front-matter > summary::before, .content .backlinks > summary::before {
     content: "▸";
     font-size: 13px;
 }
-.content .front-matter[open] > summary::before {
+.content .front-matter[open] > summary::before, .content .backlinks[open] > summary::before {
     content: "▾";
 }
-.content .front-matter > summary > span {
+.content .front-matter > summary > span, .content .backlinks > summary > span {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 14px;
 }
-.content .front-matter[open] > summary > span {
+.content .front-matter[open] > summary > span, .content .backlinks[open] > summary > span {
     display: none;
+}
+.content .backlinks > summary > b {
+    flex: none;
+    font-size: 14px;
+    font-weight: 600;
+}
+.content .backlinks > div {
+    margin: 2px 0 0;
+    padding: 3px 10px;
+    font-size: 14px;
+    background: var(--bg-alt);
 }
 .content .front-matter table {
     margin: 2px 0 0;
@@ -438,15 +454,6 @@ a:hover {
     background: var(--bg-alt);
 }
 
-.content .backlinks {
-    margin-top: 1.5em;
-    color: var(--fg-muted);
-    font-size: 14px;
-}
-.content .backlinks > span {
-    font-weight: 600;
-}
-
 .embed {
     margin: 1em 0;
     padding: 2px 14px;
@@ -573,18 +580,19 @@ details.callout:not([open]) > summary {
     .content .page:first-child {
         padding-right: 48px;
     }
-    /* front matter stops floating, sits under the title */
-    .content .page:has(> .front-matter) {
+    /* backlinks and front matter stop floating, sit under the title */
+    .content .page:has(> details) {
         display: flex;
         flex-direction: column;
     }
-    .content .front-matter, .content .front-matter[open] {
+    .content .front-matter, .content .front-matter[open],
+    .content .backlinks, .content .backlinks[open] {
         float: none;
         order: 1;
         max-width: 100%;
         margin: 4px 0 0;
     }
-    .content .front-matter > summary {
+    .content .front-matter > summary, .content .backlinks > summary {
         justify-content: flex-start;
     }
 }
