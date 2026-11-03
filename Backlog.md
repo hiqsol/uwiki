@@ -96,3 +96,13 @@ Dependencies stay `markdown` only: watching, serving and previews use the standa
   closer to the start is more basic, also for folders without folder page
 - e) Pages unreachable from the root go last, by name
 - f) `check --unlisted` warns about pages the folder page does not link, without changing exit code
+
+## P11 Front matter block
+
+- a) `build` HTML shows front matter in a block floating right, its top level with the page title
+- b) Folded by default, one line as tall as the title: values in order, joined by ` · `, lists by `, `,
+  cut with an ellipsis, ▸ unfolds
+- c) Unfolded it grows down as needed into a table of all keys and values, title included,
+  the page text flows around it, ▾ folds back
+- d) Narrow screens: the block stops floating and sits under the title, folded too
+- e) Pages without front matter get no block, `--no-front-matter` turns it off
