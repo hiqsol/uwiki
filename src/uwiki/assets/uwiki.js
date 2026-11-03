@@ -21,6 +21,7 @@
   var selected = -1;
 
   addCrumbs();
+  markBoxDrawing();
   processHeaders(toc, document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page"), 0);
   bindEvents();
   bindPreviews();
@@ -43,6 +44,13 @@
         h.insertBefore(crumb, h.firstChild);
       }
       blocks.reverse().forEach(function (block) { h.insertBefore(block, h.firstChild); });
+    });
+  }
+
+  // code blocks drawing boxes get line height they join at, see pre.box-drawing
+  function markBoxDrawing() {
+    document.querySelectorAll(".content pre").forEach(function (pre) {
+      if (/[\u2500-\u259f]/.test(pre.textContent)) pre.classList.add("box-drawing");
     });
   }
 

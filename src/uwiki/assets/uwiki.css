@@ -414,6 +414,15 @@ a:hover {
     padding: 0;
     background: none;
 }
+/* box drawing glyphs span the font's own line height, pre is sized as its code to keep lines no taller */
+.content pre.box-drawing {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    line-height: normal;
+}
+.content pre.box-drawing code {
+    font-size: 1em;
+}
 
 .content img {
     max-width: 100%;
