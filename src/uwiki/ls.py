@@ -21,12 +21,12 @@ class Listing:
         """Unique http and https links outside front matter and code, sorted."""
         res = set()
         for _, page, _ in self.vaults.files():
-            source = page.page if page.is_folder else page
+            source = page.source
             try:
                 text = read_text(source.fullpath)[0]
             except ValueError:
                 continue
-            for line in Converter.prose(text):
+            for _, line in Converter.prose(text):
                 res.update(map(self.trim, self.URL.findall(Converter.CODE.sub(' ', line))))
         return sorted(res)
 

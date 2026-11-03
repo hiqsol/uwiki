@@ -14,7 +14,7 @@
   var pages = Array.prototype.slice.call(document.querySelectorAll(".content .page"));
   var tocLinks = {};
   var active = null;
-  var sections = [];
+  var sections = null;  // search index, built on first search
   var vocab = new Map();
   var termCache = new Map();
   var found = [];
@@ -22,7 +22,6 @@
 
   addCrumbs();
   processHeaders(toc, document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page"), 0);
-  buildIndex();
   bindEvents();
   bindPreviews();
   bindItems();
@@ -159,6 +158,7 @@
   }
 
   function buildIndex() {
+    sections = [];
     var heads = content.querySelectorAll("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]");
     var range = document.createRange();
     var page = null;
@@ -268,6 +268,7 @@
   function search(q) {
     var terms = Array.from(new Set(words(q)));
     if (!terms.length) return [];
+    if (!sections) buildIndex();
     var hits = new Map();
     terms.forEach(function (t, ti) {
       matchTerm(t).forEach(function (m) {
@@ -408,9 +409,8 @@
     }
     var nodes = [];
     var walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      if (range.intersectsNode(walker.currentNode)) nodes.push(walker.currentNode);
-    }
+    walker.currentNode = s.head;
+    while (walker.nextNode() && range.intersectsNode(walker.currentNode)) nodes.push(walker.currentNode);
     nodes.forEach(function (node) {
       var frag = markUp(node.data, hit.words, true);
       if (frag) node.parentNode.replaceChild(frag, node);

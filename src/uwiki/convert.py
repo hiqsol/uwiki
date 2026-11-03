@@ -1,8 +1,8 @@
 """Reads pages, resolves wiki links, embeds and callouts into plain markdown."""
 
+import functools
 import html
 import os
-import posixpath
 import re
 from pathlib import Path
 from urllib.parse import quote, unquote
@@ -15,6 +15,7 @@ class Converter:
     CODE = re.compile(r'(`+).*?\1')
     TITLE = TITLE
     CALLOUT = re.compile(r'^>\s*\[!([\w-]+)\]([+-]?)[ \t]*(.*?)\s*$')
+    WIKILINK = re.compile(r'(!?)\[\[(.+?)\]\]')
     MD_LINK = re.compile(r"""(`+).*?\1|(?<!!)\[([^\]]*)\]\(([^)\s]+)(?:[ \t]+(?:"[^"]*"|'[^']*'))?\)""")
     LINK_DEF = re.compile(r'^ {0,3}\[[^\]]+\]:[ \t]*(<[^>\s]*>|\S+)')
     BLOCK_START = re.compile(r'^\s*(?:[-*+] |\d+[.)] |>|#{1,6}\s|```|~~~)')
@@ -41,7 +42,7 @@ class Converter:
         self.item_lines = {}  # line number: (number path, sections whose first list it is in)
 
     def read(self):
-        node = self.page.page if self.page.is_folder else self.page
+        node = self.page.source
         if node is None:
             return ''
         text, start = self.read_text(node)
@@ -72,30 +73,33 @@ class Converter:
         return read_text(page.fullpath)
 
     @classmethod
-    def prose(cls, text):
-        """Lines outside fenced code."""
+    def fenced(cls, lines):
+        """Yields lines with whether they are fenced code, fences included."""
         fence = None
-        for line in text.splitlines():
+        for line in lines:
             f = cls.FENCE.match(line)
             if fence:
                 if f and line.lstrip().startswith(fence):
                     fence = None
+                yield line, True
             elif f:
                 fence = f[1]
+                yield line, True
             else:
-                yield line
+                yield line, False
+
+    @classmethod
+    def prose(cls, text):
+        """Line indexes and lines outside fenced code."""
+        for i, (line, code) in enumerate(cls.fenced(text.splitlines())):
+            if not code:
+                yield i, line
 
     @classmethod
     def headings(cls, text):
         """Yields lines with their heading matches, None for non headings and fenced code."""
-        fence = None
-        for line in text.splitlines(keepends=True):
-            f = cls.FENCE.match(line)
-            if fence and f and line.lstrip().startswith(fence):
-                fence = None
-            elif not fence and f:
-                fence = f[1]
-            yield line, None if fence or f else cls.HEADING.match(line)
+        for line, code in cls.fenced(text.splitlines(keepends=True)):
+            yield line, None if code else cls.HEADING.match(line)
 
     @classmethod
     def section(cls, text, heading):
@@ -115,19 +119,10 @@ class Converter:
     def list_items(cls, text):
         """Yields line index, number path and sections of items of the first numbered list of the page
         (section '') and of the first one under every heading (its text): `3`, nested `3.2`."""
-        fence = None
         section, sections = '', set()
         page = False
         stack, keys, blank = [], [], False
-        for i, line in enumerate(text.splitlines()):
-            f = cls.FENCE.match(line)
-            if fence:
-                if f and line.lstrip().startswith(fence):
-                    fence = None
-                continue
-            if f:
-                fence = f[1]
-                continue
+        for i, line in cls.prose(text):
             h = cls.HEADING.match(line)
             m = cls.NUMBERED.match(line)
             if h:
@@ -154,9 +149,14 @@ class Converter:
     @classmethod
     def find_item(cls, page, heading, item):
         """Whether page has item by number path in its first numbered list, or the first one under heading."""
-        key = lambda heading: cebabize(heading) if heading else ''
-        return any(path == item and any(key(k) == key(heading) for k in keys)
-                   for _, path, keys in cls.list_items(cls.read_text(page)[0]))
+        return (item, cebabize(heading) if heading else '') in cls.item_keys(cls.read_text(page)[0])
+
+    @staticmethod
+    @functools.lru_cache(maxsize=4096)
+    def item_keys(text):
+        """Number paths of list items with anchors of sections they are in, once per text links look into."""
+        return frozenset((path, cebabize(key) if key else '')
+                         for _, path, keys in Converter.list_items(text) for key in keys)
 
     def title_section(self, target, heading):
         """Heading of a section, none for the title heading the page header replaces."""
@@ -302,7 +302,7 @@ class Converter:
 
     def anchor(self, target, heading):
         """Heading anchor in target, page anchor for the title heading it drops."""
-        node = target.page if target.is_folder else target
+        node = target.source
         m = node and self.title_heading(self.read_text(node)[0], target)
         if m and cebabize(m[3]) == cebabize(heading):
             return target.anchor
@@ -320,21 +320,27 @@ class Converter:
         target = self.scanner.resolve_path(path, self.source.path) if path else self.page
         if target is None or not fragment:
             return target, ''
-        node = (target.page if target.is_folder else target) if path else self.source
+        node = target.source if path else self.source
         return target, node and self.find_heading(node, fragment)
 
     @classmethod
     def find_heading(cls, page, slug):
         """Heading GitHub and GitLab anchor as slug, repeated ones as slug-1, slug-2..., or uwiki does."""
-        seen = {}
-        for _, m in cls.headings(cls.read_text(page)[0]):
+        slug = slug.lower()
+        return next((heading for anchor, cebab, heading in cls.heading_keys(cls.read_text(page)[0])
+                     if slug in (anchor, cebab)), None)
+
+    @staticmethod
+    @functools.lru_cache(maxsize=4096)
+    def heading_keys(text):
+        """GitHub anchor, uwiki anchor and text of every heading, once per text links look into."""
+        seen, res = {}, []
+        for _, m in Converter.headings(text):
             if m:
-                base = cls.slug(m[2])
-                anchor = f'{base}-{seen[base]}' if base in seen else base
+                base = Converter.slug(m[2])
+                res.append((f'{base}-{seen[base]}' if base in seen else base, cebabize(m[2]), m[2]))
                 seen[base] = seen.get(base, 0) + 1
-                if slug.lower() in (anchor, cebabize(m[2])):
-                    return m[2]
-        return None
+        return tuple(res)
 
     @staticmethod
     def slug(heading):
@@ -343,16 +349,17 @@ class Converter:
         text = re.sub(r'<[^>]*>|(?<!\w)_+|_+(?!\w)', '', text)
         return re.sub(r'[^\w\- ]', '', text.lower()).replace(' ', '-')
 
-    def outside_code(self, line, func):
+    @classmethod
+    def outside_code(cls, line, func):
         res = ''
         pos = 0
-        for m in self.CODE.finditer(line):
+        for m in cls.CODE.finditer(line):
             res += func(line[pos:m.start()]) + m[0]
             pos = m.end()
         return res + func(line[pos:])
 
     def process_links(self, text):
-        return re.sub(r'(!?)\[\[(.+?)\]\]', self.wikilink, text)
+        return self.WIKILINK.sub(self.wikilink, text)
 
     def wikilink(self, match):
         if match[1] and self.attachment(match[2]):
@@ -392,11 +399,11 @@ class Converter:
         return f'<img {attrs} />'
 
     def embed_note(self, text):
-        if self.parse_target(text)[2]:
+        name, heading, item, _ = self.parse_target(text)
+        if item:
             return self.link(text) + '\n'
-        name, heading, _ = self.parse_link(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.source
-        node = target.page if target and target.is_folder else target
+        node = target and target.source
         if node is not None and self.scope and not self.scope.inside(target):
             self.check_scope(target, f'![[{text}]]', embed=True)
             return self.link(text, checked=True) + '\n'
@@ -412,12 +419,12 @@ class Converter:
     def link(self, text, checked=False):
         name, heading, item, description = self.parse_target(text)
         if name:
-            target = self.scanner.resolve(name, self.source.path)
+            target, aliased = self.scanner.lookup(name, self.source.path)
             if not target and not heading and self.attachment(text):
                 return self.attachment_link(text)
             if not checked:
                 self.check_scope(target, f'[[{text}]]')
-            if target and self.scanner.by_alias(name, self.source.path):
+            if aliased:
                 title = name
             else:
                 title = target.title if target else titleize(Path(name).name)
@@ -441,13 +448,6 @@ class Converter:
         name, *parts = [part.strip() for part in text.split('#')]
         item = parts.pop() if parts and cls.ITEM.fullmatch(parts[-1]) else ''
         return name, parts[-1] if parts else '', item, description.strip()
-
-    @staticmethod
-    def parse_link(text):
-        """Parses `Page#Heading|description` into parts, nested headings resolve to the last one."""
-        text, _, description = text.partition('|')
-        name, *headings = text.split('#')
-        return name.strip(), headings[-1].strip() if headings else '', description.strip()
 
     @property
     def title(self):

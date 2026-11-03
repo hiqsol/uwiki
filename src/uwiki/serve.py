@@ -66,6 +66,7 @@ class Server:
         self.page = build.outputs['html']
         self.outdir = os.path.dirname(os.path.abspath(self.page))
         self.root = None
+        self._attachments = None, set()  # selection: attachment files of its vault
         self.open = open
         self.out = out or sys.stdout
         self.watcher = Watcher(build, interval, quiet=quiet, out=self.out)
@@ -76,10 +77,13 @@ class Server:
         self.url = f'http://{host}:{port}/' + quote(os.path.basename(self.page))
 
     def attachments(self):
+        """Attachment files of the last scan, collected once per build."""
         selection = self.build.selection
         if selection is None:
             return set()
-        return {os.path.abspath(f) for files in selection.scanner.attachments.values() for f in files}
+        if self._attachments[0] is not selection:
+            self._attachments = selection, {os.path.abspath(f) for f in selection.scanner.file_paths(pages=False)}
+        return self._attachments[1]
 
     def run(self):
         signal.signal(signal.SIGTERM, interrupt)

@@ -57,7 +57,7 @@ class Builder:
         """Shown pages and folders in reading order, each with whether its text is built."""
         folder = folder or self.scanner.root
         yield folder, self.selection.selected(folder)
-        for child in self.children(folder):
+        for child in self.order.children(folder):
             if not self.selection.shows(child):
                 continue
             if child.is_folder:
@@ -65,14 +65,13 @@ class Builder:
             else:
                 yield child, True
 
-    def children(self, folder):
-        return self.order.children(folder)
-
     def converter(self, node):
         return Converter(node, self.scanner, self.outdir, scope=self)
 
     def backlinks(self, node):
         """Built pages linking to node, in reading order, with headings links lead to: [(page, heading)]."""
+        if not self.options.backlinks:
+            return []
         if self._backlinks is None:
             self._backlinks = {}
             for source, body in self.nodes():
@@ -86,8 +85,6 @@ class Builder:
                         heading = ''
                     entries = self._backlinks.setdefault(target, {})
                     entries.setdefault((source, cebabize(heading)), (source, heading))
-        if not self.options.backlinks:
-            return []
         return list(self._backlinks.get(node, {}).values())
 
     def backlink_text(self, source, heading):

@@ -3,16 +3,15 @@
 import os
 import re
 from pathlib import Path
-from urllib.parse import unquote
 
 from .convert import Converter
-from .vault import Filter, Vaults
+from .order import Links
+from .vault import Filter, Vaults, read_parts
 
 class Stats:
     """Statistics of markdown files grouped by folder or frontmatter key."""
 
     COLUMNS = ['pages', 'words', 'lines', 'headings', 'items', 'links', 'external', 'images']
-    WIKILINK = re.compile(r'(!?)\[\[(.+?)\]\]')
     MDLINK = re.compile(r'(!?)\[[^\]]*\]\(([^)\s]+)[^)]*\)')
     ITEM = re.compile(r'^\s*(?:[-*+]|\d+[.)]|[a-z]\))\s')
     META = re.compile(r'^([\w-]+):[ \t]*(.*?)\s*$', re.MULTILINE)
@@ -22,56 +21,45 @@ class Stats:
         self.vaults = Vaults(paths, Filter(include, exclude))
         self.by = by
         self.pages = []
-        self.incoming = {}
+        self.incoming = {}  # page file: links to it from counted pages
+        self.links = {}  # scanner: links of its pages
 
     def collect(self):
         for scanner, page, shown in self.vaults.files():
             self.pages.append(self.count(scanner, page, shown))
+            if scanner not in self.links:
+                self.links[scanner] = Links(scanner)
+            for target, _, _ in self.links[scanner].of(page):
+                if target.source and target.source is not page.source:
+                    self.incoming[target.source.fullpath] = self.incoming.get(target.source.fullpath, 0) + 1
         for page in self.pages:
             page['incoming'] = self.incoming.get(page['file'], 0)
         return self
 
     def count(self, scanner, page, shown):
-        source = page.page if page.is_folder else page
-        with open(source.fullpath, encoding='utf-8') as f:
-            text = f.read()
-        m = Converter.FRONT_MATTER.match(text)
-        meta = {k: v.strip('\'"') for k, v in self.META.findall(m[0])} if m else {}
-        body = text[m.end():] if m else text
+        source = page.source
+        _, front, body, _ = read_parts(source.fullpath)
+        meta = {k: v.strip('\'"') for k, v in self.META.findall(front)}
         res = dict.fromkeys(self.COLUMNS, 0)
         res.update(path=shown, file=source.fullpath, meta=meta, pages=1,
                    lines=len(body.splitlines()), is_index=page.is_folder)
-        for line in Converter.prose(body):
+        for _, line in Converter.prose(body):
             line = Converter.CODE.sub('', self.QUOTE.sub('', line))
             res['words'] += len(line.split())
             res['headings'] += bool(Converter.HEADING.match(line))
             res['items'] += bool(self.ITEM.match(line))
-            for embed, target in self.WIKILINK.findall(line):
-                self.wikilink(scanner, source, embed, target, res)
+            for embed, text in Converter.WIKILINK.findall(line):
+                res['images' if embed and self.image(scanner, source, text) else 'links'] += 1
             for embed, url in self.MDLINK.findall(line):
                 res['images' if embed else 'external' if '://' in url else 'links'] += 1
-                if not embed and Converter.is_local(url):
-                    self.mdlink(scanner, source, url)
         return res
 
-    def wikilink(self, scanner, source, embed, text, res):
-        name = Converter.parse_link(text)[0]
+    @staticmethod
+    def image(scanner, source, text):
+        """Whether wiki link text names an image, not a page."""
         file = scanner.attachment(text.partition('|')[0].strip(), source.path)
-        if file and not scanner.resolve(name, source.path):
-            image = Path(file).suffix.lower() in Converter.IMAGE_EXTS
-            res['images' if embed and image else 'links'] += 1
-            return
-        res['links'] += 1
-        self.link(scanner.resolve(name, source.path) if name else None, source)
-
-    def mdlink(self, scanner, source, url):
-        path = unquote(url).partition('#')[0]
-        self.link(scanner.resolve_path(path, source.path) if path else None, source)
-
-    def link(self, target, source):
-        node = target.page if target and target.is_folder else target
-        if node and node.fullpath != source.fullpath:
-            self.incoming[node.fullpath] = self.incoming.get(node.fullpath, 0) + 1
+        return (file is not None and Path(file).suffix.lower() in Converter.IMAGE_EXTS
+                and not scanner.resolve(Converter.parse_target(text)[0], source.path))
 
     def group(self, page):
         if self.by == 'folder':

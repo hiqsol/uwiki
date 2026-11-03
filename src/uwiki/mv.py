@@ -2,15 +2,11 @@
 
 import os
 import posixpath
-import re
 import subprocess
-from pathlib import Path
 from urllib.parse import quote, unquote
 
 from .convert import Converter
-from .vault import FRONT_MATTER, Scanner, Vaults
-
-WIKILINK = re.compile(r'(!?)\[\[(.+?)\]\]')
+from .vault import Scanner, Vaults, read_parts
 
 class MoveError(ValueError):
     """Move that cannot be made."""
@@ -43,7 +39,7 @@ class Move:
         self.source, self.target = source, target
         self.src = self.rel(source)
         self.dst = self.rel(target)
-        self.old = Scanner(self.root, '')
+        self.old = Scanner(self.root)
         self.old.scan()
         files = self.old.files()
         self.new = Scanner.from_files(self.root, [self.moved(f) for f in files])
@@ -79,14 +75,13 @@ class Move:
 
     def plan(self):
         """Rewritten text of every page whose links change, by its new path."""
-        for file in self.old.pages():
-            rel = self.rel(file)
+        for file, node in self.old.pages().items():
             try:
-                with open(file, encoding='utf-8') as f:
-                    text = f.read()
+                text, front, body, _ = read_parts(file)
             except (OSError, UnicodeDecodeError):
                 continue
-            new = self.rewrite(text, rel, self.moved(rel))
+            rel = self.rel(file)
+            new = front + Rewriter(self, node, rel, self.moved(rel)).process(body)
             if new != text:
                 self.changes[self.moved(rel)] = text, new
         return self.changes
@@ -97,8 +92,7 @@ class Move:
         """Page or folder of the new vault the old one becomes."""
         if node.file:
             return self.new_pages.get(self.full(self.moved(self.rel(node.file))))
-        path = '/' + self.moved(node.path.strip('/'))
-        return next((n for p, n in self.new.targets.get(Path(path).name.lower(), []) if p == path.lower()), None)
+        return self.new.resolve_path(self.moved(node.path.strip('/')))
 
     @staticmethod
     def source_path(rel):
@@ -152,8 +146,8 @@ class Move:
         if not path:
             return None
         raw = unquote(path)
-        target = posixpath.normpath(posixpath.join(posixpath.dirname(old_rel), raw))
-        if target.startswith('..'):
+        target = Scanner.vault_path(raw, old_rel)
+        if target is None:
             return None
         if not os.path.exists(self.full(target)):
             # spelled in other case, as check reports: follows the page it resolves to
@@ -162,7 +156,7 @@ class Move:
                 return None
             target = self.rel(node.file) if node.file and not raw.endswith('/') else node.path.strip('/')
         moved = self.moved(target)
-        if posixpath.normpath(posixpath.join(posixpath.dirname(new_rel), raw)) == moved:
+        if Scanner.vault_path(raw, new_rel) == moved:
             return None
         res = posixpath.relpath(moved, posixpath.dirname(new_rel) or '.')
         if raw.endswith('/'):
@@ -172,69 +166,6 @@ class Move:
         if '%' in path or ' ' in res:
             res = quote(res)
         return res + hash + fragment
-
-    # rewriting text as converter reads it: outside front matter, fenced and inline code
-
-    def rewrite(self, text, old_rel, new_rel):
-        m = FRONT_MATTER.match(text)
-        head, body = (text[:m.end()], text[m.end():]) if m else ('', text)
-        old_source, new_source = self.source_path(old_rel), self.source_path(new_rel)
-        wiki = lambda match: (lambda new: match[0] if new is None else f'{match[1]}[[{new}]]')(
-            self.wiki(match[2], bool(match[1]), old_source, new_source))
-
-        def md_link(match):
-            if match[1]:
-                return match[0]
-            new = self.markdown(match[3], old_rel, new_rel)
-            if new is None:
-                return match[0]
-            start = match.start(3) - match.start()
-            return match[0][:start] + new + match[0][start + len(match[3]):]
-
-        def definition(match):
-            href = match[1]
-            bare = href.strip('<>')
-            new = self.markdown(bare, old_rel, new_rel)
-            if new is None:
-                return match[0]
-            new = f'<{new}>' if href.startswith('<') else new
-            return match[0][:match.start(1) - match.start()] + new
-
-        out = []
-        fence = None
-        lines = body.splitlines(keepends=True)
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            i += 1
-            f = Converter.FENCE.match(line)
-            if fence:
-                if f and line.lstrip().startswith(fence):
-                    fence = None
-                out.append(line)
-                continue
-            if f:
-                fence = f[1]
-                out.append(line)
-                continue
-            if Converter.LINK_DEF.match(line):
-                out.append(Converter.LINK_DEF.sub(definition, line, count=1))
-                continue
-            while (Converter.open_bracket(line) and not Converter.HEADING.match(line) and i < len(lines)
-                   and lines[i].strip() and not Converter.BLOCK_START.match(lines[i])):
-                line += lines[i]
-                i += 1
-            line = Converter.MD_LINK.sub(md_link, line)
-            out.append(self.outside_code(line, lambda part: WIKILINK.sub(wiki, part)))
-        return head + ''.join(out)
-
-    @staticmethod
-    def outside_code(line, func):
-        res, pos = '', 0
-        for m in Converter.CODE.finditer(line):
-            res += func(line[pos:m.start()]) + m[0]
-            pos = m.end()
-        return res + func(line[pos:])
 
     # doing it
 
@@ -272,3 +203,36 @@ class Move:
         except OSError:
             return False
         return res.stdout.strip() == 'true'
+
+class Rewriter(Converter):
+    """Rewrites links of a page where converter reads them: outside front matter, fenced and inline code."""
+
+    def __init__(self, move, page, old_rel, new_rel):
+        super().__init__(page, move.old)
+        self.mode = 'md'
+        self.move, self.old_rel, self.new_rel = move, old_rel, new_rel
+        self.old_source, self.new_source = move.source_path(old_rel), move.source_path(new_rel)
+
+    def process_line(self, line):
+        if self.LINK_DEF.match(line):
+            return self.LINK_DEF.sub(self.link_definition, line, count=1)
+        return self.links(line)
+
+    def wikilink(self, match):
+        new = self.move.wiki(match[2], bool(match[1]), self.old_source, self.new_source)
+        return match[0] if new is None else f'{match[1]}[[{new}]]'
+
+    def markdown_link(self, match):
+        new = None if match[1] else self.move.markdown(match[3], self.old_rel, self.new_rel)
+        if new is None:
+            return match[0]
+        start = match.start(3) - match.start()
+        return match[0][:start] + new + match[0][start + len(match[3]):]
+
+    def link_definition(self, match):
+        href = match[1]
+        new = self.move.markdown(href.strip('<>'), self.old_rel, self.new_rel)
+        if new is None:
+            return match[0]
+        new = f'<{new}>' if href.startswith('<') else new
+        return match[0][:match.start(1) - match.start()] + new

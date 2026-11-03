@@ -27,7 +27,7 @@ def report(problems):
         print(problem)
     return 1 if problems else 0
 
-def build(args, parser):
+def build(args):
     builder = make_build(args)
     problems = builder.run()
     for warning in builder.warnings:
@@ -38,17 +38,14 @@ def make_build(args):
     return Build(args.paths, args.output, args.title, args.html, args.md, args.include, args.exclude,
                  build_options(args))
 
-def watch(args, parser):
+def watch(args):
     Watcher(make_build(args), args.interval, quiet=args.quiet).run()
 
-def serve(args, parser):
+def serve(args):
     """Builds into a temporary folder unless -o is given, so serving leaves no files behind."""
     tmp = None if args.output else tempfile.TemporaryDirectory(prefix='uwiki-')
     output = args.output or tmp.name + os.sep
-    title = args.title
-    if not args.output and not title:
-        folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in map(os.path.abspath, args.paths)]
-        title = Path(os.path.commonpath(folders)).name
+    title = args.title or (None if args.output else Path(Vaults.common(args.paths)).name)
     options = build_options(args)
     options.live_reload = True
     options.attachment_base = served.FILES
@@ -65,7 +62,7 @@ def serve(args, parser):
         if tmp:
             tmp.cleanup()
 
-def mv(args, parser):
+def mv(args):
     try:
         move = Move(args.source, args.target)
         move.plan()
@@ -84,7 +81,7 @@ def mv(args, parser):
 def build_options(args):
     return BuildOptions(backlinks=not args.no_backlinks, front_matter=not args.no_front_matter)
 
-def check(args, parser):
+def check(args):
     options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked,
                            unlisted=args.unlisted, mentions=args.mentions, mentions_ignore=args.mentions_ignore,
                            mentions_min_length=args.mentions_min_length,
@@ -95,7 +92,7 @@ def check(args, parser):
         print(warning)
     return code
 
-def llms(args, parser):
+def llms(args):
     single = args.paths[0] if len(args.paths) == 1 and os.path.isdir(args.paths[0]) else None
     if not args.output and not single:
         raise UsageError('-o is required unless one folder is listed')
@@ -119,16 +116,16 @@ def llms(args, parser):
     with open(output, 'w', encoding='utf-8') as f:
         f.write(text)
 
-def ls(args, parser):
+def ls(args):
     listing = Listing(args.paths, args.include, args.exclude)
     for line in listing.urls() if args.external else listing.files():
         print(line, end='\0' if args.null else '\n')
 
-def stats(args, parser):
+def stats(args):
     res = Stats(args.paths, args.by, args.include, args.exclude).collect()
     print(json.dumps(res.data(args.top), indent=2, ensure_ascii=False) if args.json else res.report(args.top))
 
-def wrap(args, parser):
+def wrap(args):
     files = Listing(args.paths, args.include, args.exclude).files()
     return report(wrap_files(files, args.width, args.check))
 
@@ -266,8 +263,7 @@ def config_defaults(top, args):
     """Defaults of command options from the config of the vault given paths are in."""
     if not getattr(args, 'paths', None):
         return {}
-    folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in map(os.path.abspath, args.paths)]
-    config = Config.load(Vaults.vault_root(os.path.abspath(args.paths[0]), os.path.commonpath(folders)))
+    config = Config.load(Vaults.vault_root(os.path.abspath(args.paths[0]), Vaults.common(args.paths)))
     p = top.commands[args.command]
     dests = {a.dest: a for a in p._actions if a.dest not in NOT_OPTIONS}
     known = {a.dest for sub in top.commands.values() for a in sub._actions}
@@ -299,7 +295,7 @@ def main():
         if defaults:
             p.set_defaults(**defaults)
             args = top.parse_args()
-        code = args.func(args, p)
+        code = args.func(args)
     except (UsageError, ConfigError) as e:
         p.error(str(e))
     sys.exit(code or 0)

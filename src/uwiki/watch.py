@@ -9,16 +9,16 @@ from .vault import Scanner
 class Watcher:
     """Builds once, then again on change of any file the vault takes: pages and attachments.
 
-    Changes within `debounce` seconds of each other make one build, a failed build keeps
+    Changes within `DEBOUNCE` seconds of each other make one build, a failed build keeps
     the last good output and watching goes on.
     """
 
-    def __init__(self, build, interval=0.5, debounce=0.3, quiet=False, on_build=None, out=None):
+    DEBOUNCE = 0.3
+
+    def __init__(self, build, interval=0.5, quiet=False, out=None):
         self.build = build
         self.interval = interval
-        self.debounce = debounce
         self.quiet = quiet
-        self.on_build = on_build
         self.out = out or sys.stdout
         self.outputs = {os.path.abspath(f) for f in build.outputs.values()}
         self.root = None
@@ -26,12 +26,11 @@ class Watcher:
     def snapshot(self):
         """Every file the vault takes with its mtime and size, outputs left out."""
         if self.root is None:
-            self.root = self.build.scan().root
-        scanner = Scanner(self.root, '', self.build.filter)
-        scanner.scan()
-        files = [*scanner.pages(), *(f for files in scanner.attachments.values() for f in files)]
+            self.root = (self.build.selection or self.build.scan()).root
+        scanner = Scanner(self.root, self.build.filter)
+        scanner.scan(links=False)
         res = {}
-        for file in files:
+        for file in scanner.file_paths():
             if file in self.outputs:
                 continue
             try:
@@ -63,8 +62,6 @@ class Watcher:
         pages = len(self.build.selection.shown)
         outputs = ', '.join(self.build.outputs.values())
         self.print(f'{stamp} built {pages} pages: {outputs} ({time.monotonic() - start:.2f}s)')
-        if self.on_build:
-            self.on_build()
         return True
 
     def changes(self, last):
@@ -75,7 +72,7 @@ class Watcher:
             if current != last:
                 break
         while True:
-            time.sleep(self.debounce)
+            time.sleep(self.DEBOUNCE)
             settled = self.snapshot()
             if settled == current:
                 return current

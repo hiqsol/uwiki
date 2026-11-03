@@ -1,5 +1,6 @@
 """Vault model: pages, folders and Obsidian-like link resolution."""
 
+import functools
 import os
 import posixpath
 import re
@@ -8,36 +9,55 @@ from pathlib import Path
 FRONT_MATTER = re.compile(r'\A---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)', re.DOTALL | re.MULTILINE)
 TITLE = re.compile(r'\A(\s*)(#{1,6})[ \t]+(.*?)[ \t]*(?:\r?\n|\Z)')
 
+_files = {}  # path: (mtime and size, text, front matter, text after it, number of its first line)
+
+def read_parts(path):
+    """Text of file, its front matter, text after it and number of its first line.
+
+    Read once while the file stays the same, every command asks for a page many times.
+    """
+    st = os.stat(path)
+    stamp = st.st_mtime_ns, st.st_size
+    cached = _files.get(path)
+    if cached is None or cached[0] != stamp:
+        with open(path, encoding='utf-8') as f:
+            text = f.read()
+        m = FRONT_MATTER.match(text)
+        front = m[0] if m else ''
+        cached = _files[path] = stamp, text, front, text[len(front):], front.count('\n') + 1
+    return cached[1:]
+
 def read_text(path):
     """Returns file text without front matter and number of its first line."""
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            text = f.read()
+        return read_parts(path)[2:]
     except UnicodeDecodeError as e:
         raise ValueError(f'Error reading {path}') from e
-    m = FRONT_MATTER.match(text)
-    if not m:
-        return text, 1
-    return text[m.end():], m[0].count('\n') + 1
+
+def read_front(path):
+    """Front matter of file with its `---` lines, empty if none or unreadable."""
+    try:
+        return read_parts(path)[1]
+    except (OSError, TypeError, UnicodeDecodeError):
+        return ''
 
 def read_title(path):
     """Front matter title, else heading the file starts with, if any."""
-    text = read_file(path)
-    m = FRONT_MATTER.match(text)
-    title = front_matter_value(m[0] if m else '', 'title')
+    title = front_matter_value(read_front(path), 'title')
     if title:
         return title
-    heading = TITLE.match(text[m.end():] if m else text)
+    try:
+        heading = TITLE.match(read_parts(path)[2])
+    except (OSError, TypeError, UnicodeDecodeError):
+        return None
     return heading[3] if heading else None
 
 def read_description(path):
-    m = FRONT_MATTER.match(read_file(path))
-    return front_matter_value(m[0], 'description') if m else None
+    return front_matter_value(read_front(path), 'description')
 
 def read_file(path):
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return f.read()
+        return read_parts(path)[0]
     except (OSError, TypeError, UnicodeDecodeError):
         return ''
 
@@ -64,8 +84,7 @@ def front_matter_value(front, key):
 
 def read_front_matter(path):
     """Top level front matter of file as (key, value) pairs, see front_matter_items."""
-    m = FRONT_MATTER.match(read_file(path))
-    return front_matter_items(m[0]) if m else []
+    return front_matter_items(read_front(path))
 
 def read_aliases(path):
     """Front matter `aliases` (or `alias`) of file, a list or one text."""
@@ -126,13 +145,18 @@ def unquote_scalar(value):
         return value[1:-1]
     return re.sub(r'\s+#.*$', '', value)
 
+@functools.lru_cache(maxsize=1 << 16)
 def titleize(name):
     words = camel_split(name, r'[\s_-]+')
     if not words:
         return name
     return ' '.join(w[0].upper() + w[1:] for w in words)
+
+@functools.lru_cache(maxsize=1 << 16)
 def cebabize(name):
+    """Anchor of name, compared for every link and heading, so cached."""
     return '-'.join(camel_split(name)).lower() or 'page'
+
 def camel_split(name, separators=r'[\W_]+'):
     """Splits `MyPage`, `my notes`, `my-notes`, `HTMLParser`, `2024Plans` into words."""
     words = []
@@ -165,6 +189,11 @@ class Page:
         self.anchor = cebabize(name)
 
     @property
+    def source(self):
+        """Page whose text it is: itself, folder page for a folder, None for a folder without one."""
+        return self
+
+    @property
     def file(self):
         return self.fullpath
 
@@ -175,10 +204,8 @@ class Page:
             self._title = read_title(self.file) or self.default_title
         return self._title
 
-    def __str__(self):
-        return f'Page(name={self.name}, title={self.title}, path={self.path})'
     def __repr__(self):
-        return self.__str__()
+        return f'{type(self).__name__}(name={self.name}, title={self.title}, path={self.path})'
 
 class Folder(Page):
     def __init__(self, folder, name, path, fullpath):
@@ -188,17 +215,15 @@ class Folder(Page):
         self.page = None
 
     @property
+    def source(self):
+        return self.page
+
+    @property
     def file(self):
         return self.page.fullpath if self.page else None
 
-    def build_child(self, is_folder, name, path, fullpath):
-        if is_folder:
-            return Folder(self, name, path, fullpath)
-        else:
-            return Page(self, name, path, fullpath)
-
     def child(self, is_folder, name, path, fullpath):
-        res = self.build_child(is_folder, name, path, fullpath)
+        res = (Folder if is_folder else Page)(self, name, path, fullpath)
         res.depth = self.depth + 1
         if not is_folder and self.is_index(name) and (
             self.page is None or self.is_readme(name) and not self.is_readme(self.page.name)
@@ -234,12 +259,6 @@ class Folder(Page):
         if name.endswith('s'):
             return name[:-1]
         return name
-
-    def __str__(self):
-        return f'Folder(name={self.name}, title={self.title}, path={self.path})'
-
-    def __repr__(self):
-        return self.__str__()
 
 class Filter:
     """Takes vault paths: skip list and excludes drop them, includes take them back.
@@ -288,10 +307,10 @@ class Filter:
         return self.takes(path[:-1]) or any(p.startswith(path) or path.startswith(p) for p in self.include_prefixes)
 
 class Scanner:
-    def __init__(self, path, title, filter=None):
+    def __init__(self, path, filter=None):
         self.path = path
         self.root = Folder(None, Path(path).name, '', self.path)
-        self.root.default_title = title
+        self.root.default_title = ''
         self.root.anchor = 'root'
         self.filter = filter or Filter()
         self.targets = {}
@@ -300,16 +319,18 @@ class Scanner:
         self.warnings = []
         self._aliases = None
 
-    def scan(self):
+    def scan(self, links=True):
+        """Finds pages and attachments, then link targets and anchors unless only files are wanted."""
         self._scan_dir(self.root)
-        self._index(self.root)
-        self._alias_symlinks()
-        self._assign_anchors()
+        if links:
+            self._index(self.root)
+            self._alias_symlinks()
+            self._assign_anchors()
 
     @classmethod
     def from_files(cls, path, files):
         """Vault of given vault relative files as if scanned, for files not on disk yet, e.g. after a move."""
-        scanner = cls(path, '')
+        scanner = cls(path)
         tree = {}
         for file in files:
             *folders, name = file.split('/')
@@ -335,10 +356,13 @@ class Scanner:
         scanner._assign_anchors()
         return scanner
 
+    def file_paths(self, pages=True):
+        """Full paths of pages and attachments, or of attachments only."""
+        return [*(self.pages() if pages else ()), *(f for files in self.attachments.values() for f in files)]
+
     def files(self):
         """Vault relative paths of pages and attachments."""
-        res = [*self.pages(), *(f for files in self.attachments.values() for f in files)]
-        return sorted(os.path.relpath(f, self.path).replace(os.sep, '/') for f in res)
+        return sorted(os.path.relpath(f, self.path).replace(os.sep, '/') for f in self.file_paths())
 
     def _scan_dir(self, folder):
         base = folder.fullpath
@@ -496,13 +520,8 @@ class Scanner:
                       for path, node in self.aliases.get(name, [])]
         return min(candidates, key=lambda c: c[:3])[3] if candidates else None
 
-    def by_alias(self, name, source=''):
-        """Whether link name resolves through an alias: no page has the name, a page has it as alias."""
-        named = self.named(name, source)
-        return (not named or named[0][0]) and self.alias(name, source) is not None
-
-    def resolve(self, name, source=''):
-        """Finds link target by name or path like Obsidian does.
+    def lookup(self, name, source=''):
+        """Link target by name or path like Obsidian finds it, and whether it is found by its alias.
 
         Prefers pages to aliases of pages, then to folders without folder page, as Obsidian links no folders,
         then targets near the source page, then shortest path.
@@ -511,17 +530,27 @@ class Scanner:
         if not named or named[0][0]:
             aliased = self.alias(name, source)
             if aliased is not None:
-                return aliased
-        return named[0][1] if named else None
+                return aliased, True
+        return (named[0][1] if named else None), False
+
+    def resolve(self, name, source=''):
+        """Link target by name or path, see lookup."""
+        return self.lookup(name, source)[0]
+
+    @staticmethod
+    def vault_path(path, source=''):
+        """Vault relative path of a path relative to the source page, None if it leads out of the vault."""
+        path = posixpath.normpath(posixpath.join(posixpath.dirname(source).lstrip('/'), path))
+        return None if path.startswith('..') else path
 
     def resolve_path(self, path, source=''):
         """Finds link target by path relative to the source page, as markdown links give it."""
-        path = posixpath.normpath(posixpath.join(posixpath.dirname(source).lstrip('/'), path)).lower()
-        if path.startswith('..'):
+        path = self.vault_path(path, source)
+        if path is None:
             return None
+        path = '/' + path.lower()
         if path.endswith('.md'):
             path = path[:-3]
-        path = '/' + path
         return next((node for p, node in self.targets.get(Path(path).name, []) if p == path), None)
 
 
@@ -533,11 +562,15 @@ class Vaults:
         self.filter = filter
         self.vaults = {}
 
+    @staticmethod
+    def common(paths):
+        """Folder all given paths share."""
+        return os.path.commonpath([p if os.path.isdir(p) else os.path.dirname(p) for p in map(os.path.abspath, paths)])
+
     def files(self):
         """Yields scanner, page and path to show of every file once, folder pages give folders."""
         seen = set()
-        folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in map(os.path.abspath, self.paths)]
-        common = os.path.commonpath(folders)
+        common = self.common(self.paths)
         for arg in self.paths:
             path = os.path.abspath(arg)
             scanner, pages = self.vault(self.vault_root(path, common))
@@ -563,7 +596,7 @@ class Vaults:
     def vault(self, root):
         """Scanned vault and its pages by file path, folder pages give folders."""
         if root not in self.vaults:
-            scanner = Scanner(root, '', self.filter)
+            scanner = Scanner(root, self.filter)
             scanner.scan()
             pages = scanner.pages()
             self.vaults[root] = scanner, pages
@@ -585,8 +618,7 @@ class Selection:
     def __init__(self, paths, filter=None):
         self.paths = [os.path.abspath(p) for p in paths]
         self.vaults = Vaults(paths, filter)
-        folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in self.paths]
-        common = os.path.commonpath(folders)
+        common = Vaults.common(self.paths)
         roots = {Vaults.vault_root(p, common) for p in self.paths}
         if len(roots) > 1:
             raise ValueError('paths are in different vaults: ' + ', '.join(sorted(roots)))

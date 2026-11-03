@@ -1,7 +1,6 @@
 """Checks vault the way it builds: links, headings, images, frontmatter, list numbering, orphans."""
 
 import os
-import posixpath
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,7 +8,8 @@ from urllib.parse import unquote
 
 from .config import Config
 from .convert import Converter
-from .vault import Filter, Scanner, Vaults, front_matter_items, read_aliases
+from .order import Links
+from .vault import Filter, Scanner, Vaults, front_matter_items, read_aliases, read_parts
 
 @dataclass
 class CheckOptions:
@@ -27,7 +27,6 @@ class CheckConverter(Converter):
 
     IMAGE = re.compile(r'!\[[^\]]*\]\(([^)\s]+)\)')
     NUMBERED = re.compile(r'^([ \t]*)(\d+)\. ')
-    LIST_BREAK = re.compile(r'^(?:[-*+] |>|#{1,6}\s)')
 
     def __init__(self, page, scanner, report, options):
         super().__init__(page, scanner)
@@ -36,7 +35,6 @@ class CheckConverter(Converter):
         self.mode = 'md'
         self.lists = []  # [indent, last number] of open numbered lists, outermost first
         self.blank = False
-        self.targets = set()
 
     def process_line(self, line):
         for n, raw in enumerate(line.splitlines(keepends=True)):
@@ -66,11 +64,11 @@ class CheckConverter(Converter):
             return
         if path.startswith('/'):
             return self.report(line, f'absolute link: {href}')
-        if posixpath.normpath(posixpath.join(posixpath.dirname(self.source.path).lstrip('/'), path)).startswith('..'):
+        if Scanner.vault_path(path, self.source.path) is None:
             return self.report(line, f'link leaves vault: {href}')
         target, heading = self.resolve_href(href)
         if target is not None and self.ITEM.fullmatch(fragment):
-            node = target.page if target.is_folder else target
+            node = target.source
             heading = True
             if node is None or not self.find_item(node, '', fragment):
                 self.report(line, f'missing item: {href}')
@@ -79,8 +77,6 @@ class CheckConverter(Converter):
             return self.report(line, f'link differs from file name: {href}' if target else f'unresolved link: {href}')
         if target is None and path.lower().endswith('.md'):
             return self.report(line, f'unresolved link: {href}')
-        if target is not None:
-            self.targets.add(target)
         if path and os.path.isdir(file) and not self.options.folder_links:
             self.report(line, f'folder link: {href}')
         elif target is not None and heading is None:
@@ -97,13 +93,11 @@ class CheckConverter(Converter):
     def check_link(self, text):
         name, heading, item, _ = self.parse_target(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.source
-        if target is not None:
-            self.targets.add(target)
         if target is None:
             if heading or item or not self.attachment(text):
                 self.report(self.line, f'unresolved link: [[{name}]]')
             return
-        node = target.page if target.is_folder else target
+        node = target.source
         if heading and not heading.startswith('^'):
             if node is None or not self.section(self.read_text(node)[0], heading):
                 return self.report(self.line, f'missing heading: [[{name}#{heading}]]')
@@ -139,7 +133,7 @@ class Checker:
         self.options = options or CheckOptions()
         self.problems = []
         self.warnings = []
-        self.links = {}  # checked page: pages it links to
+        self.links = {}  # scanner: links of its pages
         self.checked = {}  # checked page: (scanner, path to show)
         self.schemas = {}  # scanner: front matter schema of its vault config
 
@@ -166,14 +160,14 @@ class Checker:
             pattern, nodes = terms[scanner]
             if pattern is None:
                 continue
-            source = page.page if page.is_folder else page
+            source = page.source
             try:
                 text, start = Converter.read_text(source)
             except ValueError:
                 continue
             linked = self.targets(scanner, page)
             seen = set()
-            for n, line in self.prose_lines(text):
+            for n, line in Converter.prose(text):
                 if Converter.HEADING.match(line) or Converter.LINK_DEF.match(line):
                     continue
                 for m in pattern.finditer(self.PLAIN_SKIP.sub(lambda m: ' ' * len(m[0]), line)):
@@ -183,20 +177,6 @@ class Checker:
                         continue
                     seen.add(node)
                     self.warnings.append(f'{shown}:{start + n}: warning: unlinked mention: {m[0]}')
-
-    @staticmethod
-    def prose_lines(text):
-        """Line indexes and lines outside fenced code."""
-        fence = None
-        for n, line in enumerate(text.splitlines()):
-            f = Converter.FENCE.match(line)
-            if fence:
-                if f and line.lstrip().startswith(fence):
-                    fence = None
-            elif f:
-                fence = f[1]
-            else:
-                yield n, line
 
     def mention_terms(self, scanner):
         """Regex of page titles and aliases as whole words, and the page each names; ones naming two pages left out."""
@@ -219,9 +199,25 @@ class Checker:
             del nodes[key]
         if not nodes:
             return None, nodes
-        words = sorted(nodes, key=len, reverse=True)
-        pattern = re.compile(r'(?<!\w)(?:' + '|'.join(map(re.escape, words)) + r')(?!\w)', re.IGNORECASE if case else 0)
+        pattern = re.compile(r'(?<!\w)' + self.trie(nodes) + r'(?!\w)', re.IGNORECASE if case else 0)
         return pattern, nodes
+
+    @classmethod
+    def trie(cls, words):
+        """Regex of words sharing their prefixes, longest first: fast with thousands of them."""
+        tree = {}
+        for word in words:
+            node = tree
+            for c in word:
+                node = node.setdefault(c, {})
+            node[''] = {}
+        def pattern(node):
+            alts = [re.escape(c) + pattern(sub) for c, sub in node.items() if c]
+            if not alts:
+                return ''
+            res = alts[0] if len(alts) == 1 else '(?:' + '|'.join(alts) + ')'
+            return f'(?:{res})?' if '' in node else res
+        return pattern(tree)
 
     def check_unlisted(self):
         """Warns about pages and folders their folder page does not link, as contents should."""
@@ -233,7 +229,10 @@ class Checker:
                 self.warnings.append(f'{shown}:1: warning: not listed in {folder.page.name}.md')
 
     def targets(self, scanner, page):
-        return self.links[page] if page in self.links else self.page_links(scanner, page)
+        """Pages and folders page links to, as build and its reading order see them."""
+        if scanner not in self.links:
+            self.links[scanner] = Links(scanner)
+        return self.links[scanner].targets(page)
 
     def check_orphans(self):
         """Pages links from root folder page do not lead to, pages no other page links, warnings for the latter."""
@@ -252,25 +251,9 @@ class Checker:
 
     def vault_links(self, scanner):
         """Vault pages, ones other pages link to, ones links from root folder page lead to, all pages read."""
-        links = {page: self.targets(scanner, page) for page in scanner.pages().values()}
-        linked = {target for page, targets in links.items() for target in targets if target is not page}
-        if not scanner.root.page:
-            return set(links), linked, linked
-        reached, todo = {scanner.root}, [scanner.root]
-        while todo:
-            for target in links.get(todo.pop(), ()):
-                if target not in reached:
-                    reached.add(target)
-                    todo.append(target)
-        return set(links), linked, reached
-
-    def page_links(self, scanner, page):
-        converter = CheckConverter(page, scanner, lambda line, message: None, self.options)
-        try:
-            converter.read()
-        except ValueError:
-            pass
-        return converter.targets
+        pages = set(scanner.pages().values())
+        linked = {target for page in pages for target in self.targets(scanner, page) if target is not page}
+        return pages, linked, self.links[scanner].reach() if scanner.root.page else linked
 
     def schema(self, scanner):
         if scanner not in self.schemas:
@@ -307,24 +290,20 @@ class Checker:
 
     def check_file(self, scanner, page, shown):
         report = lambda line, msg: self.problems.append(f'{shown}:{line}: {msg}')
-        source = page.page if page.is_folder else page
+        source = page.source
         try:
-            with open(source.fullpath, encoding='utf-8') as f:
-                text = f.read()
+            text, front, _, _ = read_parts(source.fullpath)
         except UnicodeDecodeError:
             return report(1, 'not UTF-8')
-        m = Converter.FRONT_MATTER.match(text)
-        if m:
-            for n, line in enumerate(m[0].splitlines()[1:-1], 2):
-                if line and not line.startswith((' ', '-')) and ':' not in line:
-                    report(n, f'malformed frontmatter: {line}')
-        elif self.FRONT_MATTER_START.match(text):
+        for n, line in enumerate(front.splitlines()[1:-1], 2):
+            if line and not line.startswith((' ', '-')) and ':' not in line:
+                report(n, f'malformed frontmatter: {line}')
+        if not front and self.FRONT_MATTER_START.match(text):
             report(1, 'unclosed frontmatter')
-        self.check_schema(scanner, source, m[0] if m else '', report)
-        self.check_aliases(scanner, page, m[0] if m else '', report)
+        self.check_schema(scanner, source, front, report)
+        self.check_aliases(scanner, page, front, report)
         if page.folder and page.folder.shadowed_index() is page:
             report(1, Scanner.shadowed_message(page.folder))
         converter = CheckConverter(page, scanner, report, self.options)
         converter.read()
-        self.links[page] = converter.targets
 

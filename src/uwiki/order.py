@@ -27,9 +27,7 @@ class LinkCollector(Converter):
         return super().link(text, checked)
 
     def embed_note(self, text):
-        name, heading, _ = self.parse_link(text)
-        target = self.scanner.resolve(name, self.source.path) if name else self.page
-        self.note(target, '' if heading.startswith('^') else heading)
+        self.link(text)
         return ''
 
     def note(self, target, heading='', line=None):
@@ -112,6 +110,9 @@ class Order:
 
         if folder.page:
             visit(folder)
+        if len(seen) == len(kids):
+            return res
+        # walking links from the root reads the whole vault, so only for pages the folder does not link
         reach = self.links.reach()
         first = {kid: min((reach[n] for n in self.inner(kid) if n in reach), default=None) for kid in kids}
         rest = sorted(range(len(kids)), key=lambda i: (first[kids[i]] is None, first[kids[i]] or 0, i))
@@ -129,13 +130,3 @@ class Order:
         if node.is_folder:
             for child in node.children.values():
                 yield from Order.inner(child)
-
-    def walk(self, folder=None):
-        """Every page and folder depth first in reading order, folders before their pages."""
-        folder = folder or self.scanner.root
-        yield folder
-        for child in self.children(folder):
-            if child.is_folder:
-                yield from self.walk(child)
-            else:
-                yield child
