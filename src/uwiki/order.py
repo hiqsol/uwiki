@@ -13,13 +13,17 @@ class LinkCollector(Converter):
     def local_href(self, href, line=None):
         if self.is_local(href):
             target, heading = self.resolve_href(href)
-            self.note(target, heading, line)
+            fragment = href.partition('#')[2]
+            self.note(target, fragment if self.ITEM.fullmatch(fragment) else heading, line)
         return super().local_href(href, line)
 
     def link(self, text, checked=False):
-        name, heading, _ = self.parse_link(text)
+        name, heading, item, _ = self.parse_target(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.page
-        self.note(target, '' if heading.startswith('^') else heading)
+        heading = '' if heading.startswith('^') else heading
+        if item and target is not None:
+            heading = self.title_section(target, heading)
+        self.note(target, ' › '.join(filter(None, [heading, item])))
         return super().link(text, checked)
 
     def embed_note(self, text):

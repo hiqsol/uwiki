@@ -4,15 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P10 Numbered list item anchors
-
-- a) Every item of a numbered list gets an anchor by its number path: `#3`, nested `#3.2`
-- b) `[[Star#3]]` and `[text](Star.md#3)` link to item 3 of the first numbered list of Star,
-  `[[Star#Heading#3]]` to item 3 under Heading
-- c) `check` reports links to missing items, as for missing headings
-- d) HTML shows the number on hover with a copy link, as headings do in GitHub
-- e) GitHub renders no such anchors: README notes that such markdown links open the page only
-
 ## P11 Unlinked mentions
 
 - a) `check --mentions` warns about a page title or alias used as plain text without a link,

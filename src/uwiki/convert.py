@@ -19,6 +19,9 @@ class Converter:
     LINK_DEF = re.compile(r'^ {0,3}\[[^\]]+\]:[ \t]*(<[^>\s]*>|\S+)')
     BLOCK_START = re.compile(r'^\s*(?:[-*+] |\d+[.)] |>|#{1,6}\s|```|~~~)')
     EMBED_LINE = re.compile(r'^\s*!\[\[([^\]]+)\]\]\s*$')
+    NUMBERED = re.compile(r'^([ \t]*)(\d+)[.)]([ \t]+)')
+    LIST_BREAK = re.compile(r'^(?:[-*+] |>|#{1,6}\s)')
+    ITEM = re.compile(r'\d+(?:\.\d+)*')
     IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.avif'}
     FRONT_MATTER = FRONT_MATTER
 
@@ -35,6 +38,7 @@ class Converter:
         self.line = 0
         self._title = ''
         self.shift = 0
+        self.item_lines = {}  # line number: (number path, sections whose first list it is in)
 
     def read(self):
         node = self.page.page if self.page.is_folder else self.page
@@ -47,6 +51,8 @@ class Converter:
             level = len(m[2])
             if all(not h or len(h[1]) > level for _, h in self.headings(text)):
                 self.shift = level
+        if not self.embedded:
+            self.item_lines = {start + i: (path, keys) for i, path, keys in self.list_items(text)}
         return self.process(text, start)
 
     @classmethod
@@ -104,6 +110,73 @@ class Converter:
             if level:
                 res += line
         return res
+
+    @classmethod
+    def list_items(cls, text):
+        """Yields line index, number path and sections of items of the first numbered list of the page
+        (section '') and of the first one under every heading (its text): `3`, nested `3.2`."""
+        fence = None
+        section, sections = '', set()
+        page = False
+        stack, keys, blank = [], [], False
+        for i, line in enumerate(text.splitlines()):
+            f = cls.FENCE.match(line)
+            if fence:
+                if f and line.lstrip().startswith(fence):
+                    fence = None
+                continue
+            if f:
+                fence = f[1]
+                continue
+            h = cls.HEADING.match(line)
+            m = cls.NUMBERED.match(line)
+            if h:
+                section, stack = h[2], []
+            elif m:
+                indent = len(m[1].expandtabs(4))
+                if not stack:
+                    keys = [] if page else ['']
+                    page = True
+                    if section and cebabize(section) not in sections:
+                        keys.append(section)
+                        sections.add(cebabize(section))
+                while stack and stack[-1][0] > indent:
+                    stack.pop()
+                if not stack or stack[-1][0] < indent:
+                    stack.append([indent, 0])
+                stack[-1][1] += 1
+                if keys:
+                    yield i, '.'.join(str(n) for _, n in stack), keys
+            elif line.strip() and not line[0].isspace() and (blank or cls.LIST_BREAK.match(line)):
+                stack = []
+            blank = not line.strip()
+
+    @classmethod
+    def find_item(cls, page, heading, item):
+        """Whether page has item by number path in its first numbered list, or the first one under heading."""
+        key = lambda heading: cebabize(heading) if heading else ''
+        return any(path == item and any(key(k) == key(heading) for k in keys)
+                   for _, path, keys in cls.list_items(cls.read_text(page)[0]))
+
+    def title_section(self, target, heading):
+        """Heading of a section, none for the title heading the page header replaces."""
+        return '' if heading and self.anchor(target, heading) == target.anchor else heading
+
+    def item_anchor(self, target, heading, item):
+        """Anchor of item: of the target page, or of its heading section."""
+        return f'{self.anchor(target, heading) if heading else target.anchor}--{item}'
+
+    def item_anchors(self, line):
+        """Line of numbered list item with anchors of its number path put after the number."""
+        path, keys = self.item_lines[self.line]
+        m = self.NUMBERED.match(line)
+        ids = [self.item_anchor(self.page, key, path) for key in keys]
+        if self.mode == 'md':
+            anchors = ''.join(f'<a id="{id}"></a>' for id in ids)
+        else:
+            anchors = f'<a class="item-anchor" id="{ids[-1]}" href="#{ids[-1]}" data-item="{path}"></a>'
+            anchors += ''.join(f'<a id="{id}"></a>' for id in ids[:-1])
+        return line[:m.end()] + anchors + line[m.end():]
 
     def process(self, text, start=1):
         res = ''
@@ -165,6 +238,8 @@ class Converter:
             return self.embed_note(m[1])
         if self.LINK_DEF.match(line):
             return self.LINK_DEF.sub(self.link_definition, line, count=1)
+        if self.line in self.item_lines and self.NUMBERED.match(line):
+            line = self.item_anchors(line)
         return self.links(line)
 
     def heading(self, level, text):
@@ -213,6 +288,9 @@ class Converter:
         if target is None:
             return None
         self.check_scope(target, href, line)
+        fragment = unquote(href).partition('#')[2]
+        if self.ITEM.fullmatch(fragment):
+            return '#' + self.item_anchor(target, '', fragment)
         return '#' + (self.anchor(target, heading) if heading else target.anchor)
 
     def check_scope(self, target, link, line=None, embed=False):
@@ -314,6 +392,8 @@ class Converter:
         return f'<img {attrs} />'
 
     def embed_note(self, text):
+        if self.parse_target(text)[2]:
+            return self.link(text) + '\n'
         name, heading, _ = self.parse_link(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.source
         node = target.page if target and target.is_folder else target
@@ -330,7 +410,7 @@ class Converter:
         return f'\n<div class="embed" markdown="1">\n\n{content}\n\n</div>\n\n'
 
     def link(self, text, checked=False):
-        name, heading, description = self.parse_link(text)
+        name, heading, item, description = self.parse_target(text)
         if name:
             target = self.scanner.resolve(name, self.source.path)
             if not target and not heading and self.attachment(text):
@@ -344,12 +424,23 @@ class Converter:
         else:
             target = self.page
             title = ''
-        if heading and not heading.startswith('^'):
+        if item and target:
+            anchor = self.item_anchor(target, heading, item)
+            title = ' > '.join(filter(None, [title, heading, item]))
+        elif heading and not heading.startswith('^'):
             anchor = self.anchor(target, heading) if target else cebabize(heading)
             title = f'{title} > {heading}' if title else heading
         else:
             anchor = target.anchor if target else cebabize(Path(name).name)
         return f'[{description or title}](#{anchor})'
+
+    @classmethod
+    def parse_target(cls, text):
+        """Parses `Page#Heading#3|description` into name, heading, item number path and description."""
+        text, _, description = text.partition('|')
+        name, *parts = [part.strip() for part in text.split('#')]
+        item = parts.pop() if parts and cls.ITEM.fullmatch(parts[-1]) else ''
+        return name, parts[-1] if parts else '', item, description.strip()
 
     @staticmethod
     def parse_link(text):

@@ -156,6 +156,10 @@ aliases = "list"
 Supported Obsidian syntax:
 
 - `[[Page]]`, `[[Page|text]]`, `[[folder/Page]]`, `[[Page#Heading]]`, `[[#Heading]]`
+- `[[Page#3]]`, `[[Page#3.2]]` link item 3, or nested item 2 of item 3, of the first numbered list of Page,
+  `[[Page#Heading#3]]` of the first one under Heading, `[text](Page.md#3)` too, `check` reports missing items;
+  HTML shows the number of an item on hover, a click copies the link to it.
+  GitHub renders no such anchors, so there such markdown links open the page only
 - `![[Page]]`, `![[Page#Heading]]` embeds, `![[image.png]]`, `![[image.png|300]]`
 - callouts `> [!note] Title`, foldable `> [!note]-`
 - YAML front matter is stripped from text, HTML shows it next to page title

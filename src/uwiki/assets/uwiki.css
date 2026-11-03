@@ -348,6 +348,37 @@ a:hover {
     color: var(--fg-muted);
 }
 
+/* numbered list item shows its number path left of it on hover, a click copies the link */
+.content li:has(> .item-anchor, > p:first-child > .item-anchor) {
+    position: relative;
+}
+.content .item-anchor {
+    position: absolute;
+    right: calc(100% + 1.9em);
+    top: 0;
+    padding: 0 4px;
+    color: var(--fg-muted);
+    font-size: 12px;
+    line-height: inherit;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.content .item-anchor::before {
+    content: "#" attr(data-item);
+}
+.content .item-anchor.copied::before {
+    content: "copied";
+}
+.content li:hover:not(:has(li:hover)) > .item-anchor,
+.content li:hover:not(:has(li:hover)) > p:first-child > .item-anchor,
+.content .item-anchor:focus, .content .item-anchor.copied {
+    opacity: 1;
+}
+.content .item-anchor:hover {
+    color: var(--accent);
+    text-decoration: none;
+}
 .content code {
     padding: 0.1em 0.35em;
     border-radius: 4px;

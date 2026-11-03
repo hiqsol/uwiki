@@ -25,6 +25,7 @@
   buildIndex();
   bindEvents();
   bindPreviews();
+  bindItems();
   spy();
 
   // page header "Folder / Subfolder / Page" shows folders as a crumb above page title,
@@ -476,7 +477,8 @@
     var a = el.closest && el.closest("a[href^='#']");
     if (!a || !a.closest("main.content, .preview") || a.closest(".preview-title")) return null;
     var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
-    return target && /^H[1-6]$/.test(target.tagName) && content.contains(target) ? a : null;
+    if (target && !/^H[1-6]$/.test(target.tagName)) target = target.closest("li");
+    return target && content.contains(target) && !a.classList.contains("item-anchor") ? a : null;
   }
 
   // popover the link is in, 0 for links in the page
@@ -495,7 +497,7 @@
     el.className = "preview";
     var title = document.createElement("a");
     title.className = "preview-title";
-    title.href = "#" + target.id;
+    title.href = a.getAttribute("href");
     title.textContent = previewTitle(target);
     el.appendChild(title);
     var body = document.createElement("div");
@@ -520,6 +522,7 @@
 
   // page: its text till next page; section: till next heading of same or higher level
   function sectionOf(target) {
+    if (target.tagName === "A") return [target.closest("li")];
     var nodes = [];
     var page = target.classList.contains("page");
     var level = +target.tagName[1];
@@ -533,11 +536,20 @@
 
   function previewTitle(target) {
     if (target.classList.contains("page")) return titleOf(target);
+    if (target.tagName === "A") {
+      var li = target.closest("li"), item = li.querySelector(".item-anchor"), page = pageOf(li);
+      return (page ? titleOf(page) + " › " : "") + (item ? item.dataset.item : "");
+    }
+    var page = pageOf(target);
+    return (page ? titleOf(page) + " › " : "") + target.textContent;
+  }
+
+  function pageOf(el) {
     var page = null;
-    for (var i = 0; i < pages.length && pages[i].compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING; i++) {
+    for (var i = 0; i < pages.length && pages[i].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING; i++) {
       page = pages[i];
     }
-    return (page ? titleOf(page) + " › " : "") + target.textContent;
+    return page;
   }
 
   // under the link, above it when there is no room below, inside the window
@@ -571,6 +583,24 @@
       clearTimeout(p.timer);
       p.el.remove();
     }
+  }
+
+  // numbered list items show their number on hover, a click copies the link to the item
+
+  function bindItems() {
+    content.addEventListener("click", function (e) {
+      var a = e.target.closest(".item-anchor");
+      if (!a) return;
+      e.preventDefault();
+      history.replaceState(null, "", a.getAttribute("href"));
+      var done = function () {
+        a.classList.add("copied");
+        setTimeout(function () { a.classList.remove("copied"); }, 1200);
+      };
+      try {
+        navigator.clipboard.writeText(location.href).then(done, function () {});
+      } catch (err) {}
+    });
   }
 
   // events

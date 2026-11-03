@@ -27,6 +27,7 @@ PROJECT = os.path.join(FIXTURES, 'project')
 LINKCHECK = os.path.join(FIXTURES, 'linkcheck')
 EXTERNAL = os.path.join(FIXTURES, 'external')
 ORDER = os.path.join(FIXTURES, 'order')
+ITEMS = os.path.join(FIXTURES, 'items')
 
 
 def run(*args, cwd=None):
@@ -582,6 +583,37 @@ class AliasTest(unittest.TestCase):
         self.assertIn('Linked from: [aliases](#root)', md)
         js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
         self.assertIn('h.dataset.aliases', js)
+
+
+class ItemTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', ITEMS, '-o', out)
+            assert res.returncode == 0, res.stderr
+            cls.html, cls.md = read(os.path.join(out, 'items.html')), read(os.path.join(out, 'items.md'))
+
+    def test_links_to_items(self):
+        self.assertIn('Items [Star > 2](#star--2), [Star > 2.2](#star--2.2), [Star > Light > 2](#star--light--2), '
+                      '[third](#star--3), [md](#star--3), [1](#root--1).', self.md)
+
+    def test_anchors_of_first_lists(self):
+        self.assertIn('2. <a id="star--2"></a>Second\n\t1. <a id="star--2.1"></a>Nested one', self.md)
+        self.assertIn('1. Other list, no anchors', self.md)
+        self.assertIn('2. <a id="star--light--2"></a>Light two', self.md)
+        self.assertIn('1. code', self.md)
+        self.assertIn('<li><a class="item-anchor" id="star--2.2" href="#star--2.2" data-item="2.2"></a>Nested two</li>',
+                      self.html)
+        self.assertIn('Linked from: [items › 3](#root), [items › 2](#root), [items › 2.2](#root), '
+                      '[items › Light › 2](#root), [items › 9](#root)', self.md)
+
+    def test_check_reports_missing_items(self):
+        res = run('check', 'items', cwd=FIXTURES)
+        self.assertEqual(res.stdout.splitlines(), [
+            'items/index.md:2: missing item: Star.md#9',
+            'items/index.md:2: missing item: [[Star#4]]',
+            'items/index.md:2: missing item: [[Star#Light#3]]',
+        ], res.stderr)
 
 
 class LinkBuildTest(unittest.TestCase):

@@ -65,6 +65,11 @@ class CheckConverter(Converter):
         if posixpath.normpath(posixpath.join(posixpath.dirname(self.source.path).lstrip('/'), path)).startswith('..'):
             return self.report(line, f'link leaves vault: {href}')
         target, heading = self.resolve_href(href)
+        if target is not None and self.ITEM.fullmatch(fragment):
+            node = target.page if target.is_folder else target
+            heading = True
+            if node is None or not self.find_item(node, '', fragment):
+                self.report(line, f'missing item: {href}')
         file = os.path.join(os.path.dirname(self.source.fullpath), path)
         if path and not os.path.exists(file):
             return self.report(line, f'link differs from file name: {href}' if target else f'unresolved link: {href}')
@@ -86,17 +91,20 @@ class CheckConverter(Converter):
         return ''
 
     def check_link(self, text):
-        name, heading, _ = self.parse_link(text)
+        name, heading, item, _ = self.parse_target(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.source
         if target is not None:
             self.targets.add(target)
         if target is None:
-            if heading or not self.attachment(text):
+            if heading or item or not self.attachment(text):
                 self.report(self.line, f'unresolved link: [[{name}]]')
-        elif heading and not heading.startswith('^'):
-            node = target.page if target.is_folder else target
+            return
+        node = target.page if target.is_folder else target
+        if heading and not heading.startswith('^'):
             if node is None or not self.section(self.read_text(node)[0], heading):
-                self.report(self.line, f'missing heading: [[{name}#{heading}]]')
+                return self.report(self.line, f'missing heading: [[{name}#{heading}]]')
+        if item and (node is None or not self.find_item(node, self.title_section(target, heading), item)):
+            self.report(self.line, f'missing item: [[{text.partition("|")[0].strip()}]]')
 
     def check_numbering(self, line, lineno):
         """Numbered lists count from 1, nesting by indentation, lazy continuation lines keep list going."""
