@@ -26,7 +26,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--no-front-matter] [--exclude GLOB] [--include GLOB]
 uwiki watch <folder|file>... [build options] [-q] [--interval 0.5]
 uwiki serve <folder|file>... [build options] [-p 8000] [--host 127.0.0.1] [--open] [-q] [--interval 0.5]
-uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--exclude GLOB] [--include GLOB]
+uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--mentions] [--exclude GLOB] [--include GLOB]
 uwiki llms <folder|file>... [--title TITLE] [-o FILE] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
 uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
 uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
@@ -83,7 +83,10 @@ inside the vault, spelled as on disk, absolute links are reported.
 `--no-folder-links` reports links to folders, `--orphans` reports pages
 no chain of links leads to from the root folder page (any link, without one),
 `--unlinked` warns about pages no other page links to, `--unlisted` about pages
-their folder page does not link, both without changing exit code.
+their folder page does not link, `--mentions` about the first plain text mention of a page title or alias
+in a page not linking it, all without changing exit code.
+Mentions are whole words, case sensitive unless `--mentions-ignore-case`, outside code, headings and link text,
+at least `--mentions-min-length 3` long, `--mentions-ignore TERM` skips one, a page mentioning itself is no mention.
 Links count from every page of the vault, checked or not.
 
 `llms` writes [llms.txt](https://llmstxt.org) (default: in the one folder listed, else `-o` is required):
@@ -140,6 +143,9 @@ exclude = ["drafts"]
 
 [check]
 unlisted = true
+mentions = true
+mentions-ignore = ["Go", "Notes"]
+mentions-min-length = 4
 
 [build]
 backlinks = false

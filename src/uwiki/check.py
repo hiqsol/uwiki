@@ -17,6 +17,10 @@ class CheckOptions:
     orphans: bool = False
     unlinked: bool = False
     unlisted: bool = False
+    mentions: bool = False
+    mentions_ignore: tuple = ()
+    mentions_min_length: int = 3
+    mentions_ignore_case: bool = False
 
 class CheckConverter(Converter):
     """Converts page like renderer does, reports what would render broken."""
@@ -147,7 +151,77 @@ class Checker:
             self.check_orphans()
         if self.options.unlisted:
             self.check_unlisted()
+        if self.options.mentions:
+            self.check_mentions()
         return self.problems
+
+    PLAIN_SKIP = re.compile(r"""(`+).*?\1|!?\[\[.*?\]\]|!?\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])|<[^>]*>|https?://\S+""")
+
+    def check_mentions(self):
+        """Warns about the first plain text mention of another page title or alias, page not linking it."""
+        terms = {}
+        for page, (scanner, shown) in self.checked.items():
+            if scanner not in terms:
+                terms[scanner] = self.mention_terms(scanner)
+            pattern, nodes = terms[scanner]
+            if pattern is None:
+                continue
+            source = page.page if page.is_folder else page
+            try:
+                text, start = Converter.read_text(source)
+            except ValueError:
+                continue
+            linked = self.targets(scanner, page)
+            seen = set()
+            for n, line in self.prose_lines(text):
+                if Converter.HEADING.match(line) or Converter.LINK_DEF.match(line):
+                    continue
+                for m in pattern.finditer(self.PLAIN_SKIP.sub(lambda m: ' ' * len(m[0]), line)):
+                    key = m[0].lower() if self.options.mentions_ignore_case else m[0]
+                    node = nodes.get(key)
+                    if node is None or node is page or node in linked or node in seen:
+                        continue
+                    seen.add(node)
+                    self.warnings.append(f'{shown}:{start + n}: warning: unlinked mention: {m[0]}')
+
+    @staticmethod
+    def prose_lines(text):
+        """Line indexes and lines outside fenced code."""
+        fence = None
+        for n, line in enumerate(text.splitlines()):
+            f = Converter.FENCE.match(line)
+            if fence:
+                if f and line.lstrip().startswith(fence):
+                    fence = None
+            elif f:
+                fence = f[1]
+            else:
+                yield n, line
+
+    def mention_terms(self, scanner):
+        """Regex of page titles and aliases as whole words, and the page each names; ones naming two pages left out."""
+        case = self.options.mentions_ignore_case
+        norm = lambda term: term.lower() if case else term
+        ignore = {norm(term) for term in self.options.mentions_ignore}
+        nodes, shared = {}, set()
+        for node in scanner.pages().values():
+            if node is scanner.root and not node.page:
+                continue
+            for term in [node.title, *read_aliases(node.file)]:
+                term = term.strip()
+                key = norm(term)
+                if len(term) < self.options.mentions_min_length or key in ignore:
+                    continue
+                if nodes.get(key, node) is not node:
+                    shared.add(key)
+                nodes[key] = node
+        for key in shared:
+            del nodes[key]
+        if not nodes:
+            return None, nodes
+        words = sorted(nodes, key=len, reverse=True)
+        pattern = re.compile(r'(?<!\w)(?:' + '|'.join(map(re.escape, words)) + r')(?!\w)', re.IGNORECASE if case else 0)
+        return pattern, nodes
 
     def check_unlisted(self):
         """Warns about pages and folders their folder page does not link, as contents should."""

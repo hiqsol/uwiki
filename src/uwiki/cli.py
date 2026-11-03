@@ -69,7 +69,9 @@ def build_options(args):
 
 def check(args, parser):
     options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked,
-                           unlisted=args.unlisted)
+                           unlisted=args.unlisted, mentions=args.mentions, mentions_ignore=args.mentions_ignore,
+                           mentions_min_length=args.mentions_min_length,
+                           mentions_ignore_case=args.mentions_ignore_case)
     checker = Checker(args.paths, args.include, args.exclude, options)
     code = report(checker.check())
     for warning in checker.warnings:
@@ -175,7 +177,7 @@ def parser():
 
     p = command(commands, 'check', 'check unresolved links and headings, missing images, '
                                    'frontmatter syntax and list numbering',
-                f'[--no-folder-links] [--orphans] [--unlinked] [--unlisted] {FILTER_USAGE}')
+                f'[--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--mentions] {FILTER_USAGE}')
     add_paths(p, 'folders or files to check')
     p.add_argument('--no-folder-links', action='store_true', help='report links to folders, not files')
     p.add_argument('--orphans', action='store_true',
@@ -184,6 +186,14 @@ def parser():
                    help='warn about pages no other page links to, exit code stays as is')
     p.add_argument('--unlisted', action='store_true',
                    help='warn about pages their folder page does not link, exit code stays as is')
+    p.add_argument('--mentions', action='store_true',
+                   help='warn about the first plain text mention of a page title or alias a page does not link, '
+                        'exit code stays as is')
+    p.add_argument('--mentions-ignore', action='append', default=[], metavar='TERM',
+                   help='title or alias not to warn about; repeatable')
+    p.add_argument('--mentions-min-length', type=int, default=3, metavar='N',
+                   help='shortest title or alias to warn about, default: 3')
+    p.add_argument('--mentions-ignore-case', action='store_true', help='mentions match in any case')
     add_filter(p)
     p.set_defaults(func=check)
 

@@ -616,6 +616,33 @@ class ItemTest(unittest.TestCase):
         ], res.stderr)
 
 
+class MentionTest(unittest.TestCase):
+    def test_first_plain_mentions_are_warnings(self):
+        res = run('check', 'mentions', '--mentions', cwd=FIXTURES)
+        self.assertEqual((res.returncode, res.stdout.splitlines()), (0, [
+            'mentions/Space.md:1: warning: unlinked mention: Star',
+            'mentions/Space.md:1: warning: unlinked mention: Vice President',
+            'mentions/Star.md:1: warning: unlinked mention: Space',
+            'mentions/Vice President.md:4: warning: unlinked mention: Star',
+        ]), res.stderr)
+
+    def test_case_and_config(self):
+        res = run('check', 'mentions', '--mentions', '--mentions-ignore-case', '--mentions-min-length', '2',
+                  '--mentions-ignore', 'star', cwd=FIXTURES)
+        self.assertEqual(res.stdout.splitlines(), [
+            'mentions/Space.md:1: warning: unlinked mention: Vice President',
+            'mentions/Star.md:1: warning: unlinked mention: Space',
+            'mentions/Star.md:5: warning: unlinked mention: Go',
+        ], res.stderr)
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'Star.md'), 'Star.\n')
+            write(os.path.join(tmp, 'Space.md'), 'Space has a Star and the Moon.\n')
+            write(os.path.join(tmp, 'Moon.md'), 'Moon.\n')
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nmentions = true\nmentions-ignore = ["Moon"]\n')
+            res = run('check', '.', cwd=tmp)
+        self.assertEqual(res.stdout.splitlines(), ['./Space.md:1: warning: unlinked mention: Star'], res.stderr)
+
+
 class LinkBuildTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
