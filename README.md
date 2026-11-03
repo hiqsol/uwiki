@@ -26,6 +26,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 ```
 uwiki <command> <folder|file>... [--exclude GLOB] [--include GLOB] [options]
 uwiki mv <from> <to> [--dry-run] [--exclude GLOB] [--include GLOB]
+uwiki lsp
 
 build  [--title TITLE] [-o OUTPUT] [--html | --md] [--no-backlinks] [--no-front-matter]
 watch  [build options] [-q] [--interval 0.5]
@@ -131,6 +132,21 @@ so a name only link stays name only when the name is still unique.
 Inside a git work tree it moves with `git mv`, else renames.
 `--dry-run` prints the move and every changed line instead, `-` before and `+` after.
 
+`lsp` is a language server over stdio for editors, its vault root is the folder the editor opens,
+links resolve as in every other command, the vault config `exclude`, `include` and `check` options apply.
+Go to definition leads to the page, heading or item a wiki or markdown link names, hover shows it,
+an item with its nested ones; completion after `[[` gives page and folder names and aliases,
+after `[[Page#` its headings and items with their text, after `[[Page#Heading#` items under Heading.
+References of a link, or of the page, heading or item at the cursor, list the lines linking there.
+Outline gives headings with the items links can name nested under them.
+Diagnostics are what `check` reports, published for the whole vault on start and on every save.
+Neovim 0.11+:
+
+```lua
+vim.lsp.config('uwiki', { cmd = { 'uwiki', 'lsp' }, filetypes = { 'markdown' }, root_markers = { 'uwiki.toml' } })
+vim.lsp.enable('uwiki')
+```
+
 Example:
 
 ```
@@ -182,6 +198,7 @@ Supported Obsidian syntax:
 - `[[Page]]`, `[[Page|text]]`, `[[folder/Page]]`, `[[Page#Heading]]`, `[[#Heading]]`
 - `[[Page#3]]`, `[[Page#3.2]]` link item 3, or nested item 2 of item 3, of the first numbered list of Page,
   `[[Page#Heading#3]]` of the first one under Heading, `[text](Page.md#3)` too, `check` reports missing items;
+  such a link shows as written: `Page#3`, `Page#Heading#3`, `#3` on the same page;
   HTML shows the number of an item on hover, a click copies the link to it.
   GitHub renders no such anchors, so there such markdown links open the page only
 - `![[Page]]`, `![[Page#Heading]]` embeds, `![[image.png]]`, `![[image.png|300]]`

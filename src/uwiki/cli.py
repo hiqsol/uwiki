@@ -11,6 +11,7 @@ from . import __version__
 from .build import Build, BuildOptions, UsageError
 from .check import Checker, CheckOptions
 from .config import Config, ConfigError
+from .lsp import Server
 from .llms import Llms
 from .ls import Listing
 from .stats import Stats
@@ -77,6 +78,10 @@ def mv(args):
     print(f'mv {shown(move.source)} {shown(move.target)}')
     for rel in sorted(move.changes):
         print(f'updated links in {shown(move.full(rel))}')
+
+def lsp(args):
+    Server().serve()
+    return 0
 
 def build_options(args):
     return BuildOptions(backlinks=not args.no_backlinks, front_matter=not args.no_front_matter)
@@ -247,6 +252,9 @@ def parser():
     p.add_argument('--check', action='store_true', help='report lines to rewrap instead, exit 1 if any')
     add_filter(p)
     p.set_defaults(func=wrap)
+    p = commands.add_parser('lsp', prog='uwiki lsp', usage='%(prog)s',
+                            help='language server over stdio for editors, in the vault the editor opens')
+    p.set_defaults(func=lsp)
     p = commands.add_parser('mv', prog='uwiki mv', usage=f'%(prog)s <from> <to> [--dry-run] {FILTER_USAGE}',
                             help='move or rename a page, folder or attachment, rewriting every link to it')
     p.add_argument('source', metavar='from', help='page, folder or attachment in the vault')

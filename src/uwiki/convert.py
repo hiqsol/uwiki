@@ -433,7 +433,8 @@ class Converter:
             title = ''
         if item and target:
             anchor = self.item_anchor(target, heading, item)
-            title = ' > '.join(filter(None, [title, heading, item]))
+            # as written: Page#3, Page#Heading#3, #3 on the same page
+            title = '#'.join([title, *filter(None, [heading]), item])
         elif heading and not heading.startswith('^'):
             anchor = self.anchor(target, heading) if target else cebabize(heading)
             title = f'{title} > {heading}' if title else heading

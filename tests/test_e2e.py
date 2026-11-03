@@ -617,8 +617,8 @@ class ItemTest(unittest.TestCase):
             cls.html, cls.md = read(os.path.join(out, 'items.html')), read(os.path.join(out, 'items.md'))
 
     def test_links_to_items(self):
-        self.assertIn('Items [Star > 2](#star--2), [Star > 2.2](#star--2.2), [Star > Light > 2](#star--light--2), '
-                      '[third](#star--3), [md](#star--3), [1](#root--1).', self.md)
+        self.assertIn('Items [Star#2](#star--2), [Star#2.2](#star--2.2), [Star#Light#2](#star--light--2), '
+                      '[third](#star--3), [md](#star--3), [#1](#root--1).', self.md)
 
     def test_anchors_of_first_lists(self):
         self.assertIn('2. <a id="star--2"></a>Second\n\t1. <a id="star--2.1"></a>Nested one', self.md)
@@ -966,6 +966,125 @@ class MoveTest(unittest.TestCase):
         res = run('mv', 'Base.md', 'Base.txt', cwd=vault)
         self.assertEqual(res.returncode, 2)
         self.assertIn('keeps its .md extension', res.stderr)
+
+
+class Lsp:
+    """Language server in a subprocess, its replies by id and diagnostics by file name."""
+
+    def __init__(self, root, encodings=()):
+        self.proc = subprocess.Popen([sys.executable, '-m', 'uwiki', 'lsp'], cwd=root, stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, env={**os.environ, 'PYTHONPATH': SRC})
+        self.root, self.id, self.diagnostics = root, 0, {}
+        self.request('initialize', {'rootUri': 'file://' + root,
+                                    'capabilities': {'general': {'positionEncodings': list(encodings)}}})
+        self.notify('initialized', {})
+
+    def write(self, message):
+        data = json.dumps({'jsonrpc': '2.0', **message}).encode()
+        self.proc.stdin.write(b'Content-Length: %d\r\n\r\n' % len(data) + data)
+        self.proc.stdin.flush()
+
+    def read(self):
+        length = None
+        while True:
+            line = self.proc.stdout.readline().strip()
+            if not line:
+                break
+            length = int(line.split(b':')[1])
+        return json.loads(self.proc.stdout.read(length))
+
+    def notify(self, method, params):
+        self.write({'method': method, 'params': params})
+
+    def request(self, method, params):
+        self.id += 1
+        self.write({'id': self.id, 'method': method, 'params': params})
+        while True:
+            message = self.read()
+            if message.get('method') == 'textDocument/publishDiagnostics':
+                self.diagnostics[message['params']['uri'].rsplit('/', 1)[-1]] = message['params']['diagnostics']
+            elif message.get('id') == self.id:
+                return message.get('result')
+
+    def uri(self, name):
+        return 'file://' + os.path.join(self.root, name)
+
+    def open(self, name, text=None):
+        text = read(os.path.join(self.root, name)) if text is None else text
+        self.notify('textDocument/didOpen', {'textDocument': {'uri': self.uri(name), 'languageId': 'markdown',
+                                                              'version': 1, 'text': text}})
+
+    def at(self, method, name, line, character, **params):
+        return self.request(method, {'textDocument': {'uri': self.uri(name)},
+                                     'position': {'line': line, 'character': character}, **params})
+
+    def close(self):
+        self.request('shutdown', {})
+        self.notify('exit', {})
+        self.proc.wait(timeout=10)
+        self.proc.stdout.close()
+        self.proc.stdin.close()
+
+
+class LspTest(unittest.TestCase):
+    def setUp(self):
+        self.lsp = Lsp(ITEMS)
+        self.lsp.open('index.md')
+        self.index = read(os.path.join(ITEMS, 'index.md')).splitlines()
+
+    def tearDown(self):
+        self.lsp.close()
+
+    def col(self, n, text):
+        return self.index[n].index(text) + 2
+
+    def definition(self, n, text):
+        res = self.lsp.at('textDocument/definition', 'index.md', n, self.col(n, text))
+        return res and (res['uri'].rsplit('/', 1)[-1], res['range']['start']['line'])
+
+    def test_definition_leads_to_page_heading_and_item(self):
+        self.assertEqual(self.definition(0, '[[Star#2.2]]'), ('Star.md', 5))
+        self.assertEqual(self.definition(0, '[[Star#Light#2]]'), ('Star.md', 19))
+        self.assertEqual(self.definition(0, '[md](Star.md#3)'), ('Star.md', 6))
+        self.assertEqual(self.definition(0, '[[#1]]'), ('index.md', 3))
+        self.assertIsNone(self.lsp.at('textDocument/definition', 'index.md', 0, 0))
+
+    def test_hover_shows_item_with_nested_ones(self):
+        res = self.lsp.at('textDocument/hover', 'index.md', 0, self.col(0, '[[Star#2]]'))
+        self.assertEqual(res['contents']['value'], '**Star#2**\n\n2. Second\n\t1. Nested one\n\t2. Nested two')
+
+    def test_completion_of_names_headings_and_items(self):
+        self.lsp.open('New.md', '[[St\n[[Star#\n[[Star#Light#')
+        labels = lambda n, c: [i['label'] for i in self.lsp.at('textDocument/completion', 'New.md', n, c)]
+        self.assertIn('Star', labels(0, 4))
+        self.assertEqual(labels(1, 7), ['Star', '1', '2', '2.1', '2.2', '3', 'Light'])
+        self.assertEqual(labels(2, 13), ['1', '2'])
+
+    def test_references_of_item_line(self):
+        self.lsp.open('Star.md')
+        res = self.lsp.at('textDocument/references', 'Star.md', 3, 0, context={'includeDeclaration': False})
+        self.assertEqual([(r['uri'].rsplit('/', 1)[-1], r['range']['start']['line']) for r in res],
+                         [('index.md', 0)])
+
+    def test_outline_nests_items_under_headings(self):
+        self.lsp.open('Star.md')
+        res = self.lsp.request('textDocument/documentSymbol', {'textDocument': {'uri': self.lsp.uri('Star.md')}})
+        tree = lambda symbols: [(s['name'].split(' ')[0], tree(s['children'])) for s in symbols]
+        self.assertEqual(tree(res), [('Star', [('1', []), ('2', [('2.1', []), ('2.2', [])]), ('3', []),
+                                               ('Light', [('1', []), ('2', [])])])])
+
+    def test_diagnostics_of_check(self):
+        self.lsp.request('shutdown', {})
+        problems = [(d['range']['start']['line'], d['message']) for d in self.lsp.diagnostics['index.md']]
+        self.assertEqual(problems, [(1, 'missing item: Star.md#9'), (1, 'missing item: [[Star#4]]'),
+                                    (1, 'missing item: [[Star#Light#3]]')])
+
+    def test_utf16_positions(self):
+        self.lsp.open('New.md', '😀 [[Star#3]]')
+        res = self.lsp.at('textDocument/definition', 'New.md', 0, 4)
+        self.assertEqual(res['range']['start']['line'], 6)
+        hover = self.lsp.at('textDocument/hover', 'New.md', 0, 4)
+        self.assertEqual(hover['range']['start']['character'], 3)
 
 
 class LsTest(unittest.TestCase):
