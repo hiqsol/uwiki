@@ -24,20 +24,37 @@ uv tool install git+https://github.com/hiqsol/uwiki
 ## Usage
 
 ```
-uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--no-front-matter] [--exclude GLOB] [--include GLOB]
-uwiki watch <folder|file>... [build options] [-q] [--interval 0.5]
-uwiki serve <folder|file>... [build options] [-p 8000] [--host 127.0.0.1] [--open] [-q] [--interval 0.5]
-uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--mentions] [--exclude GLOB] [--include GLOB]
-uwiki llms <folder|file>... [--title TITLE] [-o FILE] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
-uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
-uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
-uwiki wrap <folder|file>... [-w 70] [--check] [--exclude GLOB] [--include GLOB]
+uwiki <command> <folder|file>... [--exclude GLOB] [--include GLOB] [options]
 uwiki mv <from> <to> [--dry-run]
+
+build  [--title TITLE] [-o OUTPUT] [--html | --md] [--no-backlinks] [--no-front-matter]
+watch  [build options] [-q] [--interval 0.5]
+serve  [watch options] [-p 8000] [--host 127.0.0.1] [--open]
+check  [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--mentions]
+llms   [--title TITLE] [-o FILE] [--summary TEXT] [--check]
+ls     [--external] [-z]
+stats  [--by folder|KEY] [--top N] [--json]
+wrap   [-w 70] [--check]
 ```
 
 Every command takes folders and files of one or more vaults.
 Vault root of a path is the nearest folder with `.obsidian`, else the folder all given paths share,
 pages keep their folders from it and links resolve in the whole vault.
+
+Pages of a folder go in reading order, the same in `build`, `llms` and the HTML sidebar:
+folder page first, then pages it links in the order of its links, so it serves as contents,
+every other page right after the first page linking it, recursively,
+so related pages stay together and general goes before specific.
+Pages no page of the folder links go by first reach in a breadth-first walk of links
+from the root folder page, unreachable ones last, by name.
+A link into a subfolder counts for the subfolder, a subfolder links what its folder page does.
+
+Commands skip hidden files and folders, `node_modules` and `vendor`.
+`--exclude` skips more, `--include` takes back skipped or excluded ones, both repeatable.
+Glob with `/` matches path from vault root, without it any path segment, like in `.gitignore`,
+`**` matches across folders, a matching folder matches everything in it:
+`--exclude 'docs/**' --include 'docs/adr/**'`.
+Symlinked page or folder pointing into the vault is skipped, links through it lead to its target.
 
 `build` writes given paths into one `<title>.html` and one `<title>.md`.
 `-o` is a folder to write them in, default: current, or a file name:
@@ -63,21 +80,6 @@ a failed build prints why and keeps the last good output, watching goes on.
 The page reloads after a rebuild keeping its scroll position and search, `build` output never gets this script.
 Output goes to a temporary folder removed on exit unless `-o` is given, attachments are served from the vault.
 
-Pages of a folder go in reading order, the same in `build`, `llms` and the HTML sidebar:
-folder page first, then pages it links in the order of its links, so it serves as contents,
-every other page right after the first page linking it, recursively,
-so related pages stay together and general goes before specific.
-Pages no page of the folder links go by first reach in a breadth-first walk of links
-from the root folder page, unreachable ones last, by name.
-A link into a subfolder counts for the subfolder, a subfolder links what its folder page does.
-
-Commands skip hidden files and folders, `node_modules` and `vendor`.
-`--exclude` skips more, `--include` takes back skipped or excluded ones, both repeatable.
-Glob with `/` matches path from vault root, without it any path segment, like in `.gitignore`,
-`**` matches across folders, a matching folder matches everything in it:
-`--exclude 'docs/**' --include 'docs/adr/**'`.
-Symlinked page or folder pointing into the vault is skipped, links through it lead to its target.
-
 `check` reports unresolved wiki and markdown links and headings, missing images,
 frontmatter syntax and list numbering as `path:line: message`, exits 1 if any.
 Every relative markdown link, inline or reference, must name an existing file or folder
@@ -95,7 +97,6 @@ Links count from every page of the vault, checked or not.
 title (default: the folder name), `--summary` as quote
 (default: front matter `description` of the folder page of the folder given paths share), then a section per folder
 listing its pages as `- [title](path): description`, links relative to the output file.
-Pages go in reading order.
 `--check` exits 1 if the file is out of date instead of writing it.
 
 `ls` lists markdown files the other commands take, one per line, `-z` ends them with NUL instead.
@@ -119,7 +120,7 @@ a line rewrapping leaves as is, e.g. a long URL or inline code, is not reported.
 
 `mv` moves or renames a page, folder or attachment inside the vault, `<to>` may be a folder to move into,
 and rewrites every link to it: wiki links, embeds, markdown links and reference definitions.
-Vault root is the nearest folder with `.obsidian`, else the current folder.
+Unlike other commands, vault root is the nearest folder with `.obsidian`, else the current folder.
 Relative markdown links in moved pages are fixed for their new folder.
 A wiki link changes only when it would no longer lead where it did, to the shortest name leading right,
 so a name only link stays name only when the name is still unique.
@@ -205,21 +206,6 @@ The HTML page is self-contained, light or dark by system preference:
   `--no-front-matter` leaves it out
 - fuzzy full text search: press `/` or `Ctrl+K`, tolerates typos and abbreviations,
   `↑` `↓` `Enter` to open a result with matched words highlighted in text, `Esc` to clear
-
-## Library
-
-Project specific checks can build on uwiki, e.g. a script run by `uv run --script`:
-
-```python
-# /// script
-# dependencies = ["uwiki @ git+https://github.com/hiqsol/uwiki@v0.2.0"]
-# ///
-import uwiki
-
-problems = uwiki.check(['docs'])         # same lines as `uwiki check docs`
-problems = uwiki.check(['docs'], options=uwiki.CheckOptions(orphans=True))
-data = uwiki.stats(['docs'], by='status')  # same data as `uwiki stats --json`
-```
 
 ## Development
 
