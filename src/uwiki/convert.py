@@ -285,6 +285,10 @@ class Converter:
         return self.scanner.attachment(text.partition('|')[0].strip(), self.source.path)
 
     def attachment_src(self, path):
+        """Attachment path relative to output, or under the URL a server serves vault files at."""
+        base = getattr(self.scope, 'attachment_base', None)
+        if base:
+            return base + quote(os.path.relpath(path, self.scanner.path).replace(os.sep, '/'))
         return quote(os.path.relpath(path, self.outdir).replace(os.sep, '/'))
 
     def attachment_link(self, text):

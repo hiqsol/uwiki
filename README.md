@@ -25,6 +25,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 ```
 uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--no-front-matter] [--exclude GLOB] [--include GLOB]
 uwiki watch <folder|file>... [build options] [-q] [--interval 0.5]
+uwiki serve <folder|file>... [build options] [-p 8000] [--host 127.0.0.1] [--open] [-q] [--interval 0.5]
 uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--exclude GLOB] [--include GLOB]
 uwiki llms <folder|file>... [--title TITLE] [-o FILE] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
 uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
@@ -54,6 +55,11 @@ a link to a heading shows it: `Rules › Phases`. `--no-backlinks` leaves the li
 added, deleted and renamed ones too, polling every `--interval` seconds, changes close together make one build.
 Each build prints time, pages and outputs, `-q` errors only;
 a failed build prints why and keeps the last good output, watching goes on.
+
+`serve` watches the same way and serves the HTML on `http://127.0.0.1:8000`,
+`--host 0.0.0.0` serves other hosts too, `-p 0` picks a free port, `--open` opens the page after the first build.
+The page reloads after a rebuild keeping its scroll position and search, `build` output never gets this script.
+Output goes to a temporary folder removed on exit unless `-o` is given, attachments are served from the vault.
 
 Pages of a folder go in reading order, the same in `build`, `llms` and the HTML sidebar:
 folder page first, then pages it links in the order of its links, so it serves as contents,

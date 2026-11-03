@@ -3,6 +3,7 @@
 import html
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,8 @@ def read_asset(name):
 class BuildOptions:
     backlinks: bool = True
     front_matter: bool = True
+    live_reload: bool = False  # served only: page reloads after a rebuild
+    attachment_base: str = ''  # served only: URL attachments are served at
 
 class Builder:
     """Renders selected pages in reading order, folders on the way to them by title only.
@@ -32,11 +35,13 @@ class Builder:
 
     SEP = ' › '
 
-    def __init__(self, selection, outdir='.', options=None):
+    def __init__(self, selection, outdir='.', options=None, build_id=''):
         self.selection = selection
         self.scanner = selection.scanner
         self.outdir = outdir
         self.options = options or BuildOptions()
+        self.attachment_base = self.options.attachment_base
+        self.build_id = build_id
         self.problems = {}
         self.links = Links(self.scanner)
         self.order = Order(self.scanner, self.links)
@@ -125,8 +130,13 @@ class Builder:
             'title':    html.escape(title),
             'content':  content,
             'style':    read_asset('uwiki.css'),
-            'script':   read_asset('uwiki.js'),
+            'script':   read_asset('uwiki.js') + self.reload_script(),
         })
+
+    def reload_script(self):
+        if not self.options.live_reload:
+            return ''
+        return read_asset('reload.js').replace('{build}', self.build_id)
 
     def md(self):
         return ''.join(self.converter(node).md(body) + self.md_backlinks(node) for node, body in self.nodes())
@@ -151,6 +161,7 @@ class Build:
         self.outputs, self.title = self.targets(self.paths, output, title, html, md)
         self.selection = None
         self.warnings = []
+        self.build_id = ''
 
     @classmethod
     def targets(cls, paths, output, title, html, md):
@@ -193,7 +204,8 @@ class Build:
         """Scans vault, renders and writes outputs; returns problems instead of writing if any."""
         selection = self.scan()
         outdir = os.path.dirname(os.path.abspath(next(iter(self.outputs.values()))))
-        builder = Builder(selection, outdir, self.options)
+        build_id = str(time.time_ns())
+        builder = Builder(selection, outdir, self.options, build_id)
         texts = {kind: builder.html(self.title) if kind == 'html' else builder.md() for kind in self.outputs}
         if builder.problems:
             return list(builder.problems)
@@ -201,4 +213,5 @@ class Build:
             os.makedirs(os.path.dirname(os.path.abspath(file)), exist_ok=True)
             with open(file, 'w', encoding='utf-8') as f:
                 f.write(texts[kind])
+        self.build_id = build_id
         return []

@@ -661,6 +661,54 @@ class WatchTest(unittest.TestCase):
             watch.stop()
 
 
+class ServeTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.vault = os.path.join(self.tmp.name, 'wiki')
+        write(os.path.join(self.vault, 'index.md'), 'See [[A]] ![[pic.png]].\n')
+        write(os.path.join(self.vault, 'A.md'), 'Page A.\n')
+        write(os.path.join(self.vault, 'pic.png'), 'png')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def get(self, url):
+        from urllib.request import urlopen
+        with urlopen(url, timeout=5) as res:
+            return res.status, res.geturl(), res.read().decode()
+
+    def test_serves_rebuilds_and_cleans_up(self):
+        from urllib.error import HTTPError
+        serve = Background('serve', self.vault, '-p', '0', '--interval', '0.1')
+        try:
+            url = re.fullmatch(r'serving (http://127\.0\.0\.1:\d+/wiki\.html)', serve.line())[1]
+            built = re.search(r'built 2 pages: (\S+)/wiki\.html, ', serve.line())
+            outdir = built[1]
+            self.assertTrue(outdir.startswith(tempfile.gettempdir()))
+            status, _, html = self.get(url)
+            build_id = self.get(url.replace('wiki.html', '__uwiki/build'))[2]
+            self.assertIn(f'var BUILD = "{build_id}";', html)
+            self.assertIn('<img src="/__uwiki/files/pic.png" alt="pic.png" />', html)
+            self.assertEqual(self.get(url.replace('wiki.html', '__uwiki/files/pic.png'))[2], 'png')
+            with self.assertRaises(HTTPError):
+                self.get(url.replace('wiki.html', '__uwiki/files/A.md'))
+            self.assertEqual(self.get(url.replace('wiki.html', ''))[1], url)
+            write(os.path.join(self.vault, 'A.md'), 'Page A changed.\n')
+            self.assertIn('built 2 pages', serve.line())
+            self.assertNotEqual(self.get(url.replace('wiki.html', '__uwiki/build'))[2], build_id)
+            self.assertIn('Page A changed.', self.get(url)[2])
+        finally:
+            serve.stop()
+        self.assertFalse(os.path.exists(outdir))
+
+    def test_build_output_has_no_reload(self):
+        with tempfile.TemporaryDirectory() as out:
+            run('build', self.vault, '-o', out)
+            html = read(os.path.join(out, 'wiki.html'))
+        self.assertNotIn('__uwiki', html)
+        self.assertNotIn('uwiki-reload', html)
+
+
 class LsTest(unittest.TestCase):
     def ls(self, *args):
         res = run('ls', *args, cwd=FIXTURES)

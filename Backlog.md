@@ -4,16 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P7 serve command
-
-- a) `uwiki serve <folder|file>... [build options] [-p 8000] [--host 127.0.0.1]` watches as P6 and
-  serves the built HTML with `http.server`
-- b) Live reload: the page reloads after a rebuild and keeps its scroll position and search,
-  the reload script is added only when served, never to `build` output
-- c) Binds to localhost by default, `--host 0.0.0.0` exposes it on purpose
-- d) `--open` opens the page in the browser after the first build
-- e) Output goes to a temporary folder unless `-o` is given, so serving leaves no files behind
-
 ## P8 Front matter schema
 
 - a) Config `uwiki.toml` in the vault root, or `[tool.uwiki]` in `pyproject.toml`, read by every command

@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 from . import __version__
@@ -13,6 +14,7 @@ from .llms import Llms
 from .ls import Listing
 from .stats import Stats
 from .watch import Watcher
+from . import serve as served
 from .vault import Filter, Selection
 from .wrap import WIDTH, wrap_files
 
@@ -36,6 +38,30 @@ def make_build(args):
 
 def watch(args, parser):
     Watcher(make_build(args), args.interval, quiet=args.quiet).run()
+
+def serve(args, parser):
+    """Builds into a temporary folder unless -o is given, so serving leaves no files behind."""
+    tmp = None if args.output else tempfile.TemporaryDirectory(prefix='uwiki-')
+    output = args.output or tmp.name + os.sep
+    title = args.title
+    if not args.output and not title:
+        folders = [p if os.path.isdir(p) else os.path.dirname(p) for p in map(os.path.abspath, args.paths)]
+        title = Path(os.path.commonpath(folders)).name
+    options = build_options(args)
+    options.live_reload = True
+    options.attachment_base = served.FILES
+    try:
+        build = Build(args.paths, output, title, args.html, args.md, args.include, args.exclude, options)
+        if 'html' not in build.outputs:
+            raise UsageError('serve needs HTML output')
+        try:
+            server = served.Server(build, args.host, args.port, args.open, args.interval, args.quiet)
+        except OSError as e:
+            sys.exit(f'uwiki serve: cannot listen on {args.host}:{args.port}: {e.strerror}')
+        server.run()
+    finally:
+        if tmp:
+            tmp.cleanup()
 
 def build_options(args):
     return BuildOptions(backlinks=not args.no_backlinks, front_matter=not args.no_front_matter)
@@ -95,12 +121,12 @@ def add_filter(p):
     p.add_argument('--include', action='append', default=[], metavar='GLOB',
                    help='take matching ones even if skipped or excluded; repeatable')
 
-def add_build_options(p):
+def add_build_options(p, output='current'):
     p.add_argument('--title', help='default: name of the one folder built, or of -o file')
     p.add_argument('--html', action='store_true', help='write HTML only (default: both HTML and markdown)')
     p.add_argument('--md', action='store_true', help='write single markdown file only')
     p.add_argument('-o', '--output',
-                   help='folder to write <title>.html and <title>.md in, default: current; '
+                   help=f'folder to write <title>.html and <title>.md in, default: {output}; '
                         'or file name: out/Wiki writes both, out/Wiki.html or out/Wiki.md one; '
                         'required for several paths')
     p.add_argument('--no-backlinks', action='store_true', help='no "Linked from" list under pages')
@@ -135,6 +161,16 @@ def parser():
     add_build_options(p)
     add_watch_options(p)
     p.set_defaults(func=watch)
+
+    p = command(commands, 'serve', 'serve built HTML on localhost, rebuild on change and reload the page',
+                f'{BUILD_USAGE} [-p 8000] [--host 127.0.0.1] [--open] [-q] [--interval SECONDS]')
+    add_paths(p, 'folders or files to build')
+    add_build_options(p, output='temporary one removed on exit')
+    p.add_argument('-p', '--port', type=int, default=8000, help='default: 8000, 0 picks a free one')
+    p.add_argument('--host', default='127.0.0.1', help='default: 127.0.0.1, 0.0.0.0 serves other hosts too')
+    p.add_argument('--open', action='store_true', help='open the page in the browser after the first build')
+    add_watch_options(p)
+    p.set_defaults(func=serve)
 
     p = command(commands, 'check', 'check unresolved links and headings, missing images, '
                                    'frontmatter syntax and list numbering',
