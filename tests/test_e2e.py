@@ -924,6 +924,32 @@ class MoveTest(unittest.TestCase):
         self.assertIn('[bad heading](../Guide.md#nope)',
                       read(os.path.join(self.tmp.name, 'mdlinks', 'manual', 'Broken.md')))
 
+    def test_paths_in_inline_code_and_link_text_follow(self):
+        root = os.path.join(self.tmp.name, 'mdlinks')
+        with open(os.path.join(root, 'Paths.md'), 'w', encoding='utf-8') as f:
+            f.write('See `docs/`, `docs/Guide.md`, [docs/Setup.md](docs/Setup.md) and [`docs/`](docs/index.md).\n'
+                    'Stay: `index.md`, `docs/Nope.md`, `[x](docs/Guide.md)`, [the docs](docs/index.md).\n'
+                    '```\ndocs/Guide.md\n```\n')
+        with open(os.path.join(root, 'docs', 'Paths.md'), 'w', encoding='utf-8') as f:
+            f.write('Next to `./Guide.md`, up at `../index.md`.\n')
+        os.makedirs(os.path.join(root, 'out'))
+        for name, text in [('uwiki.toml', 'exclude = ["out"]\n'), ('out/Built.md', 'Built `docs/Guide.md`.\n')]:
+            with open(os.path.join(root, name), 'w', encoding='utf-8') as f:
+                f.write(text)
+        res = run('mv', 'docs', 'manual', cwd=root)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(read(os.path.join(root, 'Paths.md')),
+                         'See `manual/`, `manual/Guide.md`, [manual/Setup.md](manual/Setup.md) and '
+                         '[`manual/`](manual/index.md).\n'
+                         'Stay: `index.md`, `docs/Nope.md`, `[x](docs/Guide.md)`, [the docs](manual/index.md).\n'
+                         '```\ndocs/Guide.md\n```\n')
+        self.assertEqual(read(os.path.join(root, 'manual', 'Paths.md')), 'Next to `./Guide.md`, up at `../index.md`.\n')
+        self.assertEqual(read(os.path.join(root, 'out', 'Built.md')), 'Built `docs/Guide.md`.\n')
+        res = run('mv', 'manual/Paths.md', 'Deep/Paths.md', cwd=root)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(read(os.path.join(root, 'Deep', 'Paths.md')),
+                         'Next to `../manual/Guide.md`, up at `../index.md`.\n')
+
     def test_git_mv_and_errors(self):
         vault = os.path.join(self.tmp.name, 'vault')
         git = lambda *args: subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', *args], cwd=vault,

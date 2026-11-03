@@ -5,8 +5,9 @@ import posixpath
 import subprocess
 from urllib.parse import quote, unquote
 
+from .config import Config
 from .convert import Converter
-from .vault import Scanner, Vaults, read_parts
+from .vault import Filter, Scanner, Vaults, read_parts
 
 class MoveError(ValueError):
     """Move that cannot be made."""
@@ -20,7 +21,7 @@ class Move:
     definitions point at the new place, links in moved pages are fixed for their new folder.
     """
 
-    def __init__(self, source, target):
+    def __init__(self, source, target, include=(), exclude=()):
         source, target = os.path.abspath(source), os.path.abspath(target)
         if not os.path.exists(source):
             raise MoveError(f'no such file or folder: {source}')
@@ -39,7 +40,10 @@ class Move:
         self.source, self.target = source, target
         self.src = self.rel(source)
         self.dst = self.rel(target)
-        self.old = Scanner(self.root)
+        # files the config of the vault or the options leave out keep their text, e.g. a built wiki
+        options = Config.load(self.root).options('mv', ())
+        listed = lambda key: [options[key]] if isinstance(options.get(key), str) else list(options.get(key, []))
+        self.old = Scanner(self.root, Filter([*listed('include'), *include], [*listed('exclude'), *exclude]))
         self.old.scan()
         files = self.old.files()
         self.new = Scanner.from_files(self.root, [self.moved(f) for f in files])
@@ -167,6 +171,23 @@ class Move:
             res = quote(res)
         return res + hash + fragment
 
+    def mention(self, text, old_rel, new_rel):
+        """New spelling of a path named as inline code or link text, None unless it is a path with `/`
+        to a file or folder, relative to the page or the vault root, that now has another spelling."""
+        if '/' not in text or not Converter.is_local(text) or '#' in text:
+            return None
+        for old_base, new_base in ((old_rel, new_rel), ('', '')):
+            target = Scanner.vault_path(text, old_base)
+            if target is None or target == '.' or not os.path.exists(self.full(target)):
+                continue
+            res = posixpath.relpath(self.moved(target), posixpath.dirname(new_base) or '.')
+            if text.endswith('/'):
+                res += '/'
+            if text.startswith('./') and not res.startswith('../'):
+                res = './' + res
+            return None if res == text else res
+        return None
+
     # doing it
 
     def diff(self, shown):
@@ -205,7 +226,8 @@ class Move:
         return res.stdout.strip() == 'true'
 
 class Rewriter(Converter):
-    """Rewrites links of a page where converter reads them: outside front matter, fenced and inline code."""
+    """Rewrites links of a page where converter reads them: outside front matter, fenced and inline code,
+    and paths named as whole inline code or link text, e.g. `docs/` or [docs/Guide.md](docs/Guide.md)."""
 
     def __init__(self, move, page, old_rel, new_rel):
         super().__init__(page, move.old)
@@ -223,11 +245,27 @@ class Rewriter(Converter):
         return match[0] if new is None else f'{match[1]}[[{new}]]'
 
     def markdown_link(self, match):
-        new = None if match[1] else self.move.markdown(match[3], self.old_rel, self.new_rel)
-        if new is None:
+        if match[1]:
+            return self.code_mention(match[0], match[1])
+        text = self.text_mention(match[2])
+        new = self.move.markdown(match[3], self.old_rel, self.new_rel)
+        if new is None and text is None:
             return match[0]
         start = match.start(3) - match.start()
-        return match[0][:start] + new + match[0][start + len(match[3]):]
+        between = match[0][1 + len(match[2]):start]
+        return f'[{text or match[2]}{between}{new or match[3]}{match[0][start + len(match[3]):]}'
+
+    def code_mention(self, code, ticks):
+        new = self.move.mention(code[len(ticks):-len(ticks)], self.old_rel, self.new_rel)
+        return code if new is None else ticks + new + ticks
+
+    def text_mention(self, text):
+        """New link text when it is a path, maybe as inline code, None if it stays."""
+        ticks = len(text) - len(text.lstrip('`'))
+        if ticks and text.endswith('`' * ticks) and len(text) > 2 * ticks:
+            new = self.code_mention(text, '`' * ticks)
+            return None if new == text else new
+        return self.move.mention(text, self.old_rel, self.new_rel)
 
     def link_definition(self, match):
         href = match[1]

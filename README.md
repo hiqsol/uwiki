@@ -25,7 +25,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 
 ```
 uwiki <command> <folder|file>... [--exclude GLOB] [--include GLOB] [options]
-uwiki mv <from> <to> [--dry-run]
+uwiki mv <from> <to> [--dry-run] [--exclude GLOB] [--include GLOB]
 
 build  [--title TITLE] [-o OUTPUT] [--html | --md] [--no-backlinks] [--no-front-matter]
 watch  [build options] [-q] [--interval 0.5]
@@ -123,6 +123,9 @@ a line rewrapping leaves as is, e.g. a long URL or inline code, is not reported.
 and rewrites every link to it: wiki links, embeds, markdown links and reference definitions.
 Unlike other commands, vault root is the nearest folder with `.obsidian`, else the current folder.
 Relative markdown links in moved pages are fixed for their new folder.
+A path with `/` named as whole inline code or link text follows too, relative to the page or the vault root,
+e.g. `docs/` or `[docs/Guide.md](docs/Guide.md)`; other code, prose and non-markdown files stay as they are.
+Files the config or `--exclude` leave out, e.g. a built wiki, keep their text.
 A wiki link changes only when it would no longer lead where it did, to the shortest name leading right,
 so a name only link stays name only when the name is still unique.
 Inside a git work tree it moves with `git mv`, else renames.

@@ -64,7 +64,7 @@ def serve(args):
 
 def mv(args):
     try:
-        move = Move(args.source, args.target)
+        move = Move(args.source, args.target, args.include, args.exclude)
         move.plan()
     except MoveError as e:
         raise UsageError(str(e)) from e
@@ -247,11 +247,12 @@ def parser():
     p.add_argument('--check', action='store_true', help='report lines to rewrap instead, exit 1 if any')
     add_filter(p)
     p.set_defaults(func=wrap)
-    p = commands.add_parser('mv', prog='uwiki mv', usage='%(prog)s <from> <to> [--dry-run]',
+    p = commands.add_parser('mv', prog='uwiki mv', usage=f'%(prog)s <from> <to> [--dry-run] {FILTER_USAGE}',
                             help='move or rename a page, folder or attachment, rewriting every link to it')
     p.add_argument('source', metavar='from', help='page, folder or attachment in the vault')
     p.add_argument('target', metavar='to', help='new path, or existing folder to move into')
     p.add_argument('--dry-run', action='store_true', help='print the move and every changed line instead')
+    add_filter(p)
     p.set_defaults(func=mv)
     parser.commands = commands.choices
     return parser
