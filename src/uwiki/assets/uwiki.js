@@ -168,7 +168,7 @@
         next: heads[i + 1] || null,
         title: titleOf(h),
         page: page,
-        text: range.toString().replace(/\s+/g, " ").trim(),
+        text: textOf(range).replace(/\s+/g, " ").trim(),
         headWords: new Set(words(titleOf(h))),
         counts: new Map()
       };
@@ -184,6 +184,13 @@
       if (!list) vocab.set(w, list = []);
       if (list[list.length - 1] !== index) list.push(index);
     }
+  }
+
+  // text of the range without parts added by build, as "Linked from"
+  function textOf(range) {
+    var frag = range.cloneContents();
+    frag.querySelectorAll(".backlinks").forEach(function (el) { el.remove(); });
+    return frag.textContent;
   }
 
   // fuzzy search: exact, prefix, substring, typos and abbreviations of every query word,

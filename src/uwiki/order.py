@@ -25,7 +25,7 @@ class LinkCollector(Converter):
     def embed_note(self, text):
         name, heading, _ = self.parse_link(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.page
-        self.note(target, heading)
+        self.note(target, '' if heading.startswith('^') else heading)
         return ''
 
     def note(self, target, heading='', line=None):

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .build import Build, UsageError
+from .build import Build, BuildOptions, UsageError
 from .check import Checker, CheckOptions
 from .llms import Llms
 from .ls import Listing
@@ -23,11 +23,15 @@ def report(problems):
     return 1 if problems else 0
 
 def build(args, parser):
-    builder = Build(args.paths, args.output, args.title, args.html, args.md, args.include, args.exclude)
+    builder = Build(args.paths, args.output, args.title, args.html, args.md, args.include, args.exclude,
+                    build_options(args))
     problems = builder.run()
     for warning in builder.warnings:
         print(f'warning: {warning}', file=sys.stderr)
     return report(problems)
+
+def build_options(args):
+    return BuildOptions(backlinks=not args.no_backlinks)
 
 def check(args, parser):
     options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked,
@@ -92,9 +96,10 @@ def add_build_options(p):
                    help='folder to write <title>.html and <title>.md in, default: current; '
                         'or file name: out/Wiki writes both, out/Wiki.html or out/Wiki.md one; '
                         'required for several paths')
+    p.add_argument('--no-backlinks', action='store_true', help='no "Linked from" list under pages')
     add_filter(p)
 
-BUILD_USAGE = f'[--title TITLE] [--html] [--md] [-o OUTPUT] {FILTER_USAGE}'
+BUILD_USAGE = f'[--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] {FILTER_USAGE}'
 
 def command(commands, name, help, usage):
     return commands.add_parser(name, help=help, prog=f'uwiki {name}', usage=f'%(prog)s <folder|file>... {usage}'.rstrip())

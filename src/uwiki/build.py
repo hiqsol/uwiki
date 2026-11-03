@@ -3,11 +3,12 @@
 import html
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from .convert import Converter
 from .order import Links, Order
-from .vault import Filter, Selection
+from .vault import Filter, Selection, cebabize
 
 ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
 
@@ -18,19 +19,27 @@ def read_asset(name):
     with open(os.path.join(ASSETS, name), encoding='utf-8') as f:
         return f.read()
 
+@dataclass
+class BuildOptions:
+    backlinks: bool = True
+
 class Builder:
     """Renders selected pages in reading order, folders on the way to them by title only.
 
     Collects links to vault pages left out of the build as `path:line: message` problems.
     """
 
-    def __init__(self, selection, outdir='.'):
+    SEP = ' › '
+
+    def __init__(self, selection, outdir='.', options=None):
         self.selection = selection
         self.scanner = selection.scanner
         self.outdir = outdir
+        self.options = options or BuildOptions()
         self.problems = {}
         self.links = Links(self.scanner)
         self.order = Order(self.scanner, self.links)
+        self._backlinks = None
 
     def inside(self, node):
         return self.selection.inside(node)
@@ -56,8 +65,43 @@ class Builder:
     def converter(self, node):
         return Converter(node, self.scanner, self.outdir, scope=self)
 
+    def backlinks(self, node):
+        """Built pages linking to node, in reading order, with headings links lead to: [(page, heading)]."""
+        if self._backlinks is None:
+            self._backlinks = {}
+            for source, body in self.nodes():
+                if not body:
+                    continue
+                for target, heading, _ in self.links.of(source):
+                    if target is source:
+                        continue
+                    heading = (heading or '').strip()
+                    if heading and cebabize(heading) == cebabize(target.title):
+                        heading = ''
+                    entries = self._backlinks.setdefault(target, {})
+                    entries.setdefault((source, cebabize(heading)), (source, heading))
+        if not self.options.backlinks:
+            return []
+        return list(self._backlinks.get(node, {}).values())
+
+    def backlink_text(self, source, heading):
+        return source.title + (self.SEP + heading if heading else '')
+
+    def html_backlinks(self, node):
+        links = [f'<a href="#{source.anchor}">{html.escape(self.backlink_text(source, heading))}</a>'
+                 for source, heading in self.backlinks(node)]
+        if not links:
+            return ''
+        return f'<p class="backlinks"><span>Linked from:</span> {", ".join(links)}</p>\n'
+
+    def md_backlinks(self, node):
+        escape = lambda text: re.sub(r'([\\\[\]])', r'\\\1', text)
+        links = [f'[{escape(self.backlink_text(source, heading))}](#{source.anchor})'
+                 for source, heading in self.backlinks(node)]
+        return f'Linked from: {", ".join(links)}\n\n' if links else ''
+
     def html(self, title):
-        content = ''.join(self.converter(node).html(body) for node, body in self.nodes())
+        content = ''.join(self.converter(node).html(body) + self.html_backlinks(node) for node, body in self.nodes())
         return self.render('uwiki.html', {
             'title':    html.escape(title),
             'content':  content,
@@ -66,7 +110,7 @@ class Builder:
         })
 
     def md(self):
-        return ''.join(self.converter(node).md(body) for node, body in self.nodes())
+        return ''.join(self.converter(node).md(body) + self.md_backlinks(node) for node, body in self.nodes())
 
     @staticmethod
     def render(name, vars):
@@ -81,8 +125,9 @@ class Build:
 
     KINDS = ('html', 'md')
 
-    def __init__(self, paths, output=None, title=None, html=False, md=False, include=(), exclude=()):
+    def __init__(self, paths, output=None, title=None, html=False, md=False, include=(), exclude=(), options=None):
         self.paths = list(paths)
+        self.options = options or BuildOptions()
         self.filter = Filter(include, exclude)
         self.outputs, self.title = self.targets(self.paths, output, title, html, md)
         self.selection = None
@@ -129,7 +174,7 @@ class Build:
         """Scans vault, renders and writes outputs; returns problems instead of writing if any."""
         selection = self.scan()
         outdir = os.path.dirname(os.path.abspath(next(iter(self.outputs.values()))))
-        builder = Builder(selection, outdir)
+        builder = Builder(selection, outdir, self.options)
         texts = {kind: builder.html(self.title) if kind == 'html' else builder.md() for kind in self.outputs}
         if builder.problems:
             return list(builder.problems)

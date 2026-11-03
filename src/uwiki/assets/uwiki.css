@@ -346,6 +346,15 @@ a:hover {
     background: var(--bg-alt);
 }
 
+.content .backlinks {
+    margin-top: 1.5em;
+    color: var(--fg-muted);
+    font-size: 14px;
+}
+.content .backlinks > span {
+    font-weight: 600;
+}
+
 .embed {
     margin: 1em 0;
     padding: 2px 14px;

@@ -23,7 +23,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 ## Usage
 
 ```
-uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--exclude GLOB] [--include GLOB]
+uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--exclude GLOB] [--include GLOB]
 uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--exclude GLOB] [--include GLOB]
 uwiki llms <folder|file>... [--title TITLE] [-o FILE] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
 uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
@@ -45,6 +45,9 @@ Folders on the way to built pages show by their titles only,
 a link or embed from built pages to a vault page left out fails the build with `path:line: message`.
 Page title is front matter `title`, else the heading page starts with, else file name.
 Page header shows it after titles of all its folders, a leading heading repeating it is dropped.
+Under every page "Linked from" lists built pages linking to it by title, in HTML and markdown,
+wiki and markdown links and embeds count, links from a page to itself and from code do not,
+a link to a heading shows it: `Rules › Phases`. `--no-backlinks` leaves the list out.
 
 Pages of a folder go in reading order, the same in `build`, `llms` and the HTML sidebar:
 folder page first, then pages it links in the order of its links, so it serves as contents,

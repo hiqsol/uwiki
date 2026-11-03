@@ -170,6 +170,23 @@ class RenderTest(unittest.TestCase):
         for href in re.findall(r'\]\(#([^)]*)\)', self.md):
             self.assertIn(f'<a id="{href}"></a>', self.md)
 
+    def test_backlinks(self):
+        self.assertIn('<p class="backlinks"><span>Linked from:</span> <a href="#root">vault</a>, '
+                      '<a href="#root">vault › Second Section</a>, '
+                      '<a href="#my-notes">My Notes › Second Section</a></p>', section(self.content, 'my-page'))
+        self.assertIn('<p class="backlinks"><span>Linked from:</span> <a href="#root">vault</a>, '
+                      '<a href="#my-notes">My Notes</a></p>', section(self.content, '2024-plans'))
+        self.assertIn('Linked from: [vault](#root), [My Notes](#my-notes)\n', self.md)
+        self.assertNotIn('backlinks', section(self.content, 'root'))
+        self.assertNotIn('backlinks', section(self.content, 'r-d-x'))
+
+    def test_no_backlinks(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', VAULT, '--no-backlinks', '-o', out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertNotIn('<p class="backlinks">', read(os.path.join(out, 'vault.html')))
+            self.assertNotIn('Linked from', read(os.path.join(out, 'vault.md')))
+
     def src(self, name):
         """Attachment path relative to output dir."""
         return quote(os.path.relpath(os.path.join(VAULT, 'attachments', name), self.out).replace(os.sep, '/'))
@@ -214,6 +231,12 @@ class MarkdownLinksTest(unittest.TestCase):
 
     def test_breadcrumbs_show_every_folder(self):
         self.assertIn('data-title="Notes">Projects / Alpha / Notes</h4>', self.vault)
+
+    def test_markdown_links_are_backlinks(self):
+        self.assertIn('<p class="backlinks"><span>Linked from:</span> <a href="#root">mdlinks</a>, '
+                      '<a href="#root">mdlinks › First steps: HiAPI</a>, <a href="#docs">Documentation</a>, '
+                      '<a href="#broken">Broken</a>, <a href="#broken">Broken › First steps: HiAPI</a></p>',
+                      section(self.html, 'guide'))
 
     def test_external_code_and_unresolved_links_are_kept(self):
         self.assertIn('<a href="https://example.com/a.md">site</a>', self.html)

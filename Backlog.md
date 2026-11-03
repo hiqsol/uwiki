@@ -4,14 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P3 Backlinks
-
-- a) `build` HTML shows under every page "Linked from": pages linking to it, by title, each a link
-- b) Wiki and markdown links count, embeds too, links from a page to itself and from code do not
-- c) A link to a heading counts for its page, the list shows the heading: `Turn › Phases`
-- d) `build` markdown output gets the same list, so the single `.md` file reads the same way
-- e) `--no-backlinks` turns it off
-
 ## P4 Front matter block
 
 - a) `build` HTML shows front matter in a block floating right, its top level with the page title
