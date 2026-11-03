@@ -23,7 +23,7 @@ Dependencies stay `markdown` only: watching, serving and previews use the standa
 
 ## P3 watch command
 
-- a) `uwiki watch <folder> [title] [build options]` builds once, then rebuilds on change of any file
+- a) `uwiki watch <folder|file>... [build options]` builds once, then rebuilds on change of any file
   `build` takes: markdown, images and other attachments, after the skip list, `--include` and `--exclude`
 - b) Polling of mtimes and file lists, no dependency; added, deleted and renamed files count
 - c) Changes within a short interval are debounced into one build
@@ -32,7 +32,7 @@ Dependencies stay `markdown` only: watching, serving and previews use the standa
 
 ## P4 serve command
 
-- a) `uwiki serve <folder> [title] [build options] [-p 8000] [--host 127.0.0.1]` watches as P3 and
+- a) `uwiki serve <folder|file>... [build options] [-p 8000] [--host 127.0.0.1]` watches as P3 and
   serves the built HTML with `http.server`
 - b) Live reload: the page reloads after a rebuild and keeps its scroll position and search,
   the reload script is added only when served, never to `build` output
@@ -68,7 +68,7 @@ Dependencies stay `markdown` only: watching, serving and previews use the standa
 
 ## P8 mv command
 
-- a) `uwiki mv <from> <to>` moves or renames a page, folder or attachment inside the vault and
+- a) `uwiki mv <from> <to>`, the one exception to P12 form, moves or renames a page, folder or attachment inside the vault and
   rewrites every link to it: wiki links, markdown links, embeds and reference definitions
 - b) Relative markdown links inside moved pages are rewritten for their new place
 - c) Wiki links change only when they stop resolving to the moved target or would resolve
@@ -106,3 +106,19 @@ Dependencies stay `markdown` only: watching, serving and previews use the standa
   the page text flows around it, ▾ folds back
 - d) Narrow screens: the block stops floating and sits under the title, folded too
 - e) Pages without front matter get no block, `--no-front-matter` turns it off
+
+## P12 Same command line form
+
+- a) Every command is `uwiki <command> <folder|file>... [options]`: paths are the only positionals,
+  at least one is required, options follow them in usage and README; `mv` (P8) is the exception
+- b) `build` and `llms` lose positional title, `--title` replaces it, no backward compatibility
+- c) `build`, `llms` and `watch` take several paths into one output, `-o` is then required,
+  `serve` writes to a temporary folder as before
+- d) Vault root for given paths is found as in `check`: nearest `.obsidian`, else their common folder,
+  pages keep their folders from that root
+- e) `build -o` is a folder, writing `<title>.html` and `<title>.md` in it, or a file name:
+  `out/Wiki` writes both, `out/Wiki.html` or `out/Wiki.md` only one, `--html` and `--md` stay for the first two;
+  title defaults to the folder name of a single folder path, else `--title` is required with an `-o` folder
+- f) A link or embed from built pages to a vault page outside the given paths fails `build` with
+  `path:line: message` for each, exit 1
+- g) `wrap` takes folders too, with the same skip list, `--exclude` and `--include` as other commands
