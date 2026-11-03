@@ -560,6 +560,30 @@ class ConfigTest(unittest.TestCase):
             self.assertNotIn('Linked from', read(os.path.join(tmp, 'out', 'Mine.md')))
 
 
+class AliasTest(unittest.TestCase):
+    def test_check_reports_clashes_and_shared_aliases(self):
+        res = run('check', 'aliases', cwd=FIXTURES)
+        self.assertEqual(res.stdout.splitlines(), [
+            'aliases/Clash.md:2: alias Star: Star.md has this name, links lead there',
+            'aliases/Clash.md:2: alias Shared: also alias of Sub/Other.md',
+            'aliases/Sub/Other.md:2: alias Shared: also alias of Clash.md',
+        ], res.stderr)
+        self.assertEqual(res.returncode, 1)
+
+    def test_aliases_resolve_and_keep_text(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', 'aliases', '-o', out, cwd=FIXTURES)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            html, md = read(os.path.join(out, 'aliases.html')), read(os.path.join(out, 'aliases.md'))
+        self.assertIn('Links [VP](#vice-president), [the VPs](#vice-president), [VP > Vice President](#vice-president), '
+                      '[Star](#star), [vp](#vice-president).', md)
+        self.assertIn('<h2 id="vice-president" class="page" data-title="Vice President" data-aliases="VP, VPs">', html)
+        self.assertIn('<a href="#star">Star</a>', section(html, 'root'))
+        self.assertIn('Linked from: [aliases](#root)', md)
+        js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
+        self.assertIn('h.dataset.aliases', js)
+
+
 class LinkBuildTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

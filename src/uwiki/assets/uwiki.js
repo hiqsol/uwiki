@@ -176,7 +176,7 @@
         title: titleOf(h),
         page: page,
         text: textOf(range).replace(/\s+/g, " ").trim(),
-        headWords: new Set(words(titleOf(h))),
+        headWords: new Set(words(titleOf(h) + " " + (h.dataset.aliases || ""))),
         counts: new Map()
       };
       s.lower = s.text.toLowerCase();

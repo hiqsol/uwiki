@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from .vault import FRONT_MATTER, TITLE, cebabize, read_text, titleize
+from .vault import FRONT_MATTER, TITLE, cebabize, read_aliases, read_text, titleize
 
 class Converter:
     FENCE = re.compile(r'^\s*(```|~~~)')
@@ -337,7 +337,10 @@ class Converter:
                 return self.attachment_link(text)
             if not checked:
                 self.check_scope(target, f'[[{text}]]')
-            title = target.title if target else titleize(Path(name).name)
+            if target and self.scanner.by_alias(name, self.source.path):
+                title = name
+            else:
+                title = target.title if target else titleize(Path(name).name)
         else:
             target = self.page
             title = ''
@@ -369,7 +372,9 @@ class Converter:
 
     def html_header(self, aside=''):
         tag = f'h{min(self.page.depth + 1, 6)}'
-        return (f'<{tag} id="{self.page.anchor}" class="page" data-title="{html.escape(self.page.title)}">'
+        aliases = ', '.join(read_aliases(self.page.file))
+        aliases = f' data-aliases="{html.escape(aliases)}"' if aliases else ''
+        return (f'<{tag} id="{self.page.anchor}" class="page" data-title="{html.escape(self.page.title)}"{aliases}>'
                 f'{html.escape(self.title)}{aside}</{tag}>\n\n')
 
     def html(self, body=True, aside=''):

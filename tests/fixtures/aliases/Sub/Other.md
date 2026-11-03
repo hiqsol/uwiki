@@ -1,0 +1,4 @@
+---
+alias: Shared
+---
+Also shared.

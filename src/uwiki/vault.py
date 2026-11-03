@@ -67,6 +67,14 @@ def read_front_matter(path):
     m = FRONT_MATTER.match(read_file(path))
     return front_matter_items(m[0]) if m else []
 
+def read_aliases(path):
+    """Front matter `aliases` (or `alias`) of file, a list or one text."""
+    res = []
+    for key, value in read_front_matter(path) if path else []:
+        if key in ('aliases', 'alias'):
+            res += [v for v in (value if isinstance(value, list) else [value]) if v.strip()]
+    return [v.strip() for v in res]
+
 def front_matter_items(front):
     """Top level keys of front matter in order with values: scalar as text, list as list of texts.
 
@@ -290,6 +298,7 @@ class Scanner:
         self.attachments = {}
         self.symlinks = []
         self.warnings = []
+        self._aliases = None
 
     def scan(self):
         self._scan_dir(self.root)
@@ -415,22 +424,61 @@ class Scanner:
         ]
         return min(candidates)[2] if candidates else None
 
-    def resolve(self, name, source=''):
-        """Finds link target by name or path like Obsidian does.
+    @property
+    def aliases(self):
+        """Alias in lower case: [(path, node)] of pages and folder pages with it in front matter `aliases`."""
+        if self._aliases is None:
+            self._aliases = {}
+            for file, node in self.pages().items():
+                for alias in read_aliases(file):
+                    entries = self._aliases.setdefault(alias.lower(), [])
+                    if node not in (n for _, n in entries):
+                        entries.append((node.path.lower(), node))
+        return self._aliases
 
-        Prefers pages to folders without folder page, as Obsidian links no folders,
-        then targets near the source page, then shortest path.
-        """
-        near = str(Path(source).parent).lower().rstrip('/') + '/'
+    @staticmethod
+    def link_name(name):
         name = name.strip().strip('/').lower()
-        if name.endswith('.md'):
-            name = name[:-3]
-        candidates = [
+        return name[:-3] if name.endswith('.md') else name
+
+    def named(self, name, source=''):
+        """Targets by name or path, best first: pages before folders without folder page, near ones, short paths."""
+        near = str(Path(source).parent).lower().rstrip('/') + '/'
+        name = self.link_name(name)
+        candidates = sorted(
             (node.is_folder and not node.page, not path.startswith(near), path.count('/'), path, node)
             for path, node in self.targets.get(Path(name).name, [])
             if path.endswith('/' + name)
-        ]
-        return min(candidates, key=lambda c: c[:4])[4] if candidates else None
+        ) if name else []
+        return [(c[0], c[4]) for c in candidates]
+
+    def alias(self, name, source=''):
+        """Page with given alias, nearest to source if several, None if none."""
+        name = self.link_name(name)
+        if not name or '/' in name:
+            return None
+        near = str(Path(source).parent).lower().rstrip('/') + '/'
+        candidates = [(not path.startswith(near), path.count('/'), path, node)
+                      for path, node in self.aliases.get(name, [])]
+        return min(candidates, key=lambda c: c[:3])[3] if candidates else None
+
+    def by_alias(self, name, source=''):
+        """Whether link name resolves through an alias: no page has the name, a page has it as alias."""
+        named = self.named(name, source)
+        return (not named or named[0][0]) and self.alias(name, source) is not None
+
+    def resolve(self, name, source=''):
+        """Finds link target by name or path like Obsidian does.
+
+        Prefers pages to aliases of pages, then to folders without folder page, as Obsidian links no folders,
+        then targets near the source page, then shortest path.
+        """
+        named = self.named(name, source)
+        if not named or named[0][0]:
+            aliased = self.alias(name, source)
+            if aliased is not None:
+                return aliased
+        return named[0][1] if named else None
 
     def resolve_path(self, path, source=''):
         """Finds link target by path relative to the source page, as markdown links give it."""

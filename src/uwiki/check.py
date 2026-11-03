@@ -9,7 +9,7 @@ from urllib.parse import unquote
 
 from .config import Config
 from .convert import Converter
-from .vault import Filter, Scanner, Vaults, front_matter_items
+from .vault import Filter, Scanner, Vaults, front_matter_items, read_aliases
 
 @dataclass
 class CheckOptions:
@@ -200,12 +200,28 @@ class Checker:
         schema = self.schema(scanner)
         if schema.empty:
             return
-        lines = front.splitlines()
         path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
         for key, message in schema.problems(front_matter_items(front) if front else [], path):
-            line = next((n for n, text in enumerate(lines, 1)
-                         if key is not None and re.match(rf'[\'"]?{re.escape(key)}[\'"]?:', text)), 1)
-            report(line, message)
+            report(self.key_line(front, key), message)
+
+    @staticmethod
+    def key_line(front, key):
+        """Line of front matter key, 1 if missing."""
+        return next((n for n, text in enumerate(front.splitlines(), 1)
+                     if key is not None and re.match(rf'[\'"]?{re.escape(key)}[\'"]?:', text)), 1)
+
+    def check_aliases(self, scanner, page, front, report):
+        """Aliases page names win over, aliases two pages share."""
+        items = dict(front_matter_items(front)) if front else {}
+        key = 'aliases' if 'aliases' in items else 'alias'
+        for alias in read_aliases(page.file):
+            show = lambda node: os.path.relpath(node.file or node.fullpath, scanner.path).replace(os.sep, '/')
+            named = [node for folderless, node in scanner.named(alias) if not folderless and node is not page]
+            if named:
+                report(self.key_line(front, key), f'alias {alias}: {show(named[0])} has this name, links lead there')
+            for _, other in scanner.aliases.get(alias.lower(), []):
+                if other is not page:
+                    report(self.key_line(front, key), f'alias {alias}: also alias of {show(other)}')
 
     def check_file(self, scanner, page, shown):
         report = lambda line, msg: self.problems.append(f'{shown}:{line}: {msg}')
@@ -223,6 +239,7 @@ class Checker:
         elif self.FRONT_MATTER_START.match(text):
             report(1, 'unclosed frontmatter')
         self.check_schema(scanner, source, m[0] if m else '', report)
+        self.check_aliases(scanner, page, m[0] if m else '', report)
         if page.folder and page.folder.shadowed_index() is page:
             report(1, Scanner.shadowed_message(page.folder))
         converter = CheckConverter(page, scanner, report, self.options)

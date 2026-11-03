@@ -160,8 +160,10 @@ Supported Obsidian syntax:
 - callouts `> [!note] Title`, foldable `> [!note]-`
 - YAML front matter is stripped from text, HTML shows it next to page title
 
-Wiki link name resolves to a page before a folder without folder page,
-then to one nearer the linking page, then to the shortest path.
+Wiki link name resolves to a page, then to a page with it in front matter `aliases: [VP, VPs]`,
+then to a folder without folder page, nearer the linking page first, then by the shortest path,
+the same in every command. `[[VP]]` keeps its text `VP`, HTML search finds a page by its aliases.
+`check` reports an alias another page has as name, so links lead there, and an alias two pages share.
 
 Markdown links `[text](../folder/Page.md#heading)` resolve by path relative to the page,
 heading by its GitHub/GitLab anchor (repeated heading gets `-1`, `-2`...),

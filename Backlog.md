@@ -4,14 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P9 Aliases
-
-- a) Front matter `aliases: [VP, VPs]` makes `[[VP]]` resolve to the page, in every command
-- b) A page name wins over an alias of another page, `check` reports such clashes and aliases
-  shared by two pages
-- c) `[[VP]]` keeps its text `VP` in HTML and markdown output, the link leads to the page
-- d) Search in HTML finds a page by its aliases
-
 ## P10 Numbered list item anchors
 
 - a) Every item of a numbered list gets an anchor by its number path: `#3`, nested `#3.2`
