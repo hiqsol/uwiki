@@ -99,14 +99,14 @@ class Builder:
             return ''
         texts = [html.escape(self.backlink_text(source, heading)) for source, heading in backlinks]
         links = [f'<a href="#{source.anchor}">{text}</a>' for (source, _), text in zip(backlinks, texts)]
-        return (f'<details class="backlinks"><summary><b>Linked from ({len(links)}):</b>'
+        return (f'<details class="backlinks"><summary><b>Backlinks ({len(links)}):</b>'
                 f'<span>{", ".join(texts)}</span></summary><div>{", ".join(links)}</div></details>')
 
     def md_backlinks(self, node):
         escape = lambda text: re.sub(r'([\\\[\]])', r'\\\1', text)
         links = [f'[{escape(self.backlink_text(source, heading))}](#{source.anchor})'
                  for source, heading in self.backlinks(node)]
-        return f'Linked from: {", ".join(links)}\n\n' if links else ''
+        return f'Backlinks: {", ".join(links)}\n\n' if links else ''
 
     def html_front_matter(self, node):
         """Front matter in schema order as folded line of values unfolding into a table of keys and values,

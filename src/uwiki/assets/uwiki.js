@@ -202,7 +202,7 @@
     }
   }
 
-  // text of the range without parts added by build, as "Linked from"
+  // text of the range without parts added by build, as "Backlinks"
   function textOf(range) {
     var frag = range.cloneContents();
     frag.querySelectorAll(".backlinks").forEach(function (el) { el.remove(); });

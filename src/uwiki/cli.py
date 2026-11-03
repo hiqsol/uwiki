@@ -151,7 +151,7 @@ def add_build_options(p, output='current'):
                    help=f'folder to write <title>.html and <title>.md in, default: {output}; '
                         'or file name: out/Wiki writes both, out/Wiki.html or out/Wiki.md one; '
                         'required for several paths')
-    p.add_argument('--no-backlinks', action='store_true', help='no "Linked from" list under pages')
+    p.add_argument('--no-backlinks', action='store_true', help="no backlinks list under pages")
     p.add_argument('--no-front-matter', action='store_true', help='no front matter block next to page titles')
     add_filter(p)
 

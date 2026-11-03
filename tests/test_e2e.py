@@ -183,15 +183,15 @@ class RenderTest(unittest.TestCase):
             self.assertIn(f'<a id="{href}"></a>', self.md)
 
     def test_backlinks(self):
-        self.assertIn('data-title="My Page">My Page<details class="backlinks"><summary><b>Linked from (3):</b>'
+        self.assertIn('data-title="My Page">My Page<details class="backlinks"><summary><b>Backlinks (3):</b>'
                       '<span>vault, vault › Second Section, My Notes › Second Section</span></summary>'
                       '<div><a href="#root">vault</a>, <a href="#root">vault › Second Section</a>, '
                       '<a href="#my-notes">My Notes › Second Section</a></div></details><details class="front-matter">',
                       self.content)
-        self.assertIn('<details class="backlinks"><summary><b>Linked from (2):</b><span>vault, My Notes</span>'
+        self.assertIn('<details class="backlinks"><summary><b>Backlinks (2):</b><span>vault, My Notes</span>'
                       '</summary><div><a href="#root">vault</a>, <a href="#my-notes">My Notes</a></div></details>',
                       section(self.content, '2024-plans'))
-        self.assertIn('Linked from: [vault](#root), [My Notes](#my-notes)\n', self.md)
+        self.assertIn('Backlinks: [vault](#root), [My Notes](#my-notes)\n', self.md)
         self.assertNotIn('backlinks', section(self.content, 'root'))
         self.assertNotIn('backlinks', section(self.content, 'r-d-x'))
 
@@ -218,7 +218,7 @@ class RenderTest(unittest.TestCase):
             res = run('build', VAULT, '--no-backlinks', '-o', out)
             self.assertEqual(res.returncode, 0, res.stderr)
             self.assertNotIn('<details class="backlinks">', read(os.path.join(out, 'vault.html')))
-            self.assertNotIn('Linked from', read(os.path.join(out, 'vault.md')))
+            self.assertNotIn('Backlinks', read(os.path.join(out, 'vault.md')))
 
     def src(self, name):
         """Attachment path relative to output dir."""
@@ -266,7 +266,7 @@ class MarkdownLinksTest(unittest.TestCase):
         self.assertIn('data-title="Notes">Projects / Alpha / Notes<details class="backlinks">', self.vault)
 
     def test_markdown_links_are_backlinks(self):
-        self.assertIn('<b>Linked from (5):</b><span>mdlinks, mdlinks › First steps: HiAPI, Documentation, Broken, '
+        self.assertIn('<b>Backlinks (5):</b><span>mdlinks, mdlinks › First steps: HiAPI, Documentation, Broken, '
                       'Broken › First steps: HiAPI</span></summary><div><a href="#root">mdlinks</a>, '
                       '<a href="#root">mdlinks › First steps: HiAPI</a>, <a href="#docs">Documentation</a>, '
                       '<a href="#broken">Broken</a>, <a href="#broken">Broken › First steps: HiAPI</a></div>',
@@ -581,7 +581,7 @@ class ConfigTest(unittest.TestCase):
             self.assertEqual(res.returncode, 0, res.stderr)
             self.assertEqual(sorted(os.listdir(os.path.join(tmp, 'out'))), ['Mine.html', 'Mine.md'])
             self.assertIn('<title>Mine</title>', read(os.path.join(tmp, 'out', 'Mine.html')))
-            self.assertNotIn('Linked from', read(os.path.join(tmp, 'out', 'Mine.md')))
+            self.assertNotIn('Backlinks', read(os.path.join(tmp, 'out', 'Mine.md')))
 
 
 class AliasTest(unittest.TestCase):
@@ -603,7 +603,7 @@ class AliasTest(unittest.TestCase):
                       '[Star](#star), [vp](#vice-president).', md)
         self.assertIn('<h2 id="vice-president" class="page" data-title="Vice President" data-aliases="VP, VPs">', html)
         self.assertIn('<a href="#star">Star</a>', section(html, 'root'))
-        self.assertIn('Linked from: [aliases](#root)', md)
+        self.assertIn('Backlinks: [aliases](#root)', md)
         js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
         self.assertIn('h.dataset.aliases', js)
 
@@ -627,7 +627,7 @@ class ItemTest(unittest.TestCase):
         self.assertIn('1. code', self.md)
         self.assertIn('<li><a class="item-anchor" id="star--2.2" href="#star--2.2" data-item="2.2"></a>Nested two</li>',
                       self.html)
-        self.assertIn('Linked from: [items › 3](#root), [items › 2](#root), [items › 2.2](#root), '
+        self.assertIn('Backlinks: [items › 3](#root), [items › 2](#root), [items › 2.2](#root), '
                       '[items › Light › 2](#root), [items › 9](#root)', self.md)
 
     def test_check_reports_missing_items(self):
