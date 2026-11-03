@@ -152,6 +152,9 @@ def titleize(name):
         return name
     return ' '.join(w[0].upper() + w[1:] for w in words)
 
+# ids of the HTML page template, no page anchor takes them
+TEMPLATE_IDS = ('home', 'menu', 'sidebar', 'search', 'query', 'fold', 'results', 'toc')
+
 @functools.lru_cache(maxsize=1 << 16)
 def cebabize(name):
     """Anchor of name, compared for every link and heading, so cached."""
@@ -453,7 +456,7 @@ class Scanner:
         groups = {}
         for node in nodes.values():
             groups.setdefault(cebabize(node.name), []).append(node)
-        used = {'root'}
+        used = {'root', *TEMPLATE_IDS}
         clashing = []
         for anchor, group in groups.items():
             if len(group) == 1 and anchor not in used:

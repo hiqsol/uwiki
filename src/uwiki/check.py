@@ -8,6 +8,7 @@ from urllib.parse import unquote
 
 from .config import Config
 from .convert import Converter
+from .mention import Mentions
 from .order import Links
 from .vault import Filter, Scanner, Vaults, front_matter_items, read_aliases, read_parts
 
@@ -21,6 +22,8 @@ class CheckOptions:
     mentions_ignore: tuple = ()
     mentions_min_length: int = 3
     mentions_ignore_case: bool = False
+    mentions_every: bool = False
+    mentions_self_bold: bool = False
 
 class CheckConverter(Converter):
     """Converts page like renderer does, reports what would render broken."""
@@ -149,75 +152,25 @@ class Checker:
             self.check_mentions()
         return self.problems
 
-    PLAIN_SKIP = re.compile(r"""(`+).*?\1|!?\[\[.*?\]\]|!?\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])|<[^>]*>|https?://\S+""")
-
     def check_mentions(self):
-        """Warns about the first plain text mention of another page title or alias, page not linking it."""
-        terms = {}
+        """Warns about plain text mentions of another page title or alias: the first one of a page the page does not
+        link, or every one with mentions_every."""
+        mentions = {}
         for page, (scanner, shown) in self.checked.items():
-            if scanner not in terms:
-                terms[scanner] = self.mention_terms(scanner)
-            pattern, nodes = terms[scanner]
-            if pattern is None:
-                continue
-            source = page.source
-            try:
-                text, start = Converter.read_text(source)
-            except ValueError:
-                continue
-            linked = self.targets(scanner, page)
+            if scanner not in mentions:
+                o = self.options
+                mentions[scanner] = Mentions(scanner, o.mentions_ignore, o.mentions_min_length, o.mentions_ignore_case)
+            linked = set() if self.options.mentions_every else self.targets(scanner, page)
             seen = set()
-            for n, line in Converter.prose(text):
-                if Converter.HEADING.match(line) or Converter.LINK_DEF.match(line):
+            for mention in mentions[scanner].find(page, own=self.options.mentions_self_bold):
+                if mention.own:
+                    self.warnings.append(f'{shown}:{mention.line + 1}: warning: own term not bold: {mention.text}')
                     continue
-                for m in pattern.finditer(self.PLAIN_SKIP.sub(lambda m: ' ' * len(m[0]), line)):
-                    key = m[0].lower() if self.options.mentions_ignore_case else m[0]
-                    node = nodes.get(key)
-                    if node is None or node is page or node in linked or node in seen:
-                        continue
-                    seen.add(node)
-                    self.warnings.append(f'{shown}:{start + n}: warning: unlinked mention: {m[0]}')
-
-    def mention_terms(self, scanner):
-        """Regex of page titles and aliases as whole words, and the page each names; ones naming two pages left out."""
-        case = self.options.mentions_ignore_case
-        norm = lambda term: term.lower() if case else term
-        ignore = {norm(term) for term in self.options.mentions_ignore}
-        nodes, shared = {}, set()
-        for node in scanner.pages().values():
-            if node is scanner.root and not node.page:
-                continue
-            for term in [node.title, *read_aliases(node.file)]:
-                term = term.strip()
-                key = norm(term)
-                if len(term) < self.options.mentions_min_length or key in ignore:
+                if mention.node in linked or mention.node in seen:
                     continue
-                if nodes.get(key, node) is not node:
-                    shared.add(key)
-                nodes[key] = node
-        for key in shared:
-            del nodes[key]
-        if not nodes:
-            return None, nodes
-        pattern = re.compile(r'(?<!\w)' + self.trie(nodes) + r'(?!\w)', re.IGNORECASE if case else 0)
-        return pattern, nodes
-
-    @classmethod
-    def trie(cls, words):
-        """Regex of words sharing their prefixes, longest first: fast with thousands of them."""
-        tree = {}
-        for word in words:
-            node = tree
-            for c in word:
-                node = node.setdefault(c, {})
-            node[''] = {}
-        def pattern(node):
-            alts = [re.escape(c) + pattern(sub) for c, sub in node.items() if c]
-            if not alts:
-                return ''
-            res = alts[0] if len(alts) == 1 else '(?:' + '|'.join(alts) + ')'
-            return f'(?:{res})?' if '' in node else res
-        return pattern(tree)
+                if not self.options.mentions_every:
+                    seen.add(mention.node)
+                self.warnings.append(f'{shown}:{mention.line + 1}: warning: unlinked mention: {mention.text}')
 
     def check_unlisted(self):
         """Warns about pages and folders their folder page does not link, as contents should."""

@@ -23,6 +23,7 @@ class Converter:
     NUMBERED = re.compile(r'^([ \t]*)(\d+)[.)]([ \t]+)')
     LIST_BREAK = re.compile(r'^(?:[-*+] |>|#{1,6}\s)')
     ITEM = re.compile(r'\d+(?:\.\d+)*')
+    BOLD = re.compile(r'\*\*([^*\n]+?)\*\*')
     IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.avif'}
     FRONT_MATTER = FRONT_MATTER
 
@@ -158,6 +159,29 @@ class Converter:
         return frozenset((path, cebabize(key) if key else '')
                          for _, path, keys in Converter.list_items(text) for key in keys)
 
+    @classmethod
+    def alias_item(cls, page, alias):
+        """Number path and section of the linkable item alias is first bold in, links by alias lead there, None if none."""
+        return cls.bold_items(cls.read_text(page)[0]).get(cebabize(alias))
+
+    @staticmethod
+    @functools.lru_cache(maxsize=4096)
+    def bold_items(text):
+        """Bold terms, singular ones too, as anchors: number path and section of the item each is first bold in."""
+        items = {i: (path, keys[-1]) for i, path, keys in Converter.list_items(text)}
+        res, current = {}, None
+        for i, line in Converter.prose(text):
+            if i in items:
+                current = items[i]
+            elif Converter.HEADING.match(line) or line.strip() and not line[0].isspace():
+                current = None
+            for m in Converter.BOLD.finditer(line) if current else ():
+                term = cebabize(m[1])
+                singular = term[:-3] + 'y' if term.endswith('ies') else term[:-1] if term.endswith('s') else term
+                res.setdefault(term, current)
+                res.setdefault(singular, current)
+        return res
+
     def title_section(self, target, heading):
         """Heading of a section, none for the title heading the page header replaces."""
         return '' if heading and self.anchor(target, heading) == target.anchor else heading
@@ -176,7 +200,14 @@ class Converter:
         else:
             anchors = f'<a class="item-anchor" id="{ids[-1]}" href="#{ids[-1]}" data-item="{path}"></a>'
             anchors += ''.join(f'<a id="{id}"></a>' for id in ids[:-1])
+        anchors += ''.join(f'<a id="{id}"></a>' for id in self.alias_anchors(path, keys[-1]))
         return line[:m.end()] + anchors + line[m.end():]
+
+    def alias_anchors(self, path, key):
+        """Anchors of page aliases item defines in bold, `page--alias`, besides its number ones."""
+        source = self.page.source
+        return [self.heading_anchor(self.page, alias) for alias in read_aliases(self.page.file)
+                if source is not None and self.alias_item(source, alias) == (path, key)]
 
     def process(self, text, start=1):
         res = ''
@@ -367,7 +398,7 @@ class Converter:
         return self.link(match[2])
 
     def attachment(self, text):
-        return self.scanner.attachment(text.partition('|')[0].strip(), self.source.path)
+        return self.scanner.attachment(text.partition('|')[0].removesuffix('\\').strip(), self.source.path)
 
     def attachment_src(self, path):
         """Attachment path relative to output, or under the URL a server serves vault files at."""
@@ -426,6 +457,9 @@ class Converter:
                 self.check_scope(target, f'[[{text}]]')
             if aliased:
                 title = name
+                found = not heading and not item and target.source and self.alias_item(target.source, name)
+                if found:
+                    return f'[{description or title}](#{self.item_anchor(target, found[1], found[0])})'
             else:
                 title = target.title if target else titleize(Path(name).name)
         else:
@@ -444,8 +478,10 @@ class Converter:
 
     @classmethod
     def parse_target(cls, text):
-        """Parses `Page#Heading#3|description` into name, heading, item number path and description."""
+        """Parses `Page#Heading#3|description` into name, heading, item number path and description,
+        `Page\\|description` too, as a table cell escapes its pipe."""
         text, _, description = text.partition('|')
+        text = text.removesuffix('\\')
         name, *parts = [part.strip() for part in text.split('#')]
         item = parts.pop() if parts and cls.ITEM.fullmatch(parts[-1]) else ''
         return name, parts[-1] if parts else '', item, description.strip()

@@ -31,7 +31,8 @@ uwiki lsp
 build  [--title TITLE] [-o OUTPUT] [--html | --md] [--no-backlinks] [--no-front-matter]
 watch  [build options] [-q] [--interval 0.5]
 serve  [watch options] [-p 8000] [--host 127.0.0.1] [--open]
-check  [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--mentions]
+check  [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--mentions [--mentions-every] [--mentions-self-bold]]
+link   [--dry-run] [-w 70] [--mentions-ignore TERM] [--mentions-min-length 3] [--mentions-ignore-case] [--mentions-self-bold]
 llms   [--title TITLE] [-o FILE] [--summary TEXT] [--check]
 ls     [--external] [-z]
 stats  [--by folder|KEY] [--top N] [--json]
@@ -90,9 +91,14 @@ inside the vault, spelled as on disk, absolute links are reported.
 no chain of links leads to from the root folder page (any link, without one),
 `--unlinked` warns about pages no other page links to, `--unlisted` about pages
 their folder page does not link, `--mentions` about the first plain text mention of a page title or alias
-in a page not linking it, all without changing exit code.
-Mentions are whole words, case sensitive unless `--mentions-ignore-case`, outside code, headings and link text,
+in a page not linking it, `--mentions-every` about every one, all without changing exit code.
+Mentions are whole words and their plurals (`Stars`, `Classes`, `Ancestries`), with the first letter as written
+and the rest in any case (`Force discard` mentions `Force Discard`) unless `--mentions-ignore-case`,
+outside code, headings, link text and bold, which defines a term rather than mentions it,
 at least `--mentions-min-length 3` long, `--mentions-ignore TERM` skips one, a page mentioning itself is no mention.
+An ignored name that is no title or alias, e.g. a game title `Star Realms`, keeps the terms in it plain,
+also wrapped to the next line. `--mentions-self-bold` warns about a mention of the page itself not in bold:
+on its own page a term is bold, not linked, so terms stand out from plain words.
 Links count from every page of the vault, checked or not.
 
 `llms` writes [llms.txt](https://llmstxt.org) (default: in the one folder listed, else `-o` is required):
@@ -119,6 +125,14 @@ It lists the largest pages and orphans: pages not linked from the counted ones, 
 leaving frontmatter, code, tables and headings as is, never splitting wiki links and inline code.
 `--check` reports such lines instead and exits 1 if any,
 a line rewrapping leaves as is, e.g. a long URL or inline code, is not reported.
+
+`link` links every mention `check --mentions-every` reports, as `[[Star]]`, `[[Star]]s`,
+`[[Warp orbit]]` for alias `Warp Orbit`, as names match in any case, `[[ForceDiscard|Force discard]]`,
+in a table cell `[[ForceDiscard\|Force discard]]`, as Obsidian escapes the pipe there,
+and rewraps paragraphs it makes longer than `-w 70`, as `wrap` does.
+With `--mentions-self-bold` it makes a page's mentions of itself bold, `**Star**` on the Star page.
+It takes mention options of the `[check]` config table,
+`--dry-run` prints every changed line instead, before and after.
 
 `mv` moves or renames a page, folder or attachment inside the vault, `<to>` may be a folder to move into,
 and rewrites every link to it: wiki links, embeds, markdown links and reference definitions.
@@ -208,6 +222,8 @@ Supported Obsidian syntax:
 Wiki link name resolves to a page, then to a page with it in front matter `aliases: [VP, VPs]`,
 then to a folder without folder page, nearer the linking page first, then by the shortest path,
 the same in every command. `[[VP]]` keeps its text `VP`, HTML search finds a page by its aliases.
+An alias in bold in a numbered list item, e.g. `2. **Tile**: a piece of the Field` under `aliases: [Tile]`,
+leads to that item: `[[Tile]]` is `[[Component#2]]`, the item gets the anchor `component--tile` too.
 `check` reports an alias another page has as name, so links lead there, and an alias two pages share.
 
 Markdown links `[text](../folder/Page.md#heading)` resolve by path relative to the page,

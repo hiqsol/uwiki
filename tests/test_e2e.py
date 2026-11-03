@@ -665,6 +665,119 @@ class MentionTest(unittest.TestCase):
             res = run('check', '.', cwd=tmp)
         self.assertEqual(res.stdout.splitlines(), ['./Space.md:1: warning: unlinked mention: Star'], res.stderr)
 
+    def test_every_mention_plurals_and_first_letter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'Class.md'), 'Class.\n')
+            write(os.path.join(tmp, 'ForceDiscard.md'), 'Force Discard.\n')
+            write(os.path.join(tmp, 'Action.md'), '1. Of the [[Class]], or of several Classes: a class of\n'
+                                                   '   **Class**, Force discard\n')
+            res = run('check', '.', '--mentions', '--mentions-every', cwd=tmp)
+        self.assertEqual(res.stdout.splitlines(), [
+            './Action.md:1: warning: unlinked mention: Classes',
+            './Action.md:2: warning: unlinked mention: Force discard',
+        ], res.stderr)
+
+
+class LinkMentionTest(unittest.TestCase):
+    def test_links_every_mention_and_rewraps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'Class.md'), 'Class.\n')
+            write(os.path.join(tmp, 'ForceDiscard.md'), 'Force Discard.\n')
+            write(os.path.join(tmp, 'Component.md'), '---\naliases: [Tile]\n---\n1. **Tile** is a piece\n')
+            action = ('1. Of the [[Class]], or of several Classes and their Tiles, `Class` stays, a class too,\n'
+                      '   Force discard is a Class\n\n| Class | Force Discard |\n| - | - |\n\n'
+                      'A **wrapped\nClass** stays bold.\n')
+            write(os.path.join(tmp, 'Action.md'), action)
+            res = run('link', '.', '--dry-run', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'Action.md')), action)
+            self.assertIn('./Action.md:2: [[ForceDiscard|Force discard]] is a [[Class]]', res.stdout)
+            res = run('link', '.', cwd=tmp)
+            self.assertEqual(res.stdout, 'linked 3 lines in ./Action.md\n', res.stderr)
+            self.assertEqual(read(os.path.join(tmp, 'Action.md')),
+                             '1. Of the [[Class]], or of several [[Class]]es and their [[Tile]]s,\n'
+                             '   `Class` stays, a class too, [[ForceDiscard|Force discard]] is a\n'
+                             '   [[Class]]\n\n'
+                             '| [[Class]] | [[ForceDiscard\\|Force Discard]] |\n| - | - |\n\nA **wrapped\nClass** stays bold.\n')
+            self.assertEqual(run('check', '.', cwd=tmp).stdout, '')
+            with tempfile.TemporaryDirectory() as out:
+                res = run('build', tmp, '-o', out, '--md', '--title', 'wiki')
+                self.assertIn('| [Class](#class) | [Force Discard](#force-discard) |',
+                              read(os.path.join(out, 'wiki.md')), res.stderr)
+
+
+    def test_own_terms_get_bold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'Class.md'), '---\naliases: [Kind]\n---\n1. **Class** of a class: Classes, Kinds\n')
+            res = run('check', '.', '--mentions', '--mentions-every', '--mentions-self-bold', cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), ['./Class.md:4: warning: own term not bold: Classes',
+                                                       './Class.md:4: warning: own term not bold: Kinds'])
+            run('link', '.', '--mentions-self-bold', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'Class.md')),
+                             '---\naliases: [Kind]\n---\n1. **Class** of a class: **Classes**, **Kinds**\n')
+
+    def test_ignored_name_keeps_its_terms_unlinked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'Star.md'), 'Star.\n')
+            write(os.path.join(tmp, 'Realm.md'), 'Realm.\n')
+            write(os.path.join(tmp, 'index.md'), '[[Star]] [[Realm]]: a Star, like in Star Realms, in Star\n'
+                                                 '   Realms too, a Realm\n')
+            run('link', '.', '--mentions-ignore', 'Star Realms', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'index.md')), '[[Star]] [[Realm]]: a [[Star]], like in Star Realms, '
+                                                                   'in Star\n   Realms too, a [[Realm]]\n')
+
+    def test_folder_page_goes_by_its_own_title(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'Cards', 'Card.md'), 'Card.\n')
+            write(os.path.join(tmp, 'Cards', 'Ship.md'), 'Ship.\n')
+            write(os.path.join(tmp, 'index.md'), '[[Card]], [[Ship]]: a Card, two Cards.\n')
+            res = run('link', '.', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'index.md')), '[[Card]], [[Ship]]: a [[Card]], two [[Card]]s.\n',
+                             res.stderr)
+
+class TemplateIdTest(unittest.TestCase):
+    def test_page_named_like_template_id_gets_path_anchor(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            write(os.path.join(tmp, 'index.md'), 'See [[Home]].\n')
+            write(os.path.join(tmp, 'rules', 'Home.md'), 'Home.\n')
+            res = run('build', tmp, '-o', out, '--title', 'wiki')
+            html = read(os.path.join(out, 'wiki.html'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn('href="#rules-home">Home</a>', html)
+        self.assertEqual(html.count('id="home"'), 1)
+
+class AliasItemTest(unittest.TestCase):
+    """An alias bold in a list item leads to that item."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        write(os.path.join(self.tmp.name, 'Component.md'),
+              '---\naliases: [Tile, Token, Piece]\n---\n1. **Component** is a piece\n2. Components are:\n'
+              '\t1. **Card**\n\t2. **Tile**: a piece of the Field\n\t3. **Tokens**: counted\n')
+        write(os.path.join(self.tmp.name, 'index.md'), 'See [[Tile]], [[Token]], [[Piece]] and [[Component]].\n')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_link_leads_to_item_with_alias_anchor(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', self.tmp.name, '-o', out, '--md', '--title', 'wiki')
+            md = read(os.path.join(out, 'wiki.md'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn('See [Tile](#component--2.2), [Token](#component--2.3), [Piece](#component) and '
+                      '[Component](#component).', md)
+        self.assertIn('2. <a id="component--2.2"></a><a id="component--tile"></a>**Tile**', md)
+
+    def test_lsp_definition_and_hover(self):
+        lsp = Lsp(self.tmp.name)
+        try:
+            lsp.open('index.md')
+            res = lsp.at('textDocument/definition', 'index.md', 0, 6)
+            self.assertEqual((res['uri'].rsplit('/', 1)[-1], res['range']['start']['line']), ('Component.md', 6))
+            res = lsp.at('textDocument/hover', 'index.md', 0, 6)
+            self.assertEqual(res['contents']['value'], '**Component#2.2**\n\n2. **Tile**: a piece of the Field')
+        finally:
+            lsp.close()
+
 
 class LinkBuildTest(unittest.TestCase):
     @classmethod

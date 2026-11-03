@@ -118,6 +118,8 @@ class Move:
     def wiki(self, text, embed, old_source, new_source):
         """New text inside `[[...]]`, None if the link still leads where it did."""
         target_part, bar, description = text.partition('|')
+        if target_part.endswith('\\'):  # escaped in a table cell
+            target_part, bar = target_part[:-1], '\\|'
         name, hash, heading = target_part.partition('#')
         name = name.strip()
         if not name:

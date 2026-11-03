@@ -16,6 +16,7 @@ from .llms import Llms
 from .ls import Listing
 from .stats import Stats
 from .watch import Watcher
+from .mention import link_mentions
 from .mv import Move, MoveError
 from . import serve as served
 from .vault import Filter, Selection, Vaults
@@ -79,6 +80,17 @@ def mv(args):
     for rel in sorted(move.changes):
         print(f'updated links in {shown(move.full(rel))}')
 
+def link(args):
+    vaults = Vaults(args.paths, Filter(args.include, args.exclude))
+    changes = link_mentions(vaults, args.mentions_ignore, args.mentions_min_length, args.mentions_ignore_case,
+                            args.mentions_self_bold, args.width, args.dry_run)
+    for shown, lines in changes:
+        if args.dry_run:
+            for n, old, new in lines:
+                print(f'{shown}:{n}: {old.strip()}\n{shown}:{n}: {new.strip()}')
+        else:
+            print(f'linked {len(lines)} lines in {shown}')
+
 def lsp(args):
     Server().serve()
     return 0
@@ -90,7 +102,8 @@ def check(args):
     options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked,
                            unlisted=args.unlisted, mentions=args.mentions, mentions_ignore=args.mentions_ignore,
                            mentions_min_length=args.mentions_min_length,
-                           mentions_ignore_case=args.mentions_ignore_case)
+                           mentions_ignore_case=args.mentions_ignore_case, mentions_every=args.mentions_every,
+                           mentions_self_bold=args.mentions_self_bold)
     checker = Checker(args.paths, args.include, args.exclude, options)
     code = report(checker.check())
     for warning in checker.warnings:
@@ -213,8 +226,28 @@ def parser():
     p.add_argument('--mentions-min-length', type=int, default=3, metavar='N',
                    help='shortest title or alias to warn about, default: 3')
     p.add_argument('--mentions-ignore-case', action='store_true', help='mentions match in any case')
+    p.add_argument('--mentions-every', action='store_true',
+                   help='warn about every plain text mention, also of pages the page links')
+    p.add_argument('--mentions-self-bold', action='store_true',
+                   help='warn about a mention of the page itself not in bold, a term rather than a word')
     add_filter(p)
     p.set_defaults(func=check)
+
+    p = command(commands, 'link', 'link every plain text mention of a page title or alias, as check --mentions '
+                                  'finds them, rewrap lines it makes too long',
+                f'[--dry-run] [-w {WIDTH}] [--mentions-ignore TERM] [--mentions-min-length N] '
+                f'[--mentions-ignore-case] [--mentions-self-bold] {FILTER_USAGE}')
+    add_paths(p, 'folders or files to link mentions in')
+    p.add_argument('--dry-run', action='store_true', help='print every changed line instead, before and after')
+    p.add_argument('-w', '--width', type=int, default=WIDTH, help=f'rewrap lines longer than this, default: {WIDTH}')
+    p.add_argument('--mentions-ignore', action='append', default=[], metavar='TERM',
+                   help='title or alias not to link; repeatable')
+    p.add_argument('--mentions-min-length', type=int, default=3, metavar='N',
+                   help='shortest title or alias to link, default: 3')
+    p.add_argument('--mentions-ignore-case', action='store_true', help='mentions match in any case')
+    p.add_argument('--mentions-self-bold', action='store_true', help='make mentions of the page itself bold')
+    add_filter(p)
+    p.set_defaults(func=link)
 
     p = command(commands, 'llms', 'write llms.txt: every page with its description, one section per folder',
                 f'[--title TITLE] [-o FILE] [--summary TEXT] [--check] {FILTER_USAGE}')
@@ -265,7 +298,7 @@ def parser():
     parser.commands = commands.choices
     return parser
 
-TAKES = {'watch': ('build',), 'serve': ('build',)}
+TAKES = {'watch': ('build',), 'serve': ('build',), 'link': ('check', 'wrap')}
 NOT_OPTIONS = {'paths', 'func', 'command', 'help', 'version'}
 
 def config_defaults(top, args):
@@ -276,7 +309,6 @@ def config_defaults(top, args):
     p = top.commands[args.command]
     dests = {a.dest: a for a in p._actions if a.dest not in NOT_OPTIONS}
     known = {a.dest for sub in top.commands.values() for a in sub._actions}
-    tables = (*TAKES.get(args.command, ()), args.command)
     res = {}
     for key, value in config.options(args.command, TAKES.get(args.command, ())).items():
         name = key.replace('-', '_')
@@ -287,7 +319,7 @@ def config_defaults(top, args):
             res[name] = value
         elif f'no_{name}' in dests and isinstance(value, bool):
             res[f'no_{name}'] = not value
-        elif any(isinstance(config.data.get(t), dict) and key in config.data[t] for t in tables) \
+        elif isinstance(config.data.get(args.command), dict) and key in config.data[args.command] \
                 or name not in known and f'no_{name}' not in known:
             raise ConfigError(f'{config.path}: unknown option {key} of {args.command}')
     return res

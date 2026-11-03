@@ -258,9 +258,12 @@ class Server:
         conv = self.source(path)
         if kind == 'wiki':
             name, heading, item, _ = conv.parse_target(text)
-            node = self.scanner.resolve(name, conv.source.path) if name else conv.page
+            node, aliased = self.scanner.lookup(name, conv.source.path) if name else (conv.page, False)
             if node is None:
                 return None
+            found = aliased and not heading and not item and node.source and conv.alias_item(node.source, name)
+            if found:
+                item, heading = found
             heading = '' if heading.startswith('^') else heading
             if item:
                 heading = conv.title_section(node, heading)
