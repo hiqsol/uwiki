@@ -12,6 +12,7 @@ from .check import Checker, CheckOptions
 from .llms import Llms
 from .ls import Listing
 from .stats import Stats
+from .watch import Watcher
 from .vault import Filter, Selection
 from .wrap import WIDTH, wrap_files
 
@@ -23,12 +24,18 @@ def report(problems):
     return 1 if problems else 0
 
 def build(args, parser):
-    builder = Build(args.paths, args.output, args.title, args.html, args.md, args.include, args.exclude,
-                    build_options(args))
+    builder = make_build(args)
     problems = builder.run()
     for warning in builder.warnings:
         print(f'warning: {warning}', file=sys.stderr)
     return report(problems)
+
+def make_build(args):
+    return Build(args.paths, args.output, args.title, args.html, args.md, args.include, args.exclude,
+                 build_options(args))
+
+def watch(args, parser):
+    Watcher(make_build(args), args.interval, quiet=args.quiet).run()
 
 def build_options(args):
     return BuildOptions(backlinks=not args.no_backlinks, front_matter=not args.no_front_matter)
@@ -100,6 +107,11 @@ def add_build_options(p):
     p.add_argument('--no-front-matter', action='store_true', help='no front matter block next to page titles')
     add_filter(p)
 
+def add_watch_options(p):
+    p.add_argument('-q', '--quiet', action='store_true', help='print errors only')
+    p.add_argument('--interval', type=float, default=0.5, metavar='SECONDS',
+                   help='how often to look for changes, default: 0.5')
+
 BUILD_USAGE = f'[--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--no-front-matter] {FILTER_USAGE}'
 
 def command(commands, name, help, usage):
@@ -116,6 +128,13 @@ def parser():
     add_paths(p, 'folders or files to build, e.g. Obsidian vault')
     add_build_options(p)
     p.set_defaults(func=build)
+
+    p = command(commands, 'watch', 'build, then build again on change of any page or attachment',
+                f'{BUILD_USAGE} [-q] [--interval SECONDS]')
+    add_paths(p, 'folders or files to build')
+    add_build_options(p)
+    add_watch_options(p)
+    p.set_defaults(func=watch)
 
     p = command(commands, 'check', 'check unresolved links and headings, missing images, '
                                    'frontmatter syntax and list numbering',

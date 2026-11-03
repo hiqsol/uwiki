@@ -4,15 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P6 watch command
-
-- a) `uwiki watch <folder|file>... [build options]` builds once, then rebuilds on change of any file
-  `build` takes: markdown, images and other attachments, after the skip list, `--include` and `--exclude`
-- b) Polling of mtimes and file lists, no dependency; added, deleted and renamed files count
-- c) Changes within a short interval are debounced into one build
-- d) A failed build prints the error and keeps watching, the last good output stays
-- e) Each build prints time, pages and output paths, `-q` prints errors only
-
 ## P7 serve command
 
 - a) `uwiki serve <folder|file>... [build options] [-p 8000] [--host 127.0.0.1]` watches as P6 and

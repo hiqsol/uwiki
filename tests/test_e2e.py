@@ -5,10 +5,13 @@ Run with: make test (needs the markdown package)
 
 import json
 import os
+import queue
 import re
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from urllib.parse import quote
 
@@ -582,6 +585,80 @@ class OrderTest(unittest.TestCase):
             f'order/{name}.md:1: warning: not listed in index.md'
             for name in ['Alone', 'Asteroids', 'Beta', 'Comet', 'IPS', 'Moons/Europa', 'Moons/index', 'Nova', 'Slot']
         ])
+
+
+def write(path, text, mode='w'):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, mode, encoding=None if 'b' in mode else 'utf-8') as f:
+        f.write(text)
+
+
+class Background:
+    """uwiki command running in background, its output lines read with a timeout."""
+
+    def __init__(self, *args):
+        self.proc = subprocess.Popen([sys.executable, '-m', 'uwiki', *args], stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT, text=True, env={**os.environ, 'PYTHONPATH': SRC})
+        self.lines = queue.Queue()
+        threading.Thread(target=lambda: [self.lines.put(line) for line in self.proc.stdout], daemon=True).start()
+
+    def line(self, timeout=5):
+        return self.lines.get(timeout=timeout).rstrip('\n')
+
+    def quiet(self, seconds):
+        """Lines printed within given seconds."""
+        time.sleep(seconds)
+        res = []
+        while not self.lines.empty():
+            res.append(self.lines.get().rstrip('\n'))
+        return res
+
+    def stop(self):
+        self.proc.terminate()
+        self.proc.wait(5)
+        self.proc.stdout.close()
+
+
+class WatchTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.vault = os.path.join(self.tmp.name, 'wiki')
+        self.out = os.path.join(self.tmp.name, 'out', 'Wiki.html')
+        write(os.path.join(self.vault, 'index.md'), 'See [[A]].\n')
+        write(os.path.join(self.vault, 'A.md'), 'Page A.\n')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_rebuilds_on_change(self):
+        watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1')
+        try:
+            self.assertRegex(watch.line(), rf'^\d\d:\d\d:\d\d built 2 pages: {re.escape(self.out)} \(\d+\.\d\ds\)$')
+            write(os.path.join(self.vault, 'B.md'), 'Page B.\n')
+            write(os.path.join(self.vault, 'attachments', 'pic.png'), 'png')
+            self.assertIn('built 3 pages', watch.line())
+            self.assertEqual(watch.quiet(0.6), [])
+            write(os.path.join(self.vault, 'A.md'), b'\xff\xfe broken', 'wb')
+            self.assertIn('error: Error reading', watch.line())
+            self.assertIn('build failed, last good output stays', watch.line())
+            self.assertIn('Page A.', read(self.out))
+            os.rename(os.path.join(self.vault, 'A.md'), os.path.join(self.vault, 'C.md'))
+            write(os.path.join(self.vault, 'C.md'), 'Page C.\n')
+            self.assertIn('built 3 pages', watch.line())
+            self.assertIn('Page C.', read(self.out))
+        finally:
+            watch.stop()
+
+    def test_quiet_prints_errors_only(self):
+        watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1', '-q')
+        try:
+            time.sleep(0.5)
+            self.assertTrue(os.path.exists(self.out))
+            write(os.path.join(self.vault, 'A.md'), b'\xff', 'wb')
+            self.assertIn('error: Error reading', watch.line())
+            self.assertEqual(watch.quiet(0.5), [])
+        finally:
+            watch.stop()
 
 
 class LsTest(unittest.TestCase):
