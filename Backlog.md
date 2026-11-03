@@ -4,17 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## P2 Reading order of pages in a folder
-
-- a) One order for `build`, `llms` and the HTML sidebar, alphabetical order does not help a reader in a small folder
-- b) Folder page first, then pages it links in the order of its links, the author keeps it as contents
-- c) Every other page goes right after the first page of the folder linking it, recursively,
-  so related pages stay together and general goes before specific: Star › IPS › Slot › Space › Asteroids
-- d) Pages no page of the folder links go by first reach in a breadth-first walk of links from the root page,
-  closer to the start is more basic, also for folders without folder page
-- e) Pages unreachable from the root go last, by name
-- f) `check --unlisted` warns about pages the folder page does not link, without changing exit code
-
 ## P3 Backlinks
 
 - a) `build` HTML shows under every page "Linked from": pages linking to it, by title, each a link

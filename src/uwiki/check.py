@@ -15,6 +15,7 @@ class CheckOptions:
     folder_links: bool = True
     orphans: bool = False
     unlinked: bool = False
+    unlisted: bool = False
 
 class CheckConverter(Converter):
     """Converts page like renderer does, reports what would render broken."""
@@ -134,7 +135,21 @@ class Checker:
             self.check_file(scanner, page, shown)
         if self.options.orphans or self.options.unlinked:
             self.check_orphans()
+        if self.options.unlisted:
+            self.check_unlisted()
         return self.problems
+
+    def check_unlisted(self):
+        """Warns about pages and folders their folder page does not link, as contents should."""
+        for page, (scanner, shown) in self.checked.items():
+            folder = page.folder
+            if folder is None or folder.page is None or page is scanner.root:
+                continue
+            if page not in self.targets(scanner, folder):
+                self.warnings.append(f'{shown}:1: warning: not listed in {folder.page.name}.md')
+
+    def targets(self, scanner, page):
+        return self.links[page] if page in self.links else self.page_links(scanner, page)
 
     def check_orphans(self):
         """Pages links from root folder page do not lead to, pages no other page links, warnings for the latter."""
@@ -153,8 +168,7 @@ class Checker:
 
     def vault_links(self, scanner):
         """Vault pages, ones other pages link to, ones links from root folder page lead to, all pages read."""
-        links = {page: self.links[page] if page in self.links else self.page_links(scanner, page)
-                 for page in scanner.pages().values()}
+        links = {page: self.targets(scanner, page) for page in scanner.pages().values()}
         linked = {target for page, targets in links.items() for target in targets if target is not page}
         if not scanner.root.page:
             return set(links), linked, linked

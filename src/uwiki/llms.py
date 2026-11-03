@@ -2,34 +2,11 @@
 
 import os
 
-from .convert import Converter
+from .order import Order
 from .vault import read_description
 
-class LinkOrder(Converter):
-    """Reads page like renderer does, notes pages its links lead to, in order."""
-
-    def __init__(self, page, scanner):
-        super().__init__(page, scanner)
-        self.mode = 'md'
-        self.targets = []
-
-    def local_href(self, href, line=None):
-        if self.is_local(href):
-            self.note(self.resolve_href(href)[0])
-        return super().local_href(href, line)
-
-    def link(self, text, checked=False):
-        name = self.parse_link(text)[0]
-        if name:
-            self.note(self.scanner.resolve(name, self.source.path))
-        return super().link(text, checked)
-
-    def note(self, target):
-        if target is not None and target not in self.targets:
-            self.targets.append(target)
-
 class Llms:
-    """Root pages first, then each folder's, folder page first, then pages in order it links them, then by name.
+    """Root pages first, then each folder's, depth first, all in reading order.
 
     Only pages of the selection are listed, summary defaults to the description of the folder page
     of the folder all given paths share.
@@ -40,6 +17,7 @@ class Llms:
         self.scanner = selection.scanner
         self.outdir = os.path.dirname(os.path.abspath(output))
         self.title = title
+        self.order = Order(self.scanner)
         top = selection.common
         if summary is None and top is not None and top.page and selection.selected(top):
             summary = read_description(top.file)
@@ -57,7 +35,7 @@ class Llms:
         """Folders with pages, depth first."""
         if self.pages(folder):
             yield folder
-        for child in folder.children.values():
+        for child in self.order.children(folder):
             if child.is_folder:
                 yield from self.folders(child)
 
@@ -68,12 +46,7 @@ class Llms:
 
     def pages(self, folder):
         selected = self.selection.selected
-        pages = [child for child in folder.children.values() if not child.is_folder and selected(child)]
-        if folder.page:
-            order = LinkOrder(folder, self.scanner)
-            order.read()
-            linked = [page for page in order.targets if page in pages]
-            pages = [*linked, *(page for page in pages if page not in linked)]
+        pages = [child for child in self.order.children(folder) if not child.is_folder and selected(child)]
         return [folder, *pages] if selected(folder) else pages
 
     def entry(self, page):

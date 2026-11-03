@@ -24,7 +24,7 @@ uv tool install git+https://github.com/hiqsol/uwiki
 
 ```
 uwiki build <folder|file>... [--title TITLE] [--html] [--md] [-o OUTPUT] [--exclude GLOB] [--include GLOB]
-uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--exclude GLOB] [--include GLOB]
+uwiki check <folder|file>... [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--exclude GLOB] [--include GLOB]
 uwiki llms <folder|file>... [--title TITLE] [-o FILE] [--summary TEXT] [--check] [--exclude GLOB] [--include GLOB]
 uwiki ls <folder|file>... [--external] [-z] [--exclude GLOB] [--include GLOB]
 uwiki stats <folder|file>... [--by folder|<frontmatter key>] [--top N] [--json] [--exclude GLOB] [--include GLOB]
@@ -46,6 +46,14 @@ a link or embed from built pages to a vault page left out fails the build with `
 Page title is front matter `title`, else the heading page starts with, else file name.
 Page header shows it after titles of all its folders, a leading heading repeating it is dropped.
 
+Pages of a folder go in reading order, the same in `build`, `llms` and the HTML sidebar:
+folder page first, then pages it links in the order of its links, so it serves as contents,
+every other page right after the first page linking it, recursively,
+so related pages stay together and general goes before specific.
+Pages no page of the folder links go by first reach in a breadth-first walk of links
+from the root folder page, unreachable ones last, by name.
+A link into a subfolder counts for the subfolder, a subfolder links what its folder page does.
+
 Commands skip hidden files and folders, `node_modules` and `vendor`.
 `--exclude` skips more, `--include` takes back skipped or excluded ones, both repeatable.
 Glob with `/` matches path from vault root, without it any path segment, like in `.gitignore`,
@@ -59,14 +67,15 @@ Every relative markdown link, inline or reference, must name an existing file or
 inside the vault, spelled as on disk, absolute links are reported.
 `--no-folder-links` reports links to folders, `--orphans` reports pages
 no chain of links leads to from the root folder page (any link, without one),
-`--unlinked` warns about pages no other page links to, without changing exit code.
+`--unlinked` warns about pages no other page links to, `--unlisted` about pages
+their folder page does not link, both without changing exit code.
 Links count from every page of the vault, checked or not.
 
 `llms` writes [llms.txt](https://llmstxt.org) (default: in the one folder listed, else `-o` is required):
 title (default: the folder name), `--summary` as quote
 (default: front matter `description` of the folder page of the folder given paths share), then a section per folder
 listing its pages as `- [title](path): description`, links relative to the output file.
-Folder page goes first, then pages in the order it links them, then the rest by name.
+Pages go in reading order.
 `--check` exits 1 if the file is out of date instead of writing it.
 
 `ls` lists markdown files the other commands take, one per line, `-z` ends them with NUL instead.

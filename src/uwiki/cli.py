@@ -30,7 +30,8 @@ def build(args, parser):
     return report(problems)
 
 def check(args, parser):
-    options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked)
+    options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked,
+                           unlisted=args.unlisted)
     checker = Checker(args.paths, args.include, args.exclude, options)
     code = report(checker.check())
     for warning in checker.warnings:
@@ -112,13 +113,15 @@ def parser():
 
     p = command(commands, 'check', 'check unresolved links and headings, missing images, '
                                    'frontmatter syntax and list numbering',
-                f'[--no-folder-links] [--orphans] [--unlinked] {FILTER_USAGE}')
+                f'[--no-folder-links] [--orphans] [--unlinked] [--unlisted] {FILTER_USAGE}')
     add_paths(p, 'folders or files to check')
     p.add_argument('--no-folder-links', action='store_true', help='report links to folders, not files')
     p.add_argument('--orphans', action='store_true',
                    help='report pages no links lead to from the root folder page')
     p.add_argument('--unlinked', action='store_true',
                    help='warn about pages no other page links to, exit code stays as is')
+    p.add_argument('--unlisted', action='store_true',
+                   help='warn about pages their folder page does not link, exit code stays as is')
     add_filter(p)
     p.set_defaults(func=check)
 

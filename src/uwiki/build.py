@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from .convert import Converter
+from .order import Links, Order
 from .vault import Filter, Selection
 
 ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
@@ -28,6 +29,8 @@ class Builder:
         self.scanner = selection.scanner
         self.outdir = outdir
         self.problems = {}
+        self.links = Links(self.scanner)
+        self.order = Order(self.scanner, self.links)
 
     def inside(self, node):
         return self.selection.inside(node)
@@ -48,7 +51,7 @@ class Builder:
                 yield child, True
 
     def children(self, folder):
-        return folder.children.values()
+        return self.order.children(folder)
 
     def converter(self, node):
         return Converter(node, self.scanner, self.outdir, scope=self)

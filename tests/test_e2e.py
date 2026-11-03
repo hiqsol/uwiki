@@ -23,6 +23,7 @@ MDLINKS = os.path.join(FIXTURES, 'mdlinks')
 PROJECT = os.path.join(FIXTURES, 'project')
 LINKCHECK = os.path.join(FIXTURES, 'linkcheck')
 EXTERNAL = os.path.join(FIXTURES, 'external')
+ORDER = os.path.join(FIXTURES, 'order')
 
 
 def run(*args, cwd=None):
@@ -41,7 +42,7 @@ def section(html, id):
     """Returns HTML from page header with given id till next page header."""
     start = html.index(f'id="{id}"')
     end = html.find('class="page"', html.index('>', start))
-    return html[start:end if end > 0 else len(html)]
+    return html[start:html.rfind('<', 0, end) if end > 0 else len(html)]
 
 
 class RenderTest(unittest.TestCase):
@@ -503,6 +504,36 @@ class LlmsTest(unittest.TestCase):
             self.assertIn('# linkcheck\n\n> Line one.\n> Line two.\n\n## Home', read(output))
             res = run('llms', LINKCHECK, '-o', output, '--summary', 'Line one.\nLine two.', '--check')
             self.assertEqual((res.returncode, res.stdout), (0, ''))
+
+
+class OrderTest(unittest.TestCase):
+    ORDER = ['root', 'star', 'ips', 'slot', 'space', 'asteroids', 'moons', 'titan', 'europa',
+             'nova', 'comet', 'alone', 'beta']
+
+    def test_build_and_sidebar_follow_links(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', ORDER, '-o', out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            html, md = read(os.path.join(out, 'order.html')), read(os.path.join(out, 'order.md'))
+        self.assertEqual(re.findall(r'id="([^"]+)" class="page"', html), self.ORDER)
+        self.assertEqual(re.findall(r'^<a id="([^"-]+)"></a>\n\n#', md, re.MULTILINE), self.ORDER)
+
+    def test_llms_follows_links(self):
+        with tempfile.TemporaryDirectory() as out:
+            output = os.path.join(out, 'llms.txt')
+            res = run('llms', ORDER, '-o', output)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            titles = re.findall(r'^- \[([^\]]+)\]', read(output), re.MULTILINE)
+        self.assertEqual(titles, ['order', 'Star', 'IPS', 'Slot', 'Space', 'Asteroids', 'Nova', 'Comet',
+                                  'Alone', 'Beta', 'Moons', 'Titan', 'Europa'])
+
+    def test_unlisted_pages_are_warnings(self):
+        res = run('check', 'order', '--unlisted', cwd=FIXTURES)
+        self.assertEqual(res.returncode, 0, res.stdout)
+        self.assertEqual(res.stdout.splitlines(), [
+            f'order/{name}.md:1: warning: not listed in index.md'
+            for name in ['Alone', 'Asteroids', 'Beta', 'Comet', 'IPS', 'Moons/Europa', 'Moons/index', 'Nova', 'Slot']
+        ])
 
 
 class LsTest(unittest.TestCase):
