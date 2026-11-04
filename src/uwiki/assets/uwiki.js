@@ -37,21 +37,10 @@
     }
   }
 
-  // page header "Folder / Subfolder / Page" shows folders as a crumb above page title,
-  // backlinks and front matter blocks go before them, floating right one over the other
-  function addCrumbs() {
+  // backlinks and front matter blocks go before crumb and title, floating right one over the other
+  function floatAsides() {
     pages.forEach(function (h) {
       var blocks = Array.prototype.slice.call(h.querySelectorAll(":scope > details"));
-      blocks.forEach(function (block) { h.removeChild(block); });
-      var text = h.textContent;
-      var crumb = null;
-      if (h.dataset.title && h.dataset.title !== text) {
-        crumb = document.createElement("span");
-        crumb.className = "crumb";
-        crumb.textContent = text.slice(0, text.length - h.dataset.title.length - 3);
-        h.textContent = h.dataset.title;
-        h.insertBefore(crumb, h.firstChild);
-      }
       blocks.reverse().forEach(function (block) { h.insertBefore(block, h.firstChild); });
     });
   }
@@ -1223,7 +1212,7 @@
 
   // after all declarations above, constants among them
   bindResize();
-  addCrumbs();
+  floatAsides();
   markBoxDrawing();
   processHeaders(toc, document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page"), 0);
   readNodes();

@@ -379,6 +379,9 @@ body.resizing {
     font-weight: 500;
     letter-spacing: 0.02em;
 }
+.content .page .crumb a {
+    color: inherit;
+}
 /* problems over backlinks over front matter float right of the header, folded to one line each */
 .content .front-matter, .content .backlinks, .content .problems {
     float: right;

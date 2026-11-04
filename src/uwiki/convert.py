@@ -505,23 +505,30 @@ class Converter:
         return name, parts[-1] if parts else '', item, description.strip()
 
     @property
-    def title(self):
-        if self._title:
-            return self._title
-        titles = [self.page.title]
+    def folders(self):
+        """Folders above the page, top one first, root left out."""
+        folders = []
         folder = self.page.folder
         while folder and folder.folder:
-            titles.insert(0, folder.title)
+            folders.insert(0, folder)
             folder = folder.folder
-        self._title = ' / '.join(titles)
+        return folders
+
+    @property
+    def title(self):
+        if not self._title:
+            self._title = ' / '.join([folder.title for folder in self.folders] + [self.page.title])
         return self._title
 
     def html_header(self, aside=''):
+        """Folders as links above the page title, aside HTML after it."""
         tag = f'h{min(self.page.depth + 1, 6)}'
         aliases = ', '.join(read_aliases(self.page.file))
         aliases = f' data-aliases="{html.escape(aliases)}"' if aliases else ''
+        crumb = ' / '.join(f'<a href="#{folder.anchor}">{html.escape(folder.title)}</a>' for folder in self.folders)
+        crumb = f'<span class="crumb">{crumb}</span>' if crumb else ''
         return (f'<{tag} id="{self.page.anchor}" class="page" data-title="{html.escape(self.page.title)}"{aliases}>'
-                f'{html.escape(self.title)}{aside}</{tag}>\n\n')
+                f'{crumb}{html.escape(self.page.title)}{aside}</{tag}>\n\n')
 
     def html(self, body=True, aside=''):
         """Page header with aside HTML in it and text as HTML, header only without body."""

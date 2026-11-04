@@ -297,15 +297,15 @@ class MarkdownLinksTest(unittest.TestCase):
 
     def test_title_is_leading_heading_else_name(self):
         self.assertIn('<h2 id="docs" class="page" data-title="Documentation">Documentation<details class="backlinks">', self.html)
-        self.assertIn('class="page" data-title="Guide">Documentation / Guide<details class="backlinks">', self.html)
+        self.assertIn('class="page" data-title="Guide"><span class="crumb"><a href="#docs">Documentation</a></span>Guide<details class="backlinks">', self.html)
         self.assertIn('<h4 id="guide--first-steps-hi-api">First steps: HiAPI</h4>', self.html)
-        self.assertIn('data-title="Broken">Documentation / Broken<details class="problems"><summary><b>Problems (', self.html)
-        self.assertIn('data-title="Use plain links">Documentation / Use plain links</h3>', self.html)
+        self.assertIn('data-title="Broken"><span class="crumb"><a href="#docs">Documentation</a></span>Broken<details class="problems"><summary><b>Problems (', self.html)
+        self.assertIn('data-title="Use plain links"><span class="crumb"><a href="#docs">Documentation</a></span>Use plain links</h3>', self.html)
         self.assertIn('<h4 id="decision--context">Context</h4>', self.html)
         self.assertIn('<a href="#docs">Documentation</a>', section(self.html, 'docs'))
 
     def test_breadcrumbs_show_every_folder(self):
-        self.assertIn('data-title="Notes">Projects / Alpha / Notes<details class="backlinks">', self.vault)
+        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes<details class="backlinks">', self.vault)
 
     def test_markdown_links_are_backlinks(self):
         self.assertIn('<b>Backlinks (5):</b><span>mdlinks, mdlinks › First steps: HiAPI, Documentation, Broken, '
@@ -335,7 +335,7 @@ class ProjectTest(unittest.TestCase):
     def test_readme_is_folder_page_before_index(self):
         self.assertIn('id="root" class="page" data-title="Project">', self.html)
         self.assertIn('id="docs" class="page" data-title="Docs readme">', self.html)
-        self.assertIn('data-title="Docs index">Docs readme / Docs index<details class="problems">', self.html)
+        self.assertIn('data-title="Docs index"><span class="crumb"><a href="#docs">Docs readme</a></span>Docs index<details class="problems">', self.html)
         self.assertEqual(self.stderr, f'warning: {PROJECT}/docs/index.md: '
                                       'both index.md and README.md in folder, README.md is folder page\n')
 
@@ -405,7 +405,7 @@ class CliTest(unittest.TestCase):
         self.assertIn('id="projects" class="page"', html)
         self.assertIn('Projects folder page', html)
         self.assertIn('Archive readme.', html)
-        self.assertIn('data-title="Notes">Projects / Alpha / Notes<details class="backlinks">', html)
+        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes<details class="backlinks">', html)
         self.assertNotIn('Root text.', html)
         self.assertNotIn('id="my-page"', html)
 
@@ -415,7 +415,7 @@ class CliTest(unittest.TestCase):
         html = read(os.path.join(self.out, 'Alpha.html'))
         self.assertIn('<h2 id="projects" class="page" data-title="Projects">Projects</h2>', html)
         self.assertNotIn('Projects folder page', html)
-        self.assertIn('data-title="Notes">Projects / Alpha / Notes</h4>', html)
+        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>', html)
 
     def test_links_outside_built_paths_fail(self):
         res = run('build', 'vault/my notes.md', 'vault/root.md', '-o', os.path.join(self.out, 'Notes'), cwd=FIXTURES)
