@@ -846,7 +846,7 @@ class ItemTest(unittest.TestCase):
         self.assertIn('1. Other list, no anchors', self.md)
         self.assertIn('2. <a id="star--light--2"></a>Light two', self.md)
         self.assertIn('1. code', self.md)
-        self.assertIn('<li><a class="item-anchor" id="star--2.2" href="#star--2.2" data-item="2.2"></a>Nested two</li>',
+        self.assertIn('<li><a class="item-anchor" id="star--2.2"></a>Nested two</li>',
                       self.html)
         self.assertIn('Backlinks: [items › 3](#root), [items › 2](#root), [items › 2.2](#root), '
                       '[items › Light › 2](#root), [items › 9](#root)', self.md)

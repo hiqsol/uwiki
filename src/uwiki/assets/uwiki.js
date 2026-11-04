@@ -1218,9 +1218,15 @@
     return mermaid;
   }
 
-  // numbered list items show their number on hover, a click copies the link to the item
+  // numbered list items show their number on hover, a click copies the link to the item;
+  // the anchor's id ends with the number path, the page links the anchor to itself
 
   function bindItems() {
+    content.querySelectorAll(".item-anchor").forEach(function (a) {
+      a.setAttribute("href", "#" + a.id);
+      var m = /--(\d+(?:\.\d+)*)$/.exec(a.id);
+      if (m) a.dataset.item = m[1];
+    });
     content.addEventListener("click", function (e) {
       var a = e.target.closest(".item-anchor");
       if (!a) return;

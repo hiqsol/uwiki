@@ -201,7 +201,7 @@ class Converter:
         if self.mode == 'md':
             anchors = ''.join(f'<a id="{id}"></a>' for id in ids)
         else:
-            anchors = f'<a class="item-anchor" id="{ids[-1]}" href="#{ids[-1]}" data-item="{path}"></a>'
+            anchors = f'<a class="item-anchor" id="{ids[-1]}"></a>'  # the page links it and shows its number
             anchors += ''.join(f'<a id="{id}"></a>' for id in ids[:-1])
         anchors += ''.join(f'<a id="{id}"></a>' for id in self.alias_anchors(path, keys[-1]))
         return line[:m.end()] + anchors + line[m.end():]
