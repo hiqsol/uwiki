@@ -299,6 +299,7 @@ def parser():
 
 TAKES = {'watch': ('build',), 'serve': ('build',), 'link': ('check', 'wrap')}
 NOT_OPTIONS = {'paths', 'func', 'command', 'help', 'version'}
+CONFIG_ONLY = {'layers'}  # config keys no command line option takes
 
 def config_defaults(top, args):
     """Defaults of command options from the config of the vault given paths are in."""
@@ -310,6 +311,8 @@ def config_defaults(top, args):
     known = {a.dest for sub in top.commands.values() for a in sub._actions}
     res = {}
     for key, value in config.options(args.command, TAKES.get(args.command, ())).items():
+        if key in CONFIG_ONLY:
+            continue
         name = key.replace('-', '_')
         if name in dests:
             action = dests[name]

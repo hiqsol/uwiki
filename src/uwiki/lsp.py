@@ -5,7 +5,6 @@ completion of page names, aliases, headings and items, references of a page, hea
 outline of headings and items, diagnostics of `check` on open and save.
 """
 
-import dataclasses
 import json
 import os
 import re
@@ -500,16 +499,7 @@ class Server:
     # diagnostics
 
     def check_options(self):
-        options = self.options()
-        names = {f.name for f in dataclasses.fields(CheckOptions)}
-        values = {}
-        for key, value in options.items():
-            name = key.replace('-', '_')
-            if name in names:
-                values[name] = tuple(value) if isinstance(value, list) else value
-            elif name.startswith('no_') and name[3:] in names:
-                values[name[3:]] = not value
-        return CheckOptions(**values)
+        return CheckOptions.from_values(self.options())
 
     def diagnose(self):
         """Publishes check problems of every page, clears them where none are left."""

@@ -283,7 +283,7 @@ class Build:
 
     def check(self, selection):
         """What check with the vault config reports for the built pages, by real path of page file."""
-        options = CheckOptions.from_config(Config.load(selection.scanner.path))
+        options = CheckOptions.from_values(Config.load(selection.scanner.path).options('check', ()))
         checker = Checker(self.paths, self.include, self.exclude, options)
         try:
             checker.check()

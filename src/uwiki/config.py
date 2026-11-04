@@ -52,6 +52,16 @@ class Config:
         return res
 
     @property
+    def layers(self):
+        """Front matter keys with their values in layer order, `[check] layers.KEY = [values]`."""
+        table = self.data.get('check', {})
+        layers = table.get('layers', {}) if isinstance(table, dict) else {}
+        if not isinstance(layers, dict) or not all(
+                isinstance(v, list) and all(isinstance(x, str) for x in v) for v in layers.values()):
+            raise ConfigError(f'{self.path}: check.layers should be a table of keys with lists of values')
+        return layers
+
+    @property
     def schema(self):
         if self._schema is None:
             self._schema = Schema(self.data.get('schema', {}), self.path)

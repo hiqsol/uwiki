@@ -27,11 +27,3 @@ Done when "links resolve the same way in every command" is said once.
 
 The one page HTML is a lightweight, fast IDE for humans reading a wiki that is the source others,
 agents too, program in, commenting comes later. Everything below runs in the page, no build options.
-
-## check: scope layers
-
-`[check] layers.scope = ["core", "duel", "advanced"]` makes values of a front matter key layers:
-a page of a layer links only to pages of its layer or earlier ones, pages of other values are outside layers,
-a folder page comes no later than any of its pages, so a filtered view never misses its folder page.
-`path:line: core page links advanced page: [[Hub]]`.
-Done when a core page linking an advanced one and an advanced folder page of a core page are reported.

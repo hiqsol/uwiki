@@ -536,6 +536,30 @@ class CheckTest(unittest.TestCase):
         self.assertEqual([line for line in lines if 'orphan' in line],
                          ['linkcheck/orphan.md:1: orphan page: no page links here'])
 
+    def test_scope_layers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pages = {
+                'uwiki.toml': '[check]\nlayers.scope = ["core", "duel", "advanced"]\n',
+                'index.md': '---\nscope: meta\n---\n[[rules/index|Rules]] [[Lore]]\n',
+                'rules/index.md': '---\nscope: advanced\n---\n[[Core]] [[Duel]]\n',
+                'rules/Core.md': '---\nscope: core\n---\n[[Duel]] and [[Lore]] and [[Core]]\n\nSee [[Hub]].\n',
+                'rules/Duel.md': '---\nscope: [duel, advanced]\n---\n[[Core]] [[Hub]]\n',
+                'rules/Hub.md': '---\nscope: advanced\n---\n[[Core]]\n',
+                'Lore.md': '---\nscope: lore\n---\n[[Hub]]\n',
+            }
+            for name, text in pages.items():
+                write(os.path.join(tmp, name), text)
+            res = run('check', '.', cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), [
+                './rules/Core.md:4: core page links duel page: rules/Duel.md',
+                './rules/Core.md:6: core page links advanced page: rules/Hub.md',
+                './rules/Duel.md:4: duel page links advanced page: rules/Hub.md',
+                './rules/index.md:2: advanced folder page of core page: rules/Core.md and 1 more',
+            ], res.stderr)
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nlayers = ["core"]\n')
+            res = run('check', '.', cwd=tmp)
+            self.assertIn('check.layers should be a table of keys with lists of values', res.stderr)
+
     def test_orphans_name_the_reason(self):
         with tempfile.TemporaryDirectory() as tmp:
             for name, text in {'index': '[[A]]', 'A': 'a', 'B': '[[C]]', 'C': '[[B]] [[C]]', 'D': '[[D]]'}.items():

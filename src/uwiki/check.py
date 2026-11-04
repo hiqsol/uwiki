@@ -25,15 +25,16 @@ class CheckOptions:
     mentions_self_bold: bool = False
 
     @classmethod
-    def from_config(cls, config):
-        """Options of config `check` table and top level, as `check` takes them."""
-        values = config.options('check', ())
+    def from_values(cls, values):
+        """Options of config values, as `check` takes them: `folder-links = false`, `no-folder-links = true`."""
+        names = {field.name for field in fields(cls)}
         res = {}
-        for field in fields(cls):
-            key = field.name.replace('_', '-')
-            if key in values:
-                value = values[key]
-                res[field.name] = tuple(value) if isinstance(field.default, tuple) else value
+        for key, value in values.items():
+            name = key.replace('-', '_')
+            if name in names:
+                res[name] = tuple(value) if isinstance(value, list) else value
+            elif name.startswith('no_') and name[3:] in names:
+                res[name[3:]] = not value
         return cls(**res)
 
 class CheckConverter(Converter):
@@ -150,7 +151,7 @@ class Checker:
         self.issues = {}  # real path of page file: [(line, message, warning)]
         self.links = {}  # scanner: links of its pages
         self.checked = {}  # checked page: (scanner, path to show)
-        self.schemas = {}  # scanner: front matter schema of its vault config
+        self.configs = {}  # scanner: its vault config
 
     def check(self):
         for scanner, page, shown in self.vaults.files():
@@ -162,6 +163,7 @@ class Checker:
             self.check_unlisted()
         if self.options.mentions:
             self.check_mentions()
+        self.check_layers()
         return self.problems
 
     def add(self, page, shown, line, message, warning=False):
@@ -221,10 +223,61 @@ class Checker:
             if reason:
                 self.add(page, shown, 1, f'orphan page: {reason}')
 
+    def check_layers(self):
+        """Pages of a layer link only to pages of their layer or earlier ones, a folder page but the root one comes
+        no later than its pages, by config `[check] layers.KEY = [values in order]`; pages of other values are
+        outside layers, links to and from them go unchecked, a folder page outside is later than any layer."""
+        for page, (scanner, shown) in self.checked.items():
+            layers = self.config(scanner).layers
+            if not layers:
+                continue
+            for key, values in layers.items():
+                level = self.layer(page, key, values)
+                if level is not None:
+                    for target, _, line in self.vault_links(scanner).of(page):
+                        other = self.layer(target, key, values) if target is not page else None
+                        if other is not None and other > level:
+                            path = os.path.relpath(target.file, scanner.path).replace(os.sep, '/')
+                            self.add(page, shown, line, f'{values[level]} page links {values[other]} page: {path}')
+                if page.is_folder and page is not scanner.root:
+                    self.check_folder_layer(page, shown, scanner, key, values)
+
+    def check_folder_layer(self, folder, shown, scanner, key, values):
+        """Folder page of a later layer than its pages, or outside layers: filtering by layer would miss it."""
+        level = self.layer(folder, key, values)
+        children = [child for child in folder.children.values() if child.file]
+        earlier = [(self.layer(child, key, values), child) for child in children]
+        earlier = sorted((n, child.file) for n, child in earlier if n is not None and (level is None or n < level))
+        if not earlier:
+            return
+        first = os.path.relpath(earlier[0][1], scanner.path).replace(os.sep, '/')
+        more = f' and {len(earlier) - 1} more' if len(earlier) > 1 else ''
+        _, front, _, _ = read_parts(folder.file)
+        value = dict(front_matter_items(front)).get(key) if front else None
+        name = values[level] if level is not None else value if isinstance(value, str) and value else f'no {key}'
+        self.add(folder, shown, self.key_line(front, key),
+                 f'{name} folder page of {values[earlier[0][0]]} page: {first}{more}')
+
+    @staticmethod
+    def layer(node, key, values):
+        """Index of the earliest layer of node by its front matter key, None outside layers."""
+        if node.file is None:
+            return None
+        try:
+            items = dict(front_matter_items(read_parts(node.file)[1]))
+        except ValueError:
+            return None
+        value = items.get(key)
+        found = [values.index(v) for v in (value if isinstance(value, list) else [value]) if v in values]
+        return min(found) if found else None
+
+    def config(self, scanner):
+        if scanner not in self.configs:
+            self.configs[scanner] = Config.load(scanner.path)
+        return self.configs[scanner]
+
     def schema(self, scanner):
-        if scanner not in self.schemas:
-            self.schemas[scanner] = Config.load(scanner.path).schema
-        return self.schemas[scanner]
+        return self.config(scanner).schema
 
     def check_schema(self, scanner, source, front, report):
         """Front matter keys and values the vault config schema allows, required ones present."""

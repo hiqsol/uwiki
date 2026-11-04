@@ -100,6 +100,11 @@ An ignored name that is no title or alias, e.g. a game title `Star Realms`, keep
 also wrapped to the next line. `--mentions-self-bold` warns about a mention of the page itself not in bold:
 on its own page a term is bold, not linked, so terms stand out from plain words.
 Links count from every page of the vault, checked or not.
+Config `[check] layers.scope = ["core", "duel", "advanced"]` makes values of a front matter key layers:
+a page of a layer links only to pages of its layer or earlier ones,
+`rules/Core.md:4: core page links duel page: rules/Duel.md`,
+a folder page but the root one comes no later than any of its pages, so a filter by layer keeps it;
+pages of other values are outside layers, links to and from them go unchecked.
 
 `llms` writes [llms.txt](https://llmstxt.org) (default: in the one folder listed, else `-o` is required):
 title (default: the folder name), `--summary` as quote
@@ -192,6 +197,7 @@ unlisted = true
 mentions = true
 mentions-ignore = ["Go", "Notes"]
 mentions-min-length = 4
+layers.scope = ["core", "duel", "advanced"]  # config only
 
 [build]
 backlinks = false
