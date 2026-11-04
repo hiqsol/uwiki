@@ -179,22 +179,41 @@ class Builder:
 
     @classmethod
     def html_map(cls, items):
-        rows = ''.join(f'<tr><th>{html.escape(key)}</th><td>{cls.html_value(value)}</td></tr>' for key, value in items)
-        return f'<table>{rows}</table>'
+        """One table: a nested key beside the key above it, spanning its rows, a list of maps an item after another."""
+        rows = cls.front_rows(dict(items))
+        depth = max(len(keys) for keys, _, _ in rows)
+        spans = {}
+        for keys, _, _ in rows:
+            for node in keys:
+                spans[node] = spans.get(node, 0) + 1
+        html_rows, seen = [], set()
+        for keys, value, item in rows:
+            cells = ''
+            for level, node in enumerate(keys):
+                if node in seen:
+                    continue
+                seen.add(node)
+                rowspan = f' rowspan="{spans[node]}"' if spans[node] > 1 else ''
+                colspan = depth - level if level == len(keys) - 1 and depth - level > 1 else 0
+                colspan = f' colspan="{colspan}"' if colspan else ''
+                cells += f'<th{rowspan}{colspan}>{html.escape(node[1])}</th>'
+            kind = ' class="item"' if item else ''
+            html_rows.append(f'<tr{kind}>{cells}<td>{html.escape(value)}</td></tr>')
+        return f'<table>{"".join(html_rows)}</table>'
 
     @classmethod
-    def html_value(cls, value):
-        """Front matter value as HTML: text, list joined, map as table, list of maps as table of a row each."""
-        if isinstance(value, dict):
-            return cls.html_map(value.items())
+    def front_rows(cls, value, path=()):
+        """Rows of value as (keys, text, starts list item), keys as (path, key) nodes from the top one."""
+        if isinstance(value, dict) and value:
+            return [((node, *keys), text, item) for key, v in value.items() for node in [((*path, key), key)]
+                    for keys, text, item in cls.front_rows(v, node[0])]
         if isinstance(value, list) and any(isinstance(v, dict) for v in value):
-            maps = [v if isinstance(v, dict) else {'': v} for v in value]
-            keys = list(dict.fromkeys(key for v in maps for key in v))
-            head = ''.join(f'<th>{html.escape(key)}</th>' for key in keys)
-            rows = ''.join('<tr>' + ''.join(f'<td>{cls.html_value(v.get(key, ""))}</td>' for key in keys) + '</tr>'
-                           for v in maps)
-            return f'<table><tr>{head}</tr>{rows}</table>'
-        return html.escape(cls.front_text(value))
+            rows = []
+            for n, v in enumerate(value):
+                sub = cls.front_rows(v if isinstance(v, dict) else {'': v}, (*path, n))
+                rows += [(keys, text, item or (n > 0 and i == 0)) for i, (keys, text, item) in enumerate(sub)]
+            return rows
+        return [((), cls.front_text(value) or '', False)]
 
     def path(self, node):
         return os.path.relpath(node.file, self.scanner.path).replace(os.sep, '/')

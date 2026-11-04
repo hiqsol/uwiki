@@ -258,18 +258,20 @@ class RenderTest(unittest.TestCase):
     def test_nested_front_matter_values_are_tables(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(os.path.join(tmp, 'wiki', 'index.md'), '# Wiki\n\nSee [page](page.md).\n')
-            write(os.path.join(tmp, 'wiki', 'page.md'), '---\ngenerated: { by: bot, at: 2026-01-02 }\n'
+            write(os.path.join(tmp, 'wiki', 'page.md'), '---\nkind: note\ngenerated: { by: bot, at: 2026-01-02 }\n'
                   'owner:\n  name: Ann\n  teams: [a, b]\nsources:\n  - id: repo\n    url: git\n  - id: doc\n---\nText.\n')
             res = run('build', 'wiki', '--html', '-o', 'out/wiki.html', cwd=tmp)
             self.assertEqual(res.returncode, 0, res.stderr)
             html = read(os.path.join(tmp, 'out', 'wiki.html'))
-        self.assertIn('<summary><span>bot, 2026-01-02 · Ann, a, b · repo, git, doc</span></summary><table>'
-                      '<tr><th>generated</th><td><table><tr><th>by</th><td>bot</td></tr>'
-                      '<tr><th>at</th><td>2026-01-02</td></tr></table></td></tr>'
-                      '<tr><th>owner</th><td><table><tr><th>name</th><td>Ann</td></tr>'
-                      '<tr><th>teams</th><td>a, b</td></tr></table></td></tr>'
-                      '<tr><th>sources</th><td><table><tr><th>id</th><th>url</th></tr>'
-                      '<tr><td>repo</td><td>git</td></tr><tr><td>doc</td><td></td></tr></table></td></tr></table>', html)
+        self.assertIn('<summary><span>note · bot, 2026-01-02 · Ann, a, b · repo, git, doc</span></summary><table>'
+                      '<tr><th colspan="2">kind</th><td>note</td></tr>'
+                      '<tr><th rowspan="2">generated</th><th>by</th><td>bot</td></tr>'
+                      '<tr><th>at</th><td>2026-01-02</td></tr>'
+                      '<tr><th rowspan="2">owner</th><th>name</th><td>Ann</td></tr>'
+                      '<tr><th>teams</th><td>a, b</td></tr>'
+                      '<tr><th rowspan="3">sources</th><th>id</th><td>repo</td></tr>'
+                      '<tr><th>url</th><td>git</td></tr>'
+                      '<tr class="item"><th>id</th><td>doc</td></tr></table>', html)
 
     def test_no_backlinks(self):
         with tempfile.TemporaryDirectory() as out:
