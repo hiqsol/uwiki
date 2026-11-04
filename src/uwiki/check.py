@@ -10,7 +10,7 @@ from .config import Config
 from .convert import Converter
 from .mention import Mentions
 from .order import Links
-from .vault import Filter, Scanner, Vaults, front_matter_items, read_aliases, read_parts
+from .vault import Filter, Scanner, Vaults, front_matter_items, front_matter_tree, read_aliases, read_parts
 
 @dataclass
 class CheckOptions:
@@ -285,7 +285,7 @@ class Checker:
         if schema.empty:
             return
         path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
-        for key, message in schema.problems(front_matter_items(front) if front else [], path):
+        for key, message in schema.problems(front_matter_tree(front) if front else {}, path):
             report(self.key_line(front, key), message)
 
     @staticmethod

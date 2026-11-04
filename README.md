@@ -77,9 +77,12 @@ vim.lsp.enable('uwiki')
 
 ## Config
 
-`uwiki.toml` in the vault root, or `[tool.uwiki]` in its `pyproject.toml`, holds option defaults:
+`uwiki.toml`, or `[tool.uwiki]` in `pyproject.toml`, in the vault root or the nearest folder above it
+up to the git work tree root, holds option defaults:
 top level ones for every command, a table for a command, `[build]` also for `watch` and `serve`.
-`[schema]` gives front matter keys `check` takes, `[check] layers` makes values of a key layers:
+`[schema]` gives front matter keys `check` takes, dotted ones nested in a map or in every map of a list,
+`[schema."glob"]` adds rules for pages the glob matches from the config folder, `_inherit = false` drops the ones before.
+`[check] layers` makes values of a key layers:
 a page links only to pages of its layer or earlier ones, a folder page comes no later than its pages.
 
 ```toml
@@ -94,10 +97,14 @@ layers.scope = ["core", "duel", "advanced"]
 [schema]                                  # keys in the order HTML shows them
 _required = ["status"]
 status = ["stub", "draft", "stable"]      # allowed values
-date = "date"                             # or a type: string, number, bool, date, list, any
+date = "date"                             # or a type: string, number, bool, date, datetime, list, any
+generated.at = "datetime"                 # generated: { by: me, at: 2026-01-02T03:04:05Z }
 
 [schema."docs/**"]                        # folder rules add to the top level ones
 owner = "string"
+
+[schema."**/index.md"]
+_inherit = false                          # folder pages: no keys required, none allowed
 ```
 
 ## HTML page

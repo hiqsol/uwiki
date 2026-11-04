@@ -123,6 +123,88 @@ def front_matter_items(front):
         res.append((key, front_matter_value(front, m[1]) or ''))
     return res
 
+def front_matter_tree(front):
+    """Front matter as a map: front_matter_items values, maps and lists of maps nested as such.
+
+    Maps are `{a: 1, b: 2}` or indented `a: 1` lines, lists of maps `- a: 1` items with keys under them.
+    """
+    lines = front.splitlines()[1:-1]
+    res = {}
+    for key, value in front_matter_items(front):
+        res[key] = nested_value(lines, key, value)
+    return res
+
+def nested_value(lines, key, value):
+    """Value of top level key as a map or a list of maps when it is one, else value as given."""
+    pattern = re.compile(rf'[\'"]?{re.escape(key)}[\'"]?:(?:[ \t]+(.*?))?[ \t]*$')
+    for i, line in enumerate(lines):
+        m = pattern.match(line)
+        if not m:
+            continue
+        inline = (m[1] or '').strip()
+        if inline[:1] == '{' and inline[-1:] == '}':
+            return flow_map(inline)
+        if inline:
+            return value
+        block = []
+        for line in lines[i + 1:]:
+            if line.strip() and not line[0].isspace() and not line.startswith('- '):
+                break
+            if line.strip() and not line.strip().startswith('#'):
+                block.append((len(line) - len(line.lstrip()), line.strip()))
+        parsed = block_value(block)
+        return parsed if isinstance(parsed, dict) or isinstance(parsed, list) and any(
+            isinstance(v, dict) for v in parsed) else value
+    return value
+
+def flow_map(text):
+    res = {}
+    for item in split_flow(text[1:-1]):
+        key, _, value = item.partition(':')
+        res[key.strip().strip('\'"')] = scalar(value)
+    return res
+
+def scalar(text):
+    """Inline value: flow list or map, else unquoted text."""
+    text = text.strip()
+    if text[:1] == '[' and text[-1:] == ']':
+        return [unquote_scalar(v) for v in split_flow(text[1:-1])]
+    if text[:1] == '{' and text[-1:] == '}':
+        return flow_map(text)
+    return unquote_scalar(text)
+
+def block_value(block):
+    """Map or list of indented (indent, text) lines, of the lines at the first line's indent."""
+    if not block:
+        return ''
+    indent = block[0][0]
+    if block[0][1].startswith('-'):
+        items = []
+        for level, text in block:
+            if level == indent and text.startswith('-'):
+                items.append([(level + 2, text[1:].strip())] if text[1:].strip() else [])
+            elif items:
+                items[-1].append((level, text))
+        return [block_value(item) if item and KEY.match(item[0][1]) else
+                scalar(item[0][1]) if item else '' for item in items]
+    res = {}
+    for n, (level, text) in enumerate(block):
+        m = KEY.match(text)
+        if level != indent or not m:
+            continue
+        if m[2]:
+            res[m[1]] = scalar(m[2])
+        else:
+            nested = []
+            for level2, text2 in block[n + 1:]:
+                if level2 <= indent and not (level2 == indent and text2.startswith('-')):
+                    break
+                nested.append((level2, text2))
+            res[m[1]] = block_value(nested)
+    return res
+
+KEY = re.compile(r'[\'"]?([^\s#:\'"][^:]*?)[\'"]?:(?:[ \t]+(.*?))?[ \t]*$')
+
 def split_flow(text):
     """Splits `a, "b, c", d` by commas outside quotes."""
     items, cur, quote = [], '', None

@@ -662,6 +662,28 @@ class ConfigTest(unittest.TestCase):
         code, lines, err = self.check('schema/docs/Unlisted.md')
         self.assertEqual((code, lines), (0, []), err)
 
+    def test_nested_keys_inherit_and_config_above_vault(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\n_required = ["made.by", "made.at"]\n'
+                  'made.by = "string"\nmade.at = "datetime"\nsources.id = ["repo", "doc"]\n'
+                  '[schema."wiki/**/index.md"]\n_inherit = false\nokf = ["1"]\n')
+            write(os.path.join(tmp, 'wiki', 'index.md'), '---\nokf: 1\n---\nSee [[Flow]], [[Block]] and [[Bad]].\n')
+            write(os.path.join(tmp, 'wiki', 'Flow.md'), '---\nmade: { by: me, at: 2026-01-02T03:04:05Z }\n---\nFlow.\n')
+            write(os.path.join(tmp, 'wiki', 'Block.md'), '---\nmade:\n  by: me\n  at: 2026-01-02T03:04Z\n'
+                  'sources:\n  - id: repo\n  - id: doc\n---\nBlock.\n')
+            write(os.path.join(tmp, 'wiki', 'Bad.md'), '---\nmade: { by: me, at: 2026-01-02, how: x }\n'
+                  'sources:\n  - id: web\n---\nBad.\n')
+            write(os.path.join(tmp, 'wiki', 'None.md'), 'None.\n')
+            code, lines, err = self.check('wiki', cwd=tmp)
+            self.assertEqual(lines, [
+                'wiki/Bad.md:2: front matter made.at: 2026-01-02, expected datetime',
+                'wiki/Bad.md:2: unknown front matter key: made.how',
+                'wiki/Bad.md:3: front matter sources.id: web, expected one of repo, doc',
+                'wiki/None.md:1: missing front matter key: made.by',
+                'wiki/None.md:1: missing front matter key: made.at',
+            ], err)
+            self.assertEqual(code, 1)
+
     def test_pyproject_and_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(os.path.join(tmp, 'Page.md'), '---\ntitle: x\n---\nText.\n')
