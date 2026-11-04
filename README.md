@@ -128,7 +128,8 @@ One self-contained file, light or dark by system preference, works from `file://
   a click on a branch title folds or unfolds it too
 - hover preview of a link target under the folders it is in, links in it preview too,
   sidebar entries beside the sidebar
-- front matter, backlinks and what `check` reports top right of page header, problems marked at their lines
+- front matter, backlinks and what `check` reports top right of page header, problems marked at their lines;
+  nested maps and lists of maps in front matter show as tables
 - `/` focuses the box filtering pages: words, `"exact text"`, `key:value` front matter, `in:folder`,
   `is:problem`, `-term`, e.g. `scope:core -status:stub deck`; `Enter` goes to the next match,
   the box goes to the URL as `?q=`
