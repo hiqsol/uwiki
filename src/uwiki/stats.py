@@ -1,4 +1,4 @@
-"""Counts pages, words, headings, list items and links, finds largest and orphan pages."""
+"""Counts pages, words, headings, list items, links and orphan pages, finds largest pages."""
 
 import os
 import re
@@ -32,8 +32,10 @@ class Stats:
             for target, _, _ in self.links[scanner].of(page):
                 if target.source and target.source is not page.source:
                     self.incoming[target.source.fullpath] = self.incoming.get(target.source.fullpath, 0) + 1
+        orphans = {page.source.fullpath for links in self.links.values() for page in links.orphans() if page.source}
         for page in self.pages:
             page['incoming'] = self.incoming.get(page['file'], 0)
+            page['orphan'] = page['file'] in orphans
         return self
 
     def count(self, scanner, page, shown):
@@ -42,7 +44,7 @@ class Stats:
         meta = {k: v.strip('\'"') for k, v in self.META.findall(front)}
         res = dict.fromkeys(self.COLUMNS, 0)
         res.update(path=shown, file=source.fullpath, meta=meta, pages=1,
-                   lines=len(body.splitlines()), is_index=page.is_folder)
+                   lines=len(body.splitlines()))
         for _, line in Converter.prose(body):
             line = Converter.CODE.sub('', self.QUOTE.sub('', line))
             res['words'] += len(line.split())
@@ -81,17 +83,17 @@ class Stats:
         return sorted(self.pages, key=lambda p: -p['words'])[:top]
 
     def orphans(self):
-        """Pages not linked from the counted ones, folder pages excepted."""
-        return [p for p in self.pages if not p['incoming'] and not p['is_index']]
+        """Counted pages no chain of links leads to from the root folder page, as check --orphans finds them."""
+        return sum(p['orphan'] for p in self.pages)
 
     def data(self, top):
-        pages = [{k: v for k, v in p.items() if k not in ('file', 'is_index')} for p in self.pages]
+        pages = [{k: v for k, v in p.items() if k != 'file'} for p in self.pages]
         return {
             'by': self.by,
             'groups': self.groups(),
             'total': self.total(),
             'largest': [p['path'] for p in self.largest(top)],
-            'orphans': [p['path'] for p in self.orphans()],
+            'orphans': self.orphans(),
             'pages': pages,
         }
 
@@ -106,5 +108,5 @@ class Stats:
             lines += ['', 'largest:'] + [f"  {p['words']:>6}  {p['path']}" for p in self.largest(top)]
         orphans = self.orphans()
         if orphans:
-            lines += ['', 'orphans:'] + [f"  {p['path']}" for p in orphans]
+            lines += ['', f'orphans: {orphans}, check --orphans lists them']
         return '\n'.join(lines)

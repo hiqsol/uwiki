@@ -31,7 +31,7 @@ uwiki lsp
 build  [--title TITLE] [-o OUTPUT] [--html | --md] [--no-backlinks] [--no-front-matter]
 watch  [build options] [-q] [--interval 0.5]
 serve  [watch options] [-p 8000] [--host 127.0.0.1] [--open]
-check  [--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--mentions [--mentions-every] [--mentions-self-bold]]
+check  [--no-folder-links] [--orphans] [--unlisted] [--mentions [--mentions-every] [--mentions-self-bold]]
 link   [--dry-run] [-w 70] [--mentions-ignore TERM] [--mentions-min-length 3] [--mentions-ignore-case] [--mentions-self-bold]
 llms   [--title TITLE] [-o FILE] [--summary TEXT] [--check]
 ls     [--external] [-z]
@@ -87,9 +87,9 @@ HTML only goes to a temporary folder removed on exit unless `-o` is given, attac
 frontmatter syntax and list numbering as `path:line: message`, exits 1 if any.
 Every relative markdown link, inline or reference, must name an existing file or folder
 inside the vault, spelled as on disk, absolute links are reported.
-`--no-folder-links` reports links to folders, `--orphans` reports pages
-no chain of links leads to from the root folder page (any link, without one),
-`--unlinked` warns about pages no other page links to, `--unlisted` about pages
+`--no-folder-links` reports links to folders, `--orphans` reports orphans: pages
+no chain of links leads to from the root folder page (any link, without one), naming the reason:
+`no page links here` or `not reachable from index.md`, `--unlisted` warns about pages
 their folder page does not link, `--mentions` about the first plain text mention of a page title or alias
 in a page not linking it, `--mentions-every` about every one, all without changing exit code.
 Mentions are whole words and their plurals (`Stars`, `Classes`, `Ancestries`), with the first letter as written
@@ -119,7 +119,7 @@ uwiki ls --external docs | lychee -
 
 `stats` counts pages, words, lines, headings, list items, wiki and external links and images
 outside code, grouped by folder or frontmatter key, e.g. `--by status`.
-It lists the largest pages and orphans: pages not linked from the counted ones, folder pages excepted.
+It lists the largest pages and counts orphans `check --orphans` reports.
 
 `wrap` rewraps paragraphs and list items with lines longer than width (tab counts as 4),
 leaving frontmatter, code, tables and headings as is, never splitting wiki links and inline code.

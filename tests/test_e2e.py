@@ -536,9 +536,21 @@ class CheckTest(unittest.TestCase):
         self.assertEqual([line for line in lines if 'orphan' in line],
                          ['linkcheck/orphan.md:1: orphan page: no page links here'])
 
-    def test_unlinked_pages_are_warnings(self):
-        code, lines, err = self.check('linkcheck/sub', 'linkcheck/orphan.md', '--unlinked')
-        self.assertEqual((code, lines), (0, ['linkcheck/orphan.md:1: warning: no page links here']), err)
+    def test_orphans_name_the_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, text in {'index': '[[A]]', 'A': 'a', 'B': '[[C]]', 'C': '[[B]] [[C]]', 'D': '[[D]]'}.items():
+                write(os.path.join(tmp, f'{name}.md'), text + '\n')
+            res = run('check', '--orphans', '.', cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), [
+                './B.md:1: orphan page: not reachable from index.md',
+                './C.md:1: orphan page: not reachable from index.md',
+                './D.md:1: orphan page: no page links here',
+            ])
+            self.assertEqual(json.loads(run('stats', '--json', '.', cwd=tmp).stdout)['orphans'], 3)
+
+    def test_orphans_of_checked_pages_by_whole_vault(self):
+        code, lines, err = self.check('linkcheck/sub', 'linkcheck/orphan.md', '--orphans')
+        self.assertEqual((code, lines), (1, ['linkcheck/orphan.md:1: orphan page: no page links here']), err)
         code, lines, err = self.check('linkcheck/sub/c.md', '--orphans')
         self.assertEqual(lines, [], err)
 
@@ -1284,12 +1296,14 @@ class StatsTest(unittest.TestCase):
 
     def test_orphans_and_folder_pages(self):
         data = json.loads(self.stats('vault', '--json'))
-        self.assertEqual(data['orphans'], ['vault/R&D <x>.md', 'vault/root.md'])
+        self.assertEqual(data['orphans'], 2)
+        self.assertEqual([p['path'] for p in data['pages'] if p['orphan']], ['vault/R&D <x>.md', 'vault/root.md'])
+        self.assertEqual(self.stats('vault').splitlines()[-1], 'orphans: 2, check --orphans lists them')
         self.assertEqual(sorted(data['groups']), ['vault', 'vault/Archive', 'vault/Projects', 'vault/Projects/Alpha'])
 
     def test_markdown_links_count_for_orphans(self):
         data = json.loads(self.stats('linkcheck', '--json'))
-        self.assertEqual(data['orphans'], ['linkcheck/orphan.md'])
+        self.assertEqual([p['path'] for p in data['pages'] if p['orphan']], ['linkcheck/orphan.md'])
 
     def test_group_by_frontmatter_key(self):
         data = json.loads(self.stats('vault', '--by', 'tags', '--json'))

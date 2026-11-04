@@ -16,7 +16,6 @@ from .vault import Filter, Scanner, Vaults, front_matter_items, read_aliases, re
 class CheckOptions:
     folder_links: bool = True
     orphans: bool = False
-    unlinked: bool = False
     unlisted: bool = False
     mentions: bool = False
     mentions_ignore: tuple = ()
@@ -144,7 +143,7 @@ class Checker:
         for scanner, page, shown in self.vaults.files():
             self.checked[page] = scanner, shown
             self.check_file(scanner, page, shown)
-        if self.options.orphans or self.options.unlinked:
+        if self.options.orphans:
             self.check_orphans()
         if self.options.unlisted:
             self.check_unlisted()
@@ -181,32 +180,24 @@ class Checker:
             if page not in self.targets(scanner, folder):
                 self.warnings.append(f'{shown}:1: warning: not listed in {folder.page.name}.md')
 
-    def targets(self, scanner, page):
-        """Pages and folders page links to, as build and its reading order see them."""
+    def vault_links(self, scanner):
         if scanner not in self.links:
             self.links[scanner] = Links(scanner)
-        return self.links[scanner].targets(page)
+        return self.links[scanner]
+
+    def targets(self, scanner, page):
+        """Pages and folders page links to, as build and its reading order see them."""
+        return self.vault_links(scanner).targets(page)
 
     def check_orphans(self):
-        """Pages links from root folder page do not lead to, pages no other page links, warnings for the latter."""
+        """Pages no chain of links leads to from the root folder page, naming the reason."""
         vaults = {}
         for page, (scanner, shown) in self.checked.items():
             if scanner not in vaults:
-                vaults[scanner] = self.vault_links(scanner)
-            pages, linked, reached = vaults[scanner]
-            if page not in pages or page is scanner.root:
-                continue
-            if self.options.orphans and page not in reached:
-                reason = f'not reachable from {scanner.root.page.name}.md' if page in linked else 'no page links here'
+                vaults[scanner] = self.vault_links(scanner).orphans()
+            reason = vaults[scanner].get(page)
+            if reason:
                 self.problems.append(f'{shown}:1: orphan page: {reason}')
-            elif self.options.unlinked and page not in linked:
-                self.warnings.append(f'{shown}:1: warning: no page links here')
-
-    def vault_links(self, scanner):
-        """Vault pages, ones other pages link to, ones links from root folder page lead to, all pages read."""
-        pages = set(scanner.pages().values())
-        linked = {target for page in pages for target in self.targets(scanner, page) if target is not page}
-        return pages, linked, self.links[scanner].reach() if scanner.root.page else linked
 
     def schema(self, scanner):
         if scanner not in self.schemas:

@@ -100,7 +100,7 @@ def build_options(args):
     return BuildOptions(backlinks=not args.no_backlinks, front_matter=not args.no_front_matter)
 
 def check(args):
-    options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans, unlinked=args.unlinked,
+    options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans,
                            unlisted=args.unlisted, mentions=args.mentions, mentions_ignore=args.mentions_ignore,
                            mentions_min_length=args.mentions_min_length,
                            mentions_ignore_case=args.mentions_ignore_case, mentions_every=args.mentions_every,
@@ -210,13 +210,11 @@ def parser():
 
     p = command(commands, 'check', 'check unresolved links and headings, missing images, '
                                    'frontmatter syntax and list numbering',
-                f'[--no-folder-links] [--orphans] [--unlinked] [--unlisted] [--mentions] {FILTER_USAGE}')
+                f'[--no-folder-links] [--orphans] [--unlisted] [--mentions] {FILTER_USAGE}')
     add_paths(p, 'folders or files to check')
     p.add_argument('--no-folder-links', action='store_true', help='report links to folders, not files')
     p.add_argument('--orphans', action='store_true',
                    help='report pages no links lead to from the root folder page')
-    p.add_argument('--unlinked', action='store_true',
-                   help='warn about pages no other page links to, exit code stays as is')
     p.add_argument('--unlisted', action='store_true',
                    help='warn about pages their folder page does not link, exit code stays as is')
     p.add_argument('--mentions', action='store_true',

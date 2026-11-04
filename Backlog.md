@@ -16,12 +16,6 @@ whether by alias and its anchor.
 list numbering and item anchors share one list walker.
 Done when no command but the renderer walks page text itself and the test suite passes unchanged.
 
-## One orphan notion
-
-`check --orphans` warns about pages no chain of links leads to from the root folder page,
-naming the reason, `--unlinked` goes as it is the "no page links here" reason, `stats` only counts.
-Done when README describes orphans once.
-
 ## README by concepts
 
 Install, then concepts: vault root, folder page, reading order, link resolution, each defined once before use,

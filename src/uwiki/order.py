@@ -72,6 +72,19 @@ class Links:
                             todo.append(target)
         return self._reach
 
+    def orphans(self):
+        """Pages no chain of links leads to from the root folder page, with the reason, root page excepted.
+
+        Without root folder page a page any other page links to is reached.
+        """
+        root = self.scanner.root
+        pages = set(self.scanner.pages().values())
+        linked = {target for page in pages for target in self.targets(page) if target is not page}
+        reached = self.reach() if root.page else linked
+        name = root.page.name if root.page else ''
+        return {page: f'not reachable from {name}.md' if page in linked else 'no page links here'
+                for page in pages if page not in reached and page is not root}
+
 class Order:
     """Reading order of pages and folders in a folder.
 
