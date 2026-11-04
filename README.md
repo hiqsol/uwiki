@@ -56,7 +56,8 @@ uwiki lsp
 
 - `build` writes `<title>.html` and `<title>.md`, `-o out/Wiki.html` only one;
   a page shows its folders, backlinks and front matter; a link to a page left out fails the build
-- `watch` builds again on change, `serve` also serves the HTML on `http://127.0.0.1:8000`, reloading the page
+- `watch` builds again on change, `serve` also serves the HTML on `http://127.0.0.1:8000`, reloading the page,
+  its blocks with `data-line` of the source line they start at
 - `check` reports unresolved links, headings and items, missing images, front matter out of `[schema]`
   and list numbering as `path:line: message`, exits 1 if any;
   `--orphans` reports orphans, `--unlisted` and `--mentions` warn about pages their folder page does not link
@@ -124,6 +125,8 @@ _inherit = false                          # folder pages: no keys required, none
 
 One self-contained file, light or dark by system preference, works from `file://`:
 
+- pages render as GitHub and Obsidian show them: CommonMark with tables, task lists and strikethrough;
+  a page is laid out and drawn as it nears the window, so a long vault opens fast
 - sidebar of contents following the page being read, its edge drags its width,
   a click on a branch title folds or unfolds it too
 - hover preview of a link target under the folders it is in, links in it preview too,
