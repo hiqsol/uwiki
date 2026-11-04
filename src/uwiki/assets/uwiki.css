@@ -655,6 +655,13 @@ details.callout:not([open]) > summary {
     font-size: 15px;
     font-weight: 650;
 }
+.preview-crumb {
+    display: block;
+    color: var(--fg-muted);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
 .content.preview-body {
     max-width: none;
     margin: 0;

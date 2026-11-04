@@ -98,17 +98,20 @@
     return i;
   }
 
+  // the button and the title link of a branch both fold and unfold it, the link also goes to its page
   function toggle(li) {
     var button = document.createElement("button");
     button.className = "toggle";
     button.type = "button";
     button.setAttribute("aria-label", "Toggle section");
     button.textContent = "▼";
-    button.addEventListener("click", function () {
+    var flip = function () {
       li.classList.toggle("collapsed");
       delete li.dataset.auto;
       updateFold();
-    });
+    };
+    button.addEventListener("click", flip);
+    li.querySelector(":scope > a").addEventListener("click", flip);
     return button;
   }
 
@@ -901,6 +904,13 @@
     title.className = "preview-title";
     title.href = a.getAttribute("href");
     title.textContent = previewTitle(target);
+    var crumb = crumbOf(target.classList.contains("page") ? target : pageOf(target));
+    if (crumb) {
+      var span = document.createElement("span");
+      span.className = "preview-crumb";
+      span.textContent = crumb;
+      title.insertBefore(span, title.firstChild);
+    }
     el.appendChild(title);
     var body = document.createElement("div");
     body.className = "content preview-body";
@@ -945,6 +955,12 @@
     }
     var page = pageOf(target);
     return (page ? titleOf(page) + " › " : "") + target.textContent;
+  }
+
+  // folders of the page as its header shows them, so a preview tells where the link leads
+  function crumbOf(page) {
+    var crumb = page && page.querySelector(":scope > .crumb");
+    return crumb ? crumb.textContent : "";
   }
 
   function pageOf(el) {
