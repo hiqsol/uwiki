@@ -97,7 +97,8 @@ layers.scope = ["core", "duel", "advanced"]
 [schema]                                  # keys in the order HTML shows them
 _required = ["status"]
 status = ["stub", "draft", "stable"]      # allowed values
-date = "date"                             # or a type: string, number, bool, date, datetime, list, any
+date = "date"                             # or a type: string, number, bool, date, datetime, page, list, any
+supersedes = "page"                       # names a page as links do: Page, [[Page]], ../Page.md
 generated.at = "datetime"                 # generated: { by: me, at: 2026-01-02T03:04:05Z }
 
 [schema."docs/**"]                        # folder rules add to the top level ones

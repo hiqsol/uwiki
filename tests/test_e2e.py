@@ -684,6 +684,18 @@ class ConfigTest(unittest.TestCase):
             ], err)
             self.assertEqual(code, 1)
 
+    def test_page_type(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\nsupersedes = "page"\n')
+            write(os.path.join(tmp, 'index.md'), 'See [[Old]], [[New]], [[Bad]] and [[sub/Deep]].\n')
+            write(os.path.join(tmp, 'Old.md'), 'Old.\n')
+            write(os.path.join(tmp, 'sub', 'Deep.md'), '---\nsupersedes: ../Old.md\n---\nDeep.\n')
+            write(os.path.join(tmp, 'New.md'), '---\nsupersedes: [Old, "[[sub/Deep]]"]\n---\nNew.\n')
+            write(os.path.join(tmp, 'Bad.md'), '---\nsupersedes: [Gone, Bad, ../Old.md]\n---\nBad.\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(lines, ['./Bad.md:2: front matter supersedes: Gone, Bad, ../Old.md, expected page'], err)
+            self.assertEqual(code, 1)
+
     def test_pyproject_and_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(os.path.join(tmp, 'Page.md'), '---\ntitle: x\n---\nText.\n')

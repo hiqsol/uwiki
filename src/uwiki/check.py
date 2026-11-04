@@ -285,8 +285,20 @@ class Checker:
         if schema.empty:
             return
         path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
-        for key, message in schema.problems(front_matter_tree(front) if front else {}, path):
+        resolve = lambda value: self.names_page(scanner, source, value)
+        for key, message in schema.problems(front_matter_tree(front) if front else {}, path, resolve):
             report(self.key_line(front, key), message)
+
+    @staticmethod
+    def names_page(scanner, source, value):
+        """Value names a page other than source: by name or `[[Page]]` as links do, or by path relative to it."""
+        name = value[2:-2].partition('|')[0] if value.startswith('[[') and value.endswith(']]') else value
+        name = name.partition('#')[0].strip()
+        if name.endswith('.md') or name.startswith('.'):
+            target = scanner.resolve_path(name, source.path)
+        else:
+            target = scanner.resolve(name, source.path) if name else None
+        return target is not None and target.source is not None and target.source is not source
 
     @staticmethod
     def key_line(front, key):

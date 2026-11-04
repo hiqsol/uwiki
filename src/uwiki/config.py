@@ -92,6 +92,7 @@ class Schema:
     _required = ["status", "generated.at"]
     status = ["stub", "draft", "stable"]
     aliases = "list"
+    supersedes = "page"                      # page name, `[[Page]]` or relative path, one or a list
     generated.at = "datetime"                # nested key, of a map or of every map of a list
     [schema."docs/**"]
     _required = ["owner"]
@@ -103,7 +104,7 @@ class Schema:
     later ones win. Keys go in schema order, build shows front matter so.
     """
 
-    TYPES = ('string', 'number', 'bool', 'date', 'datetime', 'list', 'any')
+    TYPES = ('string', 'number', 'bool', 'date', 'datetime', 'page', 'list', 'any')
     NUMBER = re.compile(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?')
     DATE = re.compile(r'\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)?)?')
     DATETIME = re.compile(r'\d{4}-\d\d-\d\d[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)')
@@ -188,27 +189,28 @@ class Schema:
         order = {key: n for n, key in enumerate(self.keys(path))}
         return sorted(items, key=lambda item: order.get(item[0], len(order)))
 
-    def problems(self, tree, path):
+    def problems(self, tree, path, resolve=None):
         """(key, message) for front matter of page at path, as front_matter_tree gives it,
-        key is the top level key the problem is at, None for missing ones."""
+        key is the top level key the problem is at, None for missing ones;
+        resolve tells whether a value names a page, without it any value does."""
         if self.empty:
             return []
         res = []
-        self.check_map(tree, '', self.keys(path), res, None)
+        self.check_map(tree, '', self.keys(path), res, None, resolve or (lambda value: True))
         return res
 
-    def check_map(self, values, prefix, rules, res, at):
+    def check_map(self, values, prefix, rules, res, at, resolve):
         """Problems of map of front matter values whose keys start with prefix, at top level key or None."""
         for key, value in values.items():
             full = prefix + key
             top = at or key
             nested = any(k.startswith(full + '.') for k in rules)
             if nested and isinstance(value, dict):
-                self.check_map(value, full + '.', rules, res, top)
+                self.check_map(value, full + '.', rules, res, top, resolve)
                 continue
             if nested and isinstance(value, list) and value and all(isinstance(v, dict) for v in value):
                 for item in value:
-                    self.check_map(item, full + '.', rules, res, top)
+                    self.check_map(item, full + '.', rules, res, top, resolve)
                 continue
             if full not in rules:
                 res.append((top, f'unknown front matter key: {full}'))
@@ -218,7 +220,7 @@ class Schema:
                 if required:
                     res.append((top, f'front matter {full}: empty, required'))
                 continue
-            bad = self.mismatch(spec, value)
+            bad = self.mismatch(spec, value, resolve)
             if bad:
                 res.append((top, f'front matter {full}: {bad}'))
         for key, (required, _) in rules.items():
@@ -226,7 +228,7 @@ class Schema:
                 res.append((at, f'missing front matter key: {key}'))
 
     @classmethod
-    def mismatch(cls, spec, value):
+    def mismatch(cls, spec, value, resolve=lambda value: True):
         """What is wrong with the value, None if it fits."""
         if isinstance(value, dict):
             return None if spec == 'any' else f'map, expected {spec if isinstance(spec, str) else "one of values"}'
@@ -238,6 +240,9 @@ class Schema:
             return None
         if spec == 'list':
             return None if isinstance(value, list) else f'{value}, expected list'
+        if spec == 'page':
+            bad = [v for v in (value if isinstance(value, list) else [value]) if not resolve(v)]
+            return f'{", ".join(bad)}, expected page' if bad else None
         if isinstance(value, list):
             return f'list, expected {spec}'
         if spec == 'number' and not cls.NUMBER.fullmatch(value) \
