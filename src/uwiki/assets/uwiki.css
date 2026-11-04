@@ -517,6 +517,15 @@ body.resizing {
 .content li::marker {
     color: var(--fg-muted);
 }
+/* a task shows its checkbox in place of the bullet */
+.content li.task-list-item {
+    list-style: none;
+}
+.content .task-list-item-checkbox {
+    margin: 0 0.45em 0 -1.4em;
+    vertical-align: -0.1em;
+    accent-color: var(--accent);
+}
 
 /* numbered list item shows its number path left of it on hover, a click copies the link */
 .content li:has(> .item-anchor, > p:first-child > .item-anchor) {

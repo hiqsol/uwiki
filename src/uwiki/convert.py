@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from urllib.parse import quote, unquote
 
+from . import render
 from .vault import FRONT_MATTER, TITLE, cebabize, read_aliases, read_text, titleize
 
 class Converter:
@@ -44,6 +45,7 @@ class Converter:
         self.shift = 0
         self.item_lines = {}  # line number: (number path, sections whose first list it is in)
         self.problems = {}  # line number: [(message, warning)] check reports, marked in HTML at their line
+        self.lines = []  # source line of every line process gave last, None for lines not of the page
 
     def read(self):
         node = self.page.source
@@ -213,37 +215,48 @@ class Converter:
                 if source is not None and self.alias_item(source, alias) == (path, key)]
 
     def process(self, text, start=1):
-        res = ''
+        """Text as markdown for the renderer, `lines` the source line of each of its lines:
+        lines become lines one to one, others, as an embedded page, are of no line."""
+        res, at = '', []
         fence = None
         lines = text.splitlines(keepends=True)
         i = 0
         while i < len(lines):
             line = lines[i]
-            self.line = start + i
+            self.line = first = start + i
             i += 1
             m = self.FENCE.match(line)
             callout = self.mode == 'html' and not fence and self.CALLOUT.match(line)
             if fence:
                 if m and line.lstrip().startswith(fence):
                     fence = None
-                res += line
+                out = line
             elif m:
                 fence = m[1]
-                res += line
+                out = line
             elif callout:
                 body = ''
                 body_start = start + i
                 while i < len(lines) and lines[i].startswith('>'):
                     body += re.sub(r'^> ?', '', lines[i])
                     i += 1
-                res += self.callout(*callout.groups(), body, body_start)
+                out = self.callout(*callout.groups(), body, body_start)
             else:
                 while (self.open_bracket(line) and not self.HEADING.match(line) and i < len(lines)
                        and lines[i].strip() and not self.BLOCK_START.match(lines[i])):
                     line += lines[i]
                     i += 1
-                res += self.mark_problems(self.process_line(line), self.line, line.count('\n') or 1)
+                out = self.mark_problems(self.process_line(line), self.line, line.count('\n') or 1)
+            src = self.lines if callout else list(range(first, start + i))
+            n = self.count_lines(out)
+            at += src if len(src) == n else [None] * n
+            res += out
+        self.lines = at
         return res
+
+    @staticmethod
+    def count_lines(text):
+        return text.count('\n') + (1 if text and not text.endswith('\n') else 0)
 
     def mark_problems(self, text, start, count):
         """Text with a marker of problems of its lines after its block prefix, as list item or heading."""
@@ -256,7 +269,7 @@ class Converter:
 
     def problem_marker(self, line):
         warning = all(w for _, w in self.problems[line])
-        title = html.escape('\n'.join(f'{line}: {m}' for m, _ in self.problems[line]))
+        title = html.escape('\n'.join(f'{line}: {m}' for m, _ in self.problems[line])).replace('\n', '&#10;')
         kind = 'warning' if warning else 'problem'
         return f'<span class="problem-at {kind}" id="problem-{self.page.anchor}-{line}" title="{title}"></span>'
 
@@ -267,14 +280,20 @@ class Converter:
         return text.count('[') > text.count(']')
 
     def callout(self, kind, fold, title, body, start=1):
+        """Callout as HTML block around its body, `lines` its title line for the block, the lines of the body."""
+        line = self.line
         kind = kind.lower()
-        title = self.links(title) if title else html.escape(kind.title())
-        body = self.process(body, start).strip()
+        title = render.inline(self.links(title)) if title else html.escape(kind.title())
+        text = self.process(body, start)
+        body = text.strip()
+        skipped = text[:len(text) - len(text.lstrip())].count('\n')  # blank lines strip drops
+        body_lines = (self.lines[skipped:] + [None] * (body.count('\n') + 1))[:body.count('\n') + 1]
+        self.lines = [line] * 4 + body_lines + [None] * 3
         tag, title_tag = ('details', 'summary') if fold else ('div', 'div')
         open = ' open' if fold == '+' else ''
         return (
-            f'\n<{tag} class="callout callout-{kind}"{open} markdown="1">\n'
-            f'<{title_tag} class="callout-title" markdown="span">{title}</{title_tag}>\n\n'
+            f'\n<{tag} class="callout callout-{kind}"{open}>\n'
+            f'<{title_tag} class="callout-title">{title}</{title_tag}>\n\n'
             f'{body}\n\n</{tag}>\n\n'
         )
 
@@ -463,7 +482,7 @@ class Converter:
         content = sub.read_file(node, heading).strip()
         if self.mode == 'md':
             return f'\n{content}\n\n'
-        return f'\n<div class="embed" markdown="1">\n\n{content}\n\n</div>\n\n'
+        return f'\n<div class="embed">\n\n{content}\n\n</div>\n\n'
 
     def link(self, text, checked=False):
         name, heading, item, description = self.parse_target(text)
@@ -530,14 +549,16 @@ class Converter:
         return (f'<{tag} id="{self.page.anchor}" class="page" data-title="{html.escape(self.page.title)}"{aliases}>'
                 f'{crumb}{html.escape(self.page.title)}{aside}</{tag}>\n\n')
 
-    def html(self, body=True, aside=''):
-        """Page header with aside HTML in it and text as HTML, header only without body."""
+    def html(self, body=True, aside='', lines=False):
+        """Page header with aside HTML in it and text as HTML, header only without body;
+        with lines, blocks carry `data-line` of the source line they start at."""
         self.mode = 'html'
         text = self.html_header(aside)
+        at = [None] * self.count_lines(text)
         if body:
             text += self.read()
-        import markdown
-        return markdown.markdown(text, extensions=['tables', 'fenced_code', 'attr_list', 'md_in_html'])
+            at += self.lines
+        return render.html(text, at if lines else None)
 
     def md_header(self):
         tag = '#' * min(self.page.depth + 1, 6)

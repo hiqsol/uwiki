@@ -17,7 +17,7 @@ classifiers = [
     "Topic :: Documentation",
 ]
 requires-python = ">=3.11"
-dependencies = ["markdown"]
+dependencies = ["markdown-it-py>=3"]
 
 [project.urls]
 Homepage = "https://github.com/hiqsol/uwiki"

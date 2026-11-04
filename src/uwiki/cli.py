@@ -52,6 +52,7 @@ def serve(args):
     options = build_options(args)
     options.live_reload = True
     options.attachment_base = served.FILES
+    options.source_lines = True
     try:
         html = args.html or not args.output and not args.md
         build = Build(args.paths, output, title, html, args.md, args.include, args.exclude, options)

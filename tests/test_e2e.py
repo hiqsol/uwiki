@@ -18,7 +18,7 @@ import time
 import unittest
 from urllib.parse import quote
 
-import markdown  # noqa: F401 -- required, build tests must not be skipped
+import markdown_it  # noqa: F401 -- required, build tests must not be skipped
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'src')
@@ -222,7 +222,7 @@ class RenderTest(unittest.TestCase):
         page = section(self.content, 'my-page')
         self.assertIn('<div class="callout callout-note">\n<div class="callout-title">Custom title</div>', page)
         self.assertIn('<details class="callout callout-warning">\n<summary class="callout-title">Warning</summary>', page)
-        self.assertIn('<details class="callout callout-tip" open="open">', page)
+        self.assertIn('<details class="callout callout-tip" open>', page)
         self.assertIn('Open with <a href="#my-page--deeper">My Page &gt; Deeper</a></summary>', page)
         self.assertIn('<div class="callout callout-bug">', page)
         self.assertNotIn('[!', page)
@@ -1186,6 +1186,7 @@ class ServeTest(unittest.TestCase):
             status, _, html = self.get(url)
             build_id = self.get(url.replace('wiki.html', '__uwiki/build'))[2]
             self.assertIn(f'var BUILD = "{build_id}";', html)
+            self.assertIn('<p data-line="1">See', html)
             self.assertIn('<img src="/__uwiki/files/pic.png" alt="pic.png" />', html)
             self.assertEqual(self.get(url.replace('wiki.html', '__uwiki/files/pic.png'))[2], 'png')
             with self.assertRaises(HTTPError):
@@ -1205,6 +1206,48 @@ class ServeTest(unittest.TestCase):
             html = read(os.path.join(out, 'wiki.html'))
         self.assertNotIn('__uwiki', html)
         self.assertNotIn('uwiki-reload', html)
+        self.assertNotIn('data-line', html)
+
+
+class CommonMarkTest(unittest.TestCase):
+    """Pages render as GitHub and Obsidian show them, served ones with source lines of blocks."""
+
+    PAGE = ('---\nstatus: x\n---\n# Page\n\nPara one\ncontinues.\n\n- [ ] task\n- [x] done\n\nText:\n- item\n\n'
+            '> [!note] Title with **bold**\n> body line\n\n3. three\n4. four\n\n~~gone~~\n\n| a |\n|---|\n| 1 |\n')
+
+    @classmethod
+    def setUpClass(cls):
+        from uwiki.build import Build, BuildOptions
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'wiki', 'index.md'), 'See [[Page]].\n')
+            write(os.path.join(tmp, 'wiki', 'Page.md'), cls.PAGE)
+            res = run('build', 'wiki', '--html', '-o', 'out/wiki.html', cwd=tmp)
+            assert res.returncode == 0, res.stderr
+            cls.html = section(read(os.path.join(tmp, 'out', 'wiki.html')), 'page')
+            build = Build([os.path.join(tmp, 'wiki')], os.path.join(tmp, 'out', 'lines.html'),
+                          options=BuildOptions(source_lines=True))
+            assert build.run() == []
+            cls.lines = section(read(os.path.join(tmp, 'out', 'lines.html')), 'page')
+
+    def test_tasks_lists_after_text_and_numbering(self):
+        self.assertIn('<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled> task'
+                      '</li>', self.html)
+        self.assertIn('<input type="checkbox" class="task-list-item-checkbox" disabled checked> done', self.html)
+        self.assertIn('<p>Text:</p>\n<ul>\n<li>item</li>', self.html)
+        self.assertIn('<ol start="3">', self.html)
+        self.assertIn('<p><s>gone</s></p>', self.html)
+        self.assertIn('<td>1</td>', self.html)
+        self.assertIn('<div class="callout-title">Title with <strong>bold</strong></div>', self.html)
+
+    def test_blocks_carry_source_lines(self):
+        self.assertIn('<p data-line="6">Para one', self.lines)
+        self.assertIn('<li class="task-list-item" data-line="9">', self.lines)
+        self.assertIn('<p data-line="12">Text:</p>', self.lines)
+        self.assertIn('<li data-line="13">item</li>', self.lines)
+        self.assertIn('<p data-line="16">body line</p>', self.lines)
+        self.assertIn('<li data-line="19">', self.lines)
+        self.assertIn('<table data-line="23">', self.lines)
+        self.assertNotIn('data-line', self.html)
 
 
 class MoveTest(unittest.TestCase):

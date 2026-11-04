@@ -30,6 +30,7 @@ class BuildOptions:
     front_matter: bool = True
     live_reload: bool = False  # served only: page reloads after a rebuild
     attachment_base: str = ''  # served only: URL attachments are served at
+    source_lines: bool = False  # served only: blocks carry the source line they start at, for editing
 
 class Builder:
     """Renders selected pages in reading order, folders on the way to them by title only.
@@ -199,7 +200,7 @@ class Builder:
             text, rest = self.issues_of(node)
             converter.problems = text
             aside = self.html_problems(node, text, rest)
-        return converter.html(body, aside)
+        return converter.html(body, aside, self.options.source_lines)
 
     def reload_script(self):
         if not self.options.live_reload:
