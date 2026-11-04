@@ -33,16 +33,128 @@
     try {
       return JSON.parse(el.textContent);
     } catch (e) {
-      return { facets: [], pages: {} };
+      return { facets: [], pages: {}, backlinks: {} };
     }
   }
 
-  // backlinks and front matter blocks go before crumb and title, floating right one over the other
+  // problems the page has, backlinks and front matter blocks built from the data go before crumb and title,
+  // floating right one over the other
   function floatAsides() {
     pages.forEach(function (h) {
       var blocks = Array.prototype.slice.call(h.querySelectorAll(":scope > details"));
-      blocks.reverse().forEach(function (block) { h.insertBefore(block, h.firstChild); });
+      var info = data.pages[h.id];
+      blocks.push(backlinksBlock(data.backlinks[h.id] || []));
+      if (info && data.frontMatter !== false) blocks.push(frontMatterBlock(info));
+      blocks.filter(Boolean).reverse().forEach(function (block) { h.insertBefore(block, h.firstChild); });
     });
+  }
+
+  // folded line of backlink titles, readRefs fills it, unfolding into links to the linking pages
+  function backlinksBlock(links) {
+    if (!links.length) return null;
+    var block = details("backlinks");
+    var summary = block.firstChild, div = document.createElement("div");
+    var b = document.createElement("b");
+    b.textContent = "Backlinks (" + links.length + "):";
+    summary.appendChild(b);
+    summary.appendChild(document.createElement("span"));
+    links.forEach(function (link, i) {
+      var anchor = Array.isArray(link) ? link[0] : link, heading = Array.isArray(link) ? link[1] : "";
+      var source = document.getElementById(anchor);
+      var a = document.createElement("a");
+      a.href = "#" + anchor;
+      a.textContent = (source ? titleOf(source) : anchor) + (heading ? " › " + heading : "");
+      if (i) div.appendChild(document.createTextNode(", "));
+      div.appendChild(a);
+    });
+    block.appendChild(div);
+    return block;
+  }
+
+  // front matter as folded line of values unfolding into one table of keys and values:
+  // a nested key beside the key above it spanning its rows, a list of maps an item after another;
+  // none for title only
+  function frontMatterBlock(info) {
+    var items = {}, nested = info.nested || {};
+    Object.keys(info.meta).forEach(function (key) { items[key] = key in nested ? nested[key] : info.meta[key]; });
+    var line = Object.keys(items).filter(function (key) { return key !== "title"; }).map(function (key) {
+      return frontText(items[key]);
+    }).filter(Boolean).join(" · ");
+    if (!line) return null;
+    var block = details("front-matter" + (info.frontProblem ? " problem" : ""));
+    var span = document.createElement("span");
+    span.textContent = line;
+    block.firstChild.appendChild(span);
+    block.appendChild(frontTable(items));
+    return block;
+  }
+
+  function details(className) {
+    var block = document.createElement("details");
+    block.className = className;
+    block.appendChild(document.createElement("summary"));
+    return block;
+  }
+
+  function isMap(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+
+  // value as one line: its texts joined
+  function frontText(value) {
+    if (isMap(value)) value = Object.keys(value).map(function (key) { return value[key]; });
+    if (Array.isArray(value)) return value.map(frontText).filter(Boolean).join(", ");
+    return value === null || value === undefined ? "" : String(value);
+  }
+
+  function frontTable(items) {
+    var rows = frontRows(items, []);
+    var depth = Math.max.apply(null, rows.map(function (row) { return row.keys.length; }));
+    var spans = new Map(), seen = new Set();
+    rows.forEach(function (row) {
+      row.keys.forEach(function (node) { spans.set(node.id, (spans.get(node.id) || 0) + 1); });
+    });
+    var table = document.createElement("table");
+    rows.forEach(function (row) {
+      var tr = table.insertRow();
+      if (row.item) tr.className = "item";
+      row.keys.forEach(function (node, level) {
+        if (seen.has(node.id)) return;
+        seen.add(node.id);
+        var th = document.createElement("th");
+        th.textContent = node.key;
+        if (spans.get(node.id) > 1) th.rowSpan = spans.get(node.id);
+        if (level === row.keys.length - 1 && depth - level > 1) th.colSpan = depth - level;
+        tr.appendChild(th);
+      });
+      var td = document.createElement("td");
+      td.textContent = row.text;
+      tr.appendChild(td);
+    });
+    return table;
+  }
+
+  // rows of value as {keys, text, item: starts list item}, keys as {id: path, key} from the top one
+  function frontRows(value, path) {
+    var rows = [];
+    if (isMap(value) && Object.keys(value).length) {
+      Object.keys(value).forEach(function (key) {
+        var at = path.concat([key]), node = { id: JSON.stringify(at), key: key };
+        frontRows(value[key], at).forEach(function (row) {
+          rows.push({ keys: [node].concat(row.keys), text: row.text, item: row.item });
+        });
+      });
+      return rows;
+    }
+    if (Array.isArray(value) && value.some(isMap)) {
+      value.forEach(function (v, n) {
+        frontRows(isMap(v) ? v : { "": v }, path.concat([n])).forEach(function (row, i) {
+          rows.push({ keys: row.keys, text: row.text, item: row.item || (n > 0 && i === 0) });
+        });
+      });
+      return rows;
+    }
+    return [{ keys: [], text: frontText(value), item: false }];
   }
 
   // code blocks drawing boxes get line height they join at, see pre.box-drawing

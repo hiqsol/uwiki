@@ -13,7 +13,7 @@ from .config import Config
 from .convert import Converter
 from .order import Links, Order
 from .stats import Stats
-from .vault import Filter, Selection, cebabize, front_matter_tree, read_front, read_front_matter, read_parts
+from .vault import Filter, Selection, cebabize, front_matter_items, front_matter_tree, read_parts
 
 ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
 
@@ -102,16 +102,6 @@ class Builder:
     def backlink_text(self, source, heading):
         return source.title + (self.SEP + heading if heading else '')
 
-    def html_backlinks(self, node):
-        """Backlinks as folded line of their count and titles unfolding into links."""
-        backlinks = self.backlinks(node)
-        if not backlinks:
-            return ''
-        texts = [html.escape(self.backlink_text(source, heading)) for source, heading in backlinks]
-        links = [f'<a href="#{source.anchor}">{text}</a>' for (source, _), text in zip(backlinks, texts)]
-        return (f'<details class="backlinks"><summary><b>Backlinks ({len(links)}):</b>'
-                f'<span>{", ".join(texts)}</span></summary><div>{", ".join(links)}</div></details>')
-
     def md_backlinks(self, node):
         escape = lambda text: re.sub(r'([\\\[\]])', r'\\\1', text)
         links = [f'[{escape(self.backlink_text(source, heading))}](#{source.anchor})'
@@ -153,87 +143,40 @@ class Builder:
                 f'<span>{html.escape(", ".join(m for _, m, _ in issues))}</span></summary>'
                 f'<div>{"".join(links)}</div></details>')
 
-    def html_front_matter(self, node, problem=False):
-        """Front matter in schema order as folded line of values unfolding into a table of keys and values,
-        nested maps and lists of maps as tables in it, none for title only."""
-        if not self.options.front_matter or node.file is None:
-            return ''
-        items = self.schema.sort(list(front_matter_tree(read_front(node.file)).items()), self.path(node))
-        if not items:
-            return ''
-        line = ' · '.join(text for key, value in items if key != 'title' for text in [self.front_text(value)] if text)
-        if not line:
-            return ''
-        kind = ' problem' if problem else ''
-        return (f'<details class="front-matter{kind}"><summary><span>{html.escape(line)}</span></summary>'
-                f'{self.html_map(items)}</details>')
-
-    @classmethod
-    def front_text(cls, value):
-        """Front matter value as one line: its texts joined."""
-        if isinstance(value, dict):
-            value = list(value.values())
-        if isinstance(value, list):
-            return ', '.join(filter(None, map(cls.front_text, value)))
-        return value
-
-    @classmethod
-    def html_map(cls, items):
-        """One table: a nested key beside the key above it, spanning its rows, a list of maps an item after another."""
-        rows = cls.front_rows(dict(items))
-        depth = max(len(keys) for keys, _, _ in rows)
-        spans = {}
-        for keys, _, _ in rows:
-            for node in keys:
-                spans[node] = spans.get(node, 0) + 1
-        html_rows, seen = [], set()
-        for keys, value, item in rows:
-            cells = ''
-            for level, node in enumerate(keys):
-                if node in seen:
-                    continue
-                seen.add(node)
-                rowspan = f' rowspan="{spans[node]}"' if spans[node] > 1 else ''
-                colspan = depth - level if level == len(keys) - 1 and depth - level > 1 else 0
-                colspan = f' colspan="{colspan}"' if colspan else ''
-                cells += f'<th{rowspan}{colspan}>{html.escape(node[1])}</th>'
-            kind = ' class="item"' if item else ''
-            html_rows.append(f'<tr{kind}>{cells}<td>{html.escape(value)}</td></tr>')
-        return f'<table>{"".join(html_rows)}</table>'
-
-    @classmethod
-    def front_rows(cls, value, path=()):
-        """Rows of value as (keys, text, starts list item), keys as (path, key) nodes from the top one."""
-        if isinstance(value, dict) and value:
-            return [((node, *keys), text, item) for key, v in value.items() for node in [((*path, key), key)]
-                    for keys, text, item in cls.front_rows(v, node[0])]
-        if isinstance(value, list) and any(isinstance(v, dict) for v in value):
-            rows = []
-            for n, v in enumerate(value):
-                sub = cls.front_rows(v if isinstance(v, dict) else {'': v}, (*path, n))
-                rows += [(keys, text, item or (n > 0 and i == 0)) for i, (keys, text, item) in enumerate(sub)]
-            return rows
-        return [((), cls.front_text(value) or '', False)]
-
     def path(self, node):
         return os.path.relpath(node.file, self.scanner.path).replace(os.sep, '/')
 
     def data(self, nodes):
-        """What the page filters and counts by: front matter keys listing values in schema order,
-        built pages by anchor with vault path, front matter, words as stats counts them and tokens."""
-        pages = {}
+        """What the page filters, counts and shows beside page titles by: front matter keys listing values
+        in schema order, built pages by anchor with vault path, top level front matter in schema order with
+        nested maps and lists of maps as such, words as stats counts them, tokens and what check reports,
+        backlinks by anchor as anchors of linking pages, with headings links lead to."""
+        pages, backlinks = {}, {}
         for node, body in nodes:
+            links = [[source.anchor, heading] if heading else source.anchor for source, heading in self.backlinks(node)]
+            if links:
+                backlinks[node.anchor] = links
             if not body or node.file is None:
                 continue
-            _, _, text, _ = read_parts(node.file)
-            pages[node.anchor] = {
-                'path': self.path(node),
-                'meta': dict(read_front_matter(node.file)),
+            _, front, text, _ = read_parts(node.file)
+            path = self.path(node)
+            meta = dict(self.schema.sort(front_matter_items(front), path))
+            page = {'path': path, 'meta': meta}
+            nested = {key: value for key, value in front_matter_tree(front).items() if value != meta.get(key)}
+            if nested:
+                page['nested'] = nested
+            _, rest = self.issues_of(node)
+            if any(line > 1 for line, _, _ in rest):
+                page['frontProblem'] = True
+            page.update({
                 'words': Stats.words(text),
                 'tokens': Stats.tokens(text),
                 'problems': len(self.issues.get(os.path.realpath(node.file), [])),
-            }
-        data = {'facets': list(self.schema.facets().items()), 'pages': pages}
+            })
+            pages[node.anchor] = page
+        data = {'facets': list(self.schema.facets().items()), 'pages': pages, 'backlinks': backlinks}
+        if not self.options.front_matter:
+            data['frontMatter'] = False
         return json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
 
     def html(self, title):
@@ -248,13 +191,14 @@ class Builder:
         })
 
     def html_node(self, node, body):
+        """Page as converted, what check reports on it in its header, the page builds backlinks and
+        front matter beside them from the data."""
         converter = self.converter(node)
-        aside = self.html_backlinks(node)
+        aside = ''
         if body:
             text, rest = self.issues_of(node)
             converter.problems = text
-            front = [line for line, _, _ in rest if line > 1]
-            aside = self.html_problems(node, text, rest) + aside + self.html_front_matter(node, bool(front))
+            aside = self.html_problems(node, text, rest)
         return converter.html(body, aside)
 
     def reload_script(self):

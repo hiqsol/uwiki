@@ -72,6 +72,11 @@ def read(path):
         return f.read()
 
 
+def page_data(html):
+    """Data the page filters, counts and builds backlinks and front matter by."""
+    return json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.S)[1])
+
+
 def section(html, id):
     """Returns HTML from page header with given id till next page header."""
     start = html.index(f'id="{id}"')
@@ -88,7 +93,8 @@ class RenderTest(unittest.TestCase):
         assert res.returncode == 0, res.stderr
         cls.html = read(os.path.join(cls.out, 'vault.html'))
         cls.md = read(os.path.join(cls.out, 'vault.md'))
-        cls.content = cls.html[cls.html.index('class="content"'):cls.html.index('<script>')]
+        cls.content = cls.html[cls.html.index('class="content"'):cls.html.index('</main>')]
+        cls.data = page_data(cls.html)
 
     @classmethod
     def tearDownClass(cls):
@@ -111,8 +117,8 @@ class RenderTest(unittest.TestCase):
             self.assertIn(f'id="{id}" class="page"', self.content)
 
     def test_titles(self):
-        self.assertIn('>My Notes<details class="backlinks">', self.content)
-        self.assertIn('>2024 Plans<details class="backlinks">', self.content)
+        self.assertIn('>My Notes</h2>', self.content)
+        self.assertIn('>2024 Plans</h2>', self.content)
         self.assertIn('>R&amp;D &lt;x&gt;</h2>', self.content)
         self.assertIn('<title>vault</title>', self.html)
 
@@ -225,23 +231,19 @@ class RenderTest(unittest.TestCase):
             self.assertIn(f'<a id="{href}"></a>', self.md)
 
     def test_backlinks(self):
-        self.assertIn('data-title="My Page">My Page<details class="backlinks"><summary><b>Backlinks (3):</b>'
-                      '<span>vault, vault › Second Section, My Notes › Second Section</span></summary>'
-                      '<div><a href="#root">vault</a>, <a href="#root">vault › Second Section</a>, '
-                      '<a href="#my-notes">My Notes › Second Section</a></div></details><details class="front-matter">',
-                      self.content)
-        self.assertIn('<details class="backlinks"><summary><b>Backlinks (2):</b><span>vault, My Notes</span>'
-                      '</summary><div><a href="#root">vault</a>, <a href="#my-notes">My Notes</a></div></details>',
-                      section(self.content, '2024-plans'))
+        backlinks = self.data['backlinks']
+        self.assertEqual(backlinks['my-page'], ['root', ['root', 'Second Section'], ['my-notes', 'Second Section']])
+        self.assertEqual(backlinks['2024-plans'], ['root', 'my-notes'])
         self.assertIn('Backlinks: [vault](#root), [My Notes](#my-notes)\n', self.md)
-        self.assertNotIn('backlinks', section(self.content, 'root'))
-        self.assertNotIn('backlinks', section(self.content, 'r-d-x'))
+        self.assertNotIn('root', backlinks)
+        self.assertNotIn('r-d-x', backlinks)
+        self.assertNotIn('backlinks', self.content)  # the page builds them from the data
 
     def test_front_matter_block(self):
-        self.assertIn('</details><details class="front-matter"><summary><span>a, b · ignored</span>'
-                      '</summary><table><tr><th>tags</th><td>a, b</td></tr><tr><th>summary</th><td>ignored</td></tr>'
-                      '</table></details></h2>', self.content)
-        self.assertEqual(self.content.count('class="front-matter"'), 1)
+        self.assertEqual(self.data['pages']['my-page']['meta'], {'tags': ['a', 'b'], 'summary': 'ignored'})
+        self.assertNotIn('nested', self.data['pages']['my-page'])
+        self.assertNotIn('front-matter', self.content)  # the page builds it from the data
+        self.assertNotIn('frontMatter', self.data)
         self.assertNotIn('front-matter', self.md)
 
     def test_front_matter_values(self):
@@ -251,9 +253,8 @@ class RenderTest(unittest.TestCase):
             html = read(os.path.join(out, 'linkcheck.html'))
             res = run('build', VAULT, '--no-front-matter', '-o', out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            self.assertNotIn('<details class="front-matter">', read(os.path.join(out, 'vault.html')))
-        self.assertIn('<summary><span>Folded over lines.</span></summary><table><tr><th>title</th><td>Bee</td></tr>'
-                      '<tr><th>description</th><td>Folded over lines.</td></tr></table>', html)
+            self.assertIs(page_data(read(os.path.join(out, 'vault.html')))['frontMatter'], False)
+        self.assertEqual(page_data(html)['pages']['b']['meta'], {'title': 'Bee', 'description': 'Folded over lines.'})
 
     def test_nested_front_matter_values_are_tables(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -263,21 +264,17 @@ class RenderTest(unittest.TestCase):
             res = run('build', 'wiki', '--html', '-o', 'out/wiki.html', cwd=tmp)
             self.assertEqual(res.returncode, 0, res.stderr)
             html = read(os.path.join(tmp, 'out', 'wiki.html'))
-        self.assertIn('<summary><span>note · bot, 2026-01-02 · Ann, a, b · repo, git, doc</span></summary><table>'
-                      '<tr><th colspan="2">kind</th><td>note</td></tr>'
-                      '<tr><th rowspan="2">generated</th><th>by</th><td>bot</td></tr>'
-                      '<tr><th>at</th><td>2026-01-02</td></tr>'
-                      '<tr><th rowspan="2">owner</th><th>name</th><td>Ann</td></tr>'
-                      '<tr><th>teams</th><td>a, b</td></tr>'
-                      '<tr><th rowspan="3">sources</th><th>id</th><td>repo</td></tr>'
-                      '<tr><th>url</th><td>git</td></tr>'
-                      '<tr class="item"><th>id</th><td>doc</td></tr></table>', html)
+        page = page_data(html)['pages']['page']
+        self.assertEqual(list(page['meta']), ['kind', 'generated', 'owner', 'sources'])
+        self.assertEqual(page['nested'], {'generated': {'by': 'bot', 'at': '2026-01-02'},
+                                          'owner': {'name': 'Ann', 'teams': ['a', 'b']},
+                                          'sources': [{'id': 'repo', 'url': 'git'}, {'id': 'doc'}]})
 
     def test_no_backlinks(self):
         with tempfile.TemporaryDirectory() as out:
             res = run('build', VAULT, '--no-backlinks', '-o', out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            self.assertNotIn('<details class="backlinks">', read(os.path.join(out, 'vault.html')))
+            self.assertEqual(page_data(read(os.path.join(out, 'vault.html')))['backlinks'], {})
             self.assertNotIn('Backlinks', read(os.path.join(out, 'vault.md')))
 
     def src(self, name):
@@ -314,8 +311,8 @@ class MarkdownLinksTest(unittest.TestCase):
         self.assertIn('<a href="#setup">Setup &gt; Setup</a>', root)
 
     def test_title_is_leading_heading_else_name(self):
-        self.assertIn('<h2 id="docs" class="page" data-title="Documentation">Documentation<details class="backlinks">', self.html)
-        self.assertIn('class="page" data-title="Guide"><span class="crumb"><a href="#docs">Documentation</a></span>Guide<details class="backlinks">', self.html)
+        self.assertIn('<h2 id="docs" class="page" data-title="Documentation">Documentation</h2>', self.html)
+        self.assertIn('class="page" data-title="Guide"><span class="crumb"><a href="#docs">Documentation</a></span>Guide</h3>', self.html)
         self.assertIn('<h4 id="guide--first-steps-hi-api">First steps: HiAPI</h4>', self.html)
         self.assertIn('data-title="Broken"><span class="crumb"><a href="#docs">Documentation</a></span>Broken<details class="problems"><summary><b>Problems (', self.html)
         self.assertIn('data-title="Use plain links"><span class="crumb"><a href="#docs">Documentation</a></span>Use plain links</h3>', self.html)
@@ -323,14 +320,11 @@ class MarkdownLinksTest(unittest.TestCase):
         self.assertIn('<a href="#docs">Documentation</a>', section(self.html, 'docs'))
 
     def test_breadcrumbs_show_every_folder(self):
-        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes<details class="backlinks">', self.vault)
+        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>', self.vault)
 
     def test_markdown_links_are_backlinks(self):
-        self.assertIn('<b>Backlinks (5):</b><span>mdlinks, mdlinks › First steps: HiAPI, Documentation, Broken, '
-                      'Broken › First steps: HiAPI</span></summary><div><a href="#root">mdlinks</a>, '
-                      '<a href="#root">mdlinks › First steps: HiAPI</a>, <a href="#docs">Documentation</a>, '
-                      '<a href="#broken">Broken</a>, <a href="#broken">Broken › First steps: HiAPI</a></div>',
-                      section(self.html, 'guide'))
+        self.assertEqual(page_data(self.html)['backlinks']['guide'],
+                         ['root', ['root', 'First steps: HiAPI'], 'docs', 'broken', ['broken', 'First steps: HiAPI']])
 
     def test_external_code_and_unresolved_links_are_kept(self):
         self.assertIn('<a href="https://example.com/a.md">site</a>', self.html)
@@ -423,7 +417,7 @@ class CliTest(unittest.TestCase):
         self.assertIn('id="projects" class="page"', html)
         self.assertIn('Projects folder page', html)
         self.assertIn('Archive readme.', html)
-        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes<details class="backlinks">', html)
+        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>', html)
         self.assertNotIn('Root text.', html)
         self.assertNotIn('id="my-page"', html)
 
@@ -638,9 +632,8 @@ class ConfigTest(unittest.TestCase):
             res = run('build', os.path.join(FIXTURES, 'schema'), '--html', '-o', out)
             self.assertEqual(res.returncode, 0, res.stderr)
             html = read(os.path.join(out, 'schema.html'))
-        self.assertIn('<summary><span>draft · 2024-01-02 · a, b</span></summary><table>'
-                      '<tr><th>status</th><td>draft</td></tr><tr><th>date</th><td>2024-01-02</td></tr>'
-                      '<tr><th>tags</th><td>a, b</td></tr><tr><th>title</th><td>Good: one</td></tr></table>', html)
+        self.assertEqual(list(page_data(html)['pages']['good']['meta'].items()),
+                         [('status', 'draft'), ('date', '2024-01-02'), ('tags', ['a', 'b']), ('title', 'Good: one')])
 
     def test_check_results_in_html(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -659,14 +652,14 @@ class ConfigTest(unittest.TestCase):
                       '<a class="problem" href="#root">2: front matter status: x, expected one of draft</a>'
                       '<a class="problem" href="#problem-root-4">4: unresolved link: [[Gone]]</a>'
                       '<a class="problem" href="#problem-root-7">7: list number 3, expected 2</a></div></details>', root)
-        self.assertIn('<details class="front-matter problem">', root)
+        self.assertIs(page_data(html)['pages']['root']['frontProblem'], True)
         self.assertIn('<p><span class="problem-at problem" id="problem-root-4" title="4: unresolved link: [[Gone]]">'
                       '</span>See', root)
         self.assertIn('<li><span class="problem-at problem" id="problem-root-7" title="7: list number 3, expected 2">'
                       '</span><a class="item-anchor"', root)
         self.assertIn('<details class="problems"><summary><b>Warnings (1):</b><span>not listed in index.md</span>',
                       section(html, 'a'))
-        data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.S)[1])
+        data = page_data(html)
         self.assertEqual({p['path']: p['problems'] for p in data['pages'].values()}, {'index.md': 3, 'A.md': 1})
 
     def test_page_data_for_filter_and_stats(self):
