@@ -8,6 +8,8 @@
     --accent: #7c93ff;
     --accent-bg: rgba(124, 147, 255, 0.14);
     --mark: rgba(255, 196, 0, 0.35);
+    --problem: #ff6b6b;
+    --warning: #e9a23b;
     --sidebar-width: 290px;
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -24,6 +26,8 @@
         --accent: #3b5bdb;
         --accent-bg: rgba(59, 91, 219, 0.1);
         --mark: rgba(255, 196, 0, 0.45);
+        --problem: #d62f2f;
+        --warning: #b8650a;
         color-scheme: light;
     }
 }
@@ -357,8 +361,8 @@ body.resizing {
     font-weight: 500;
     letter-spacing: 0.02em;
 }
-/* backlinks over front matter float right of the header, folded to one line each */
-.content .front-matter, .content .backlinks {
+/* problems over backlinks over front matter float right of the header, folded to one line each */
+.content .front-matter, .content .backlinks, .content .problems {
     float: right;
     clear: right;
     max-width: min(45%, 24rem);
@@ -368,13 +372,13 @@ body.resizing {
     letter-spacing: normal;
     line-height: 1.5;
 }
-.content .backlinks {
+.content .backlinks, .content .problems {
     margin-bottom: 0;
 }
-.content .front-matter[open], .content .backlinks[open] {
+.content .front-matter[open], .content .backlinks[open], .content .problems[open] {
     max-width: min(60%, 32rem);
 }
-.content .front-matter > summary, .content .backlinks > summary {
+.content .front-matter > summary, .content .backlinks > summary, .content .problems > summary {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -384,36 +388,57 @@ body.resizing {
     cursor: pointer;
 }
 .content .front-matter > summary::-webkit-details-marker,
-.content .backlinks > summary::-webkit-details-marker {
+.content .backlinks > summary::-webkit-details-marker,
+.content .problems > summary::-webkit-details-marker {
     display: none;
 }
-.content .front-matter > summary::before, .content .backlinks > summary::before {
+.content .front-matter > summary::before, .content .backlinks > summary::before,
+.content .problems > summary::before {
     content: "▸";
     font-size: 13px;
 }
-.content .front-matter[open] > summary::before, .content .backlinks[open] > summary::before {
+.content .front-matter[open] > summary::before, .content .backlinks[open] > summary::before,
+.content .problems[open] > summary::before {
     content: "▾";
 }
-.content .front-matter > summary > span, .content .backlinks > summary > span {
+.content .front-matter > summary > span, .content .backlinks > summary > span,
+.content .problems > summary > span {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 14px;
 }
-.content .front-matter[open] > summary > span, .content .backlinks[open] > summary > span {
+.content .front-matter[open] > summary > span, .content .backlinks[open] > summary > span,
+.content .problems[open] > summary > span {
     display: none;
 }
-.content .backlinks > summary > b {
+.content .backlinks > summary > b, .content .problems > summary > b {
     flex: none;
     font-size: 14px;
     font-weight: 600;
 }
-.content .backlinks > div {
+.content .backlinks > div, .content .problems > div {
     margin: 2px 0 0;
     padding: 3px 10px;
     font-size: 14px;
     background: var(--bg-alt);
+}
+.content .problems > summary > b, .content .problems a.problem, .content .problem-at.problem::before,
+.content .front-matter.problem > summary {
+    color: var(--problem);
+}
+.content .problems a.warning, .content .problem-at.warning::before {
+    color: var(--warning);
+}
+.content .problems > div > a {
+    display: block;
+}
+.content .problem-at::before {
+    content: "⚠";
+    margin-right: 0.25em;
+    font-size: 0.9em;
+    cursor: help;
 }
 .content .front-matter table {
     margin: 2px 0 0;
@@ -688,13 +713,13 @@ details.callout:not([open]) > summary {
         flex-direction: column;
     }
     .content .front-matter, .content .front-matter[open],
-    .content .backlinks, .content .backlinks[open] {
+    .content .backlinks, .content .backlinks[open], .content .problems, .content .problems[open] {
         float: none;
         order: 1;
         max-width: 100%;
         margin: 4px 0 0;
     }
-    .content .front-matter > summary, .content .backlinks > summary {
+    .content .front-matter > summary, .content .backlinks > summary, .content .problems > summary {
         justify-content: flex-start;
     }
 }

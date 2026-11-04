@@ -286,7 +286,7 @@ class MarkdownLinksTest(unittest.TestCase):
         self.assertIn('<h2 id="docs" class="page" data-title="Documentation">Documentation<details class="backlinks">', self.html)
         self.assertIn('class="page" data-title="Guide">Documentation / Guide<details class="backlinks">', self.html)
         self.assertIn('<h4 id="guide--first-steps-hi-api">First steps: HiAPI</h4>', self.html)
-        self.assertIn('data-title="Broken">Documentation / Broken</h3>', self.html)
+        self.assertIn('data-title="Broken">Documentation / Broken<details class="problems"><summary><b>Problems (', self.html)
         self.assertIn('data-title="Use plain links">Documentation / Use plain links</h3>', self.html)
         self.assertIn('<h4 id="decision--context">Context</h4>', self.html)
         self.assertIn('<a href="#docs">Documentation</a>', section(self.html, 'docs'))
@@ -322,7 +322,7 @@ class ProjectTest(unittest.TestCase):
     def test_readme_is_folder_page_before_index(self):
         self.assertIn('id="root" class="page" data-title="Project">', self.html)
         self.assertIn('id="docs" class="page" data-title="Docs readme">', self.html)
-        self.assertIn('data-title="Docs index">Docs readme / Docs index</h3>', self.html)
+        self.assertIn('data-title="Docs index">Docs readme / Docs index<details class="problems">', self.html)
         self.assertEqual(self.stderr, f'warning: {PROJECT}/docs/index.md: '
                                       'both index.md and README.md in folder, README.md is folder page\n')
 
@@ -586,6 +586,33 @@ class ConfigTest(unittest.TestCase):
         self.assertIn('<summary><span>draft · 2024-01-02 · a, b</span></summary><table>'
                       '<tr><th>status</th><td>draft</td></tr><tr><th>date</th><td>2024-01-02</td></tr>'
                       '<tr><th>tags</th><td>a, b</td></tr><tr><th>title</th><td>Good: one</td></tr></table>', html)
+
+    def test_check_results_in_html(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = os.path.join(tmp, 'wiki')
+            write(os.path.join(vault, 'uwiki.toml'), '[check]\nunlisted = true\n[schema]\nstatus = ["draft"]\n')
+            write(os.path.join(vault, 'index.md'), '---\nstatus: x\n---\nSee [[Gone]].\n\n1. one\n3. three\n'
+                                                   '\n```\n[[InCode]]\n```\n')
+            write(os.path.join(vault, 'A.md'), 'Page A.\n')
+            res = run('build', vault, '-o', os.path.join(tmp, 'Wiki'))
+            self.assertEqual(res.returncode, 0, res.stderr)
+            html = read(os.path.join(tmp, 'Wiki.html'))
+            self.assertNotIn('problem', read(os.path.join(tmp, 'Wiki.md')))
+        root = section(html, 'root')
+        self.assertIn('<details class="problems"><summary><b>Problems (3):</b><span>front matter status: x, expected '
+                      'one of draft, unresolved link: [[Gone]], list number 3, expected 2</span></summary><div>'
+                      '<a class="problem" href="#root">2: front matter status: x, expected one of draft</a>'
+                      '<a class="problem" href="#problem-root-4">4: unresolved link: [[Gone]]</a>'
+                      '<a class="problem" href="#problem-root-7">7: list number 3, expected 2</a></div></details>', root)
+        self.assertIn('<details class="front-matter problem">', root)
+        self.assertIn('<p><span class="problem-at problem" id="problem-root-4" title="4: unresolved link: [[Gone]]">'
+                      '</span>See', root)
+        self.assertIn('<li><span class="problem-at problem" id="problem-root-7" title="7: list number 3, expected 2">'
+                      '</span><a class="item-anchor"', root)
+        self.assertIn('<details class="problems"><summary><b>Warnings (1):</b><span>not listed in index.md</span>',
+                      section(html, 'a'))
+        data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.S)[1])
+        self.assertEqual({p['path']: p['problems'] for p in data['pages'].values()}, {'index.md': 3, 'A.md': 1})
 
     def test_page_data_for_filter_and_stats(self):
         with tempfile.TemporaryDirectory() as out:

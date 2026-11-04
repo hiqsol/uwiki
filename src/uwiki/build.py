@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .check import Checker, CheckOptions
 from .config import Config
 from .convert import Converter
 from .order import Links, Order
@@ -38,7 +39,7 @@ class Builder:
 
     SEP = ' › '
 
-    def __init__(self, selection, outdir='.', options=None, build_id=''):
+    def __init__(self, selection, outdir='.', options=None, build_id='', issues=None):
         self.selection = selection
         self.scanner = selection.scanner
         self.outdir = outdir
@@ -46,6 +47,7 @@ class Builder:
         self.attachment_base = self.options.attachment_base
         self.build_id = build_id
         self.problems = {}
+        self.issues = issues or {}  # real path of page file: [(line, message, warning)] check reports
         self.links = Links(self.scanner)
         self.order = Order(self.scanner, self.links)
         self._backlinks = None
@@ -116,7 +118,42 @@ class Builder:
                  for source, heading in self.backlinks(node)]
         return f'Backlinks: {", ".join(links)}\n\n' if links else ''
 
-    def html_front_matter(self, node):
+    def issues_of(self, node):
+        """What check reports for built page, split: (lines of its text: [(message, warning)], the rest)
+        the rest is of front matter and of the page as a whole."""
+        issues = self.issues.get(os.path.realpath(node.file), []) if node.file else []
+        if not issues:
+            return {}, []
+        try:
+            _, front, _, start = read_parts(node.file)
+        except ValueError:
+            return {}, []  # not UTF-8: the build reports it
+        text, rest = {}, []
+        for line, message, warning in issues:
+            if front and line < start or not front and line == 1 and message.startswith(self.PAGE_ISSUES):
+                rest.append((line, message, warning))
+            else:
+                text.setdefault(line, []).append((message, warning))
+        return text, rest
+
+    PAGE_ISSUES = ('orphan page', 'missing front matter key', 'not listed in')
+
+    def html_problems(self, node, text, rest):
+        """What check reports for the page as folded line of messages unfolding into links to where they are."""
+        issues = sorted([(line, m, w) for line, items in text.items() for m, w in items] + rest)
+        if not issues:
+            return ''
+        links = []
+        for line, message, warning in issues:
+            href = f'problem-{node.anchor}-{line}' if line in text else node.anchor
+            kind = 'warning' if warning else 'problem'
+            links.append(f'<a class="{kind}" href="#{href}">{line}: {html.escape(message)}</a>')
+        label = 'Problems' if any(not w for _, _, w in issues) else 'Warnings'
+        return (f'<details class="problems"><summary><b>{label} ({len(issues)}):</b>'
+                f'<span>{html.escape(", ".join(m for _, m, _ in issues))}</span></summary>'
+                f'<div>{"".join(links)}</div></details>')
+
+    def html_front_matter(self, node, problem=False):
         """Front matter in schema order as folded line of values unfolding into a table of keys and values,
         none for title only."""
         if not self.options.front_matter or node.file is None:
@@ -130,7 +167,8 @@ class Builder:
             return ''
         rows = ''.join(f'<tr><th>{html.escape(key)}</th><td>{html.escape(text(value))}</td></tr>'
                        for key, value in items)
-        return (f'<details class="front-matter"><summary><span>{html.escape(line)}</span></summary>'
+        kind = ' problem' if problem else ''
+        return (f'<details class="front-matter{kind}"><summary><span>{html.escape(line)}</span></summary>'
                 f'<table>{rows}</table></details>')
 
     def path(self, node):
@@ -149,15 +187,14 @@ class Builder:
                 'meta': dict(read_front_matter(node.file)),
                 'words': Stats.words(text),
                 'tokens': Stats.tokens(text),
+                'problems': len(self.issues.get(os.path.realpath(node.file), [])),
             }
         data = {'facets': list(self.schema.facets().items()), 'pages': pages}
         return json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
 
     def html(self, title):
         nodes = list(self.nodes())
-        content = ''.join(
-            self.converter(node).html(body, self.html_backlinks(node) + (self.html_front_matter(node) if body else ''))
-            for node, body in nodes)
+        content = ''.join(self.html_node(node, body) for node, body in nodes)
         return self.render('uwiki.html', {
             'title':    html.escape(title),
             'content':  content,
@@ -165,6 +202,16 @@ class Builder:
             'style':    read_asset('uwiki.css'),
             'script':   read_asset('uwiki.js') + self.reload_script(),
         })
+
+    def html_node(self, node, body):
+        converter = self.converter(node)
+        aside = self.html_backlinks(node)
+        if body:
+            text, rest = self.issues_of(node)
+            converter.problems = text
+            front = [line for line, _, _ in rest if line > 1]
+            aside = self.html_problems(node, text, rest) + aside + self.html_front_matter(node, bool(front))
+        return converter.html(body, aside)
 
     def reload_script(self):
         if not self.options.live_reload:
@@ -190,6 +237,7 @@ class Build:
     def __init__(self, paths, output=None, title=None, html=False, md=False, include=(), exclude=(), options=None):
         self.paths = list(paths)
         self.options = options or BuildOptions()
+        self.include, self.exclude = list(include), list(exclude)
         self.filter = Filter(include, exclude)
         self.outputs, self.title = self.targets(self.paths, output, title, html, md)
         self.selection = None
@@ -233,12 +281,23 @@ class Build:
         self.warnings = [os.path.join(self.selection.shown_root, w) for w in scanner.warnings]
         return self.selection
 
+    def check(self, selection):
+        """What check with the vault config reports for the built pages, by real path of page file."""
+        options = CheckOptions.from_config(Config.load(selection.scanner.path))
+        checker = Checker(self.paths, self.include, self.exclude, options)
+        try:
+            checker.check()
+        except (OSError, ValueError):
+            return {}  # the build reports it
+        return checker.issues
+
     def run(self):
         """Scans vault, renders and writes outputs; returns problems instead of writing if any."""
         selection = self.scan()
         outdir = os.path.dirname(os.path.abspath(next(iter(self.outputs.values()))))
         build_id = str(time.time_ns())
-        builder = Builder(selection, outdir, self.options, build_id)
+        issues = self.check(selection) if 'html' in self.outputs else {}
+        builder = Builder(selection, outdir, self.options, build_id, issues)
         texts = {kind: builder.html(self.title) if kind == 'html' else builder.md() for kind in self.outputs}
         if builder.problems:
             return list(builder.problems)

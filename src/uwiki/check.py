@@ -2,7 +2,7 @@
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -23,6 +23,18 @@ class CheckOptions:
     mentions_ignore_case: bool = False
     mentions_every: bool = False
     mentions_self_bold: bool = False
+
+    @classmethod
+    def from_config(cls, config):
+        """Options of config `check` table and top level, as `check` takes them."""
+        values = config.options('check', ())
+        res = {}
+        for field in fields(cls):
+            key = field.name.replace('_', '-')
+            if key in values:
+                value = values[key]
+                res[field.name] = tuple(value) if isinstance(field.default, tuple) else value
+        return cls(**res)
 
 class CheckConverter(Converter):
     """Converts page like renderer does, reports what would render broken."""
@@ -135,6 +147,7 @@ class Checker:
         self.options = options or CheckOptions()
         self.problems = []
         self.warnings = []
+        self.issues = {}  # real path of page file: [(line, message, warning)]
         self.links = {}  # scanner: links of its pages
         self.checked = {}  # checked page: (scanner, path to show)
         self.schemas = {}  # scanner: front matter schema of its vault config
@@ -151,6 +164,15 @@ class Checker:
             self.check_mentions()
         return self.problems
 
+    def add(self, page, shown, line, message, warning=False):
+        """Reports problem or warning of page as `path:line: message`, keeps it by page file too."""
+        if warning:
+            self.warnings.append(f'{shown}:{line}: warning: {message}')
+        else:
+            self.problems.append(f'{shown}:{line}: {message}')
+        file = page.file or page.source.fullpath
+        self.issues.setdefault(os.path.realpath(file), []).append((line, message, warning))
+
     def check_mentions(self):
         """Warns about plain text mentions of another page title or alias: the first one of a page the page does not
         link, or every one with mentions_every."""
@@ -163,13 +185,13 @@ class Checker:
             seen = set()
             for mention in mentions[scanner].find(page, own=self.options.mentions_self_bold):
                 if mention.own:
-                    self.warnings.append(f'{shown}:{mention.line + 1}: warning: own term not bold: {mention.text}')
+                    self.add(page, shown, mention.line + 1, f'own term not bold: {mention.text}', True)
                     continue
                 if mention.node in linked or mention.node in seen:
                     continue
                 if not self.options.mentions_every:
                     seen.add(mention.node)
-                self.warnings.append(f'{shown}:{mention.line + 1}: warning: unlinked mention: {mention.text}')
+                self.add(page, shown, mention.line + 1, f'unlinked mention: {mention.text}', True)
 
     def check_unlisted(self):
         """Warns about pages and folders their folder page does not link, as contents should."""
@@ -178,7 +200,7 @@ class Checker:
             if folder is None or folder.page is None or page is scanner.root:
                 continue
             if page not in self.targets(scanner, folder):
-                self.warnings.append(f'{shown}:1: warning: not listed in {folder.page.name}.md')
+                self.add(page, shown, 1, f'not listed in {folder.page.name}.md', True)
 
     def vault_links(self, scanner):
         if scanner not in self.links:
@@ -197,7 +219,7 @@ class Checker:
                 vaults[scanner] = self.vault_links(scanner).orphans()
             reason = vaults[scanner].get(page)
             if reason:
-                self.problems.append(f'{shown}:1: orphan page: {reason}')
+                self.add(page, shown, 1, f'orphan page: {reason}')
 
     def schema(self, scanner):
         if scanner not in self.schemas:
@@ -233,7 +255,7 @@ class Checker:
                     report(self.key_line(front, key), f'alias {alias}: also alias of {show(other)}')
 
     def check_file(self, scanner, page, shown):
-        report = lambda line, msg: self.problems.append(f'{shown}:{line}: {msg}')
+        report = lambda line, msg: self.add(page, shown, line, msg)
         source = page.source
         try:
             text, front, _, _ = read_parts(source.fullpath)

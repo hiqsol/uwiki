@@ -24,6 +24,8 @@ class Converter:
     LIST_BREAK = re.compile(r'^(?:[-*+] |>|#{1,6}\s)')
     ITEM = re.compile(r'\d+(?:\.\d+)*')
     BOLD = re.compile(r'\*\*([^*\n]+?)\*\*')
+    BLOCK_PREFIX = re.compile(r'^[ \t]*(?:>[ \t]?)*(?:(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)?(?:#{1,6}[ \t]+)?'
+                              r'(?:\|[ \t]*)?')
     IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.avif'}
     FRONT_MATTER = FRONT_MATTER
 
@@ -41,6 +43,7 @@ class Converter:
         self._title = ''
         self.shift = 0
         self.item_lines = {}  # line number: (number path, sections whose first list it is in)
+        self.problems = {}  # line number: [(message, warning)] check reports, marked in HTML at their line
 
     def read(self):
         node = self.page.source
@@ -239,8 +242,23 @@ class Converter:
                        and lines[i].strip() and not self.BLOCK_START.match(lines[i])):
                     line += lines[i]
                     i += 1
-                res += self.process_line(line)
+                res += self.mark_problems(self.process_line(line), self.line, line.count('\n') or 1)
         return res
+
+    def mark_problems(self, text, start, count):
+        """Text with a marker of problems of its lines after its block prefix, as list item or heading."""
+        lines = [n for n in range(start, start + count) if n in self.problems]
+        if not lines or self.mode != 'html' or not text.strip():
+            return text
+        markers = ''.join(self.problem_marker(n) for n in lines)
+        at = self.BLOCK_PREFIX.match(text).end()
+        return text[:at] + markers + text[at:]
+
+    def problem_marker(self, line):
+        warning = all(w for _, w in self.problems[line])
+        title = html.escape('\n'.join(f'{line}: {m}' for m, _ in self.problems[line]))
+        kind = 'warning' if warning else 'problem'
+        return f'<span class="problem-at {kind}" id="problem-{self.page.anchor}-{line}" title="{title}"></span>'
 
     @classmethod
     def open_bracket(cls, text):

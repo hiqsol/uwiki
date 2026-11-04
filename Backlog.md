@@ -28,13 +28,6 @@ Done when "links resolve the same way in every command" is said once.
 The one page HTML is a lightweight, fast IDE for humans reading a wiki that is the source others,
 agents too, program in, commenting comes later. Everything below runs in the page, no build options.
 
-## Check results in HTML
-
-`build` embeds what `check` with the vault config reports for built pages, without failing on it.
-A page header gets a `Problems 2` block like backlinks, the issue marked where it is: link, list item, front matter,
-filter `is:problem` shows pages having any, the stats line counts them.
-Done when every issue `uwiki check` reports for a built page shows in its page and `is:problem` lists them.
-
 ## check: scope layers
 
 `[check] layers.scope = ["core", "duel", "advanced"]` makes values of a front matter key layers:

@@ -215,7 +215,7 @@
   // text of the range without parts added by build, as "Backlinks"
   function textOf(range) {
     var frag = range.cloneContents();
-    frag.querySelectorAll(".backlinks").forEach(function (el) { el.remove(); });
+    frag.querySelectorAll(".backlinks, .problems").forEach(function (el) { el.remove(); });
     return frag.textContent;
   }
 
@@ -329,6 +329,10 @@
       var page = !a.classList.contains("item-anchor") && target(a);
       if (page) add(a, page);
     });
+    content.querySelectorAll(".problems a").forEach(function (a) {
+      var id = decodeURIComponent(a.getAttribute("href").slice(1));
+      if (!document.getElementById(id)) a.setAttribute("href", "#" + id.replace(/^problem-(.*)-\d+$/, "$1"));
+    });
     content.querySelectorAll(".backlinks").forEach(function (block) {
       var line = block.querySelector(":scope > summary > span");
       var links = block.querySelectorAll(":scope > div > a");
@@ -433,7 +437,7 @@
 
   function problemMatcher(value) {
     var hit = "problem".startsWith(value) || "problems".startsWith(value);
-    return function (node) { return hit && !!(node.info.problems && node.info.problems.length); };
+    return function (node) { return hit && node.info.problems > 0; };
   }
 
   // section index: count of words or phrase in it
@@ -593,7 +597,7 @@
     var sum = function (list, key) { return list.reduce(function (a, n) { return a + (n.info[key] || 0); }, 0); };
     var cols = [["pages", matched.length, all.length], ["words", sum(matched, "words"), sum(all, "words")],
                 ["tokens", sum(matched, "tokens"), sum(all, "tokens")]];
-    var problems = sum(matched, "problemCount");
+    var problems = sum(matched, "problems");
     stats.textContent = cols.map(function (c) {
       return (filtering ? short(c[1]) + "/" : "") + short(c[2]) + " " + c[0];
     }).join(" · ") + (problems ? " · " + problems + " problems" : "");
@@ -713,7 +717,7 @@
       walker.currentNode = s.head;
       while (walker.nextNode() && range.intersectsNode(walker.currentNode)) {
         var parent = walker.currentNode.parentNode;
-        if (!parent.closest(".backlinks, .front-matter, .crumb, .item-anchor")) texts.push(walker.currentNode);
+        if (!parent.closest(".backlinks, .problems, .front-matter, .crumb, .item-anchor")) texts.push(walker.currentNode);
       }
       texts.forEach(function (node) {
         var frag = markUp(node.data, hitWords, phrases);
@@ -928,7 +932,7 @@
     for (var n = target.nextElementSibling; n; n = n.nextElementSibling) {
       if (n.classList.contains("page")) break;
       if (!page && /^H[1-6]$/.test(n.tagName) && +n.tagName[1] <= level) break;
-      if (!n.classList.contains("backlinks")) nodes.push(n);
+      if (!n.classList.contains("backlinks") && !n.classList.contains("problems")) nodes.push(n);
     }
     return nodes;
   }
