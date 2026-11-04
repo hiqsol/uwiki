@@ -708,6 +708,45 @@ class ConfigTest(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertEqual(self.check('wiki', '--max-lines', '0', cwd=tmp)[:2], (0, []))
 
+    def test_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'),
+                  '[index.pages]\nline = "* [{stem}]({path}) - {description}"\nexclude = ["wiki/log.md"]\n'
+                  '[index.adrs]\nline = "* [{stem}]({path}) — {date}, {status}. {description}"\n'
+                  'sort = "-date"\nempty = "None yet."\n')
+            write(os.path.join(tmp, 'wiki', 'index.md'), '# Wiki\n\n<!-- generated: pages -->\n'
+                  '* [b](b.md) - old\n* [gone](gone.md) - deleted\n* [sub/](sub/index.md) - by hand\n'
+                  '<!-- /generated -->\n\nProse.\n')
+            write(os.path.join(tmp, 'wiki', 'b.md'), '---\ndescription: >\n  Bee\n  page.\n---\nB.\n')
+            write(os.path.join(tmp, 'wiki', 'a.md'), '---\ndescription: Ay.\n---\nA.\n')
+            write(os.path.join(tmp, 'wiki', 'log.md'), 'Log.\n')
+            write(os.path.join(tmp, 'wiki', 'sub', 'index.md'), '<!-- generated: pages -->\n<!-- /generated -->\n')
+            write(os.path.join(tmp, 'wiki', 'adr', 'index.md'), '<!-- generated: adrs -->\n<!-- /generated -->\n')
+            res = run('index', 'wiki', '--check', cwd=tmp)
+            self.assertEqual(res.returncode, 1)
+            self.assertEqual(res.stdout.splitlines(), [
+                'wiki/adr/index.md:2: index out of date, rerun without --check', '  +None yet.',
+                'wiki/index.md:4: index out of date, rerun without --check',
+                '  -* [b](b.md) - old', '  -* [gone](gone.md) - deleted',
+                '  +* [b](b.md) - Bee page.', '  +* [a](a.md) - Ay.'], res.stderr)
+            res = run('index', 'wiki', cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), ['updated wiki/adr/index.md', 'updated wiki/index.md'])
+            self.assertEqual(read(os.path.join(tmp, 'wiki', 'index.md')), '# Wiki\n\n<!-- generated: pages -->\n'
+                             '* [b](b.md) - Bee page.\n* [a](a.md) - Ay.\n* [sub/](sub/index.md) - by hand\n'
+                             '<!-- /generated -->\n\nProse.\n')
+            write(os.path.join(tmp, 'wiki', 'adr', 'x.md'), '---\ndate: 2026-01-01\nstatus: draft\ndescription: X.\n---\n')
+            write(os.path.join(tmp, 'wiki', 'adr', 'y.md'), '---\ndate: 2026-02-01\nstatus: stable\ndescription: Y.\n---\n')
+            write(os.path.join(tmp, 'wiki', 'adr', 'z.md'), '---\ndate: 2026-02-01\ndescription: Z.\n---\n')
+            res = run('index', 'wiki', cwd=tmp)
+            self.assertEqual((res.returncode, res.stdout), (1, 'wiki/adr/index.md: z.md: no front matter status for '
+                                                               'its index line\n'))
+            write(os.path.join(tmp, 'wiki', 'adr', 'z.md'), '---\ndate: 2026-02-01\nstatus: draft\ndescription: Z.\n---\n')
+            self.assertEqual(run('index', 'wiki', cwd=tmp).returncode, 0)
+            self.assertEqual(read(os.path.join(tmp, 'wiki', 'adr', 'index.md')), '<!-- generated: adrs -->\n'
+                             '* [y](y.md) — 2026-02-01, stable. Y.\n* [z](z.md) — 2026-02-01, draft. Z.\n'
+                             '* [x](x.md) — 2026-01-01, draft. X.\n<!-- /generated -->\n')
+            self.assertEqual(run('index', 'wiki', '--check', cwd=tmp).returncode, 0)
+
     def test_pyproject_and_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(os.path.join(tmp, 'Page.md'), '---\ntitle: x\n---\nText.\n')

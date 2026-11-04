@@ -11,6 +11,7 @@ from . import __version__
 from .build import Build, BuildOptions, UsageError
 from .check import Checker, CheckOptions
 from .config import Config, ConfigError
+from .index import Index
 from .lsp import Server
 from .llms import Llms
 from .ls import Listing
@@ -135,6 +136,18 @@ def llms(args):
         return report([] if current == text else [f'{output}: out of date, rerun without --check'])
     with open(output, 'w', encoding='utf-8') as f:
         f.write(text)
+
+def index(args):
+    index = Index(args.paths, args.include, args.exclude)
+    changes = index.changes()
+    if index.problems:
+        return report(index.problems)
+    if args.check:
+        return report([line for change in changes for line in Index.diff(*change)])
+    for shown, _, text in changes:
+        with open(shown, 'w', encoding='utf-8') as f:
+            f.write(text)
+        print(f'updated {shown}')
 
 def ls(args):
     listing = Listing(args.paths, args.include, args.exclude)
@@ -263,6 +276,13 @@ def parser():
     add_filter(p)
     p.set_defaults(func=llms)
 
+    p = command(commands, 'index', 'fill <!-- generated: NAME --> blocks of pages with the other pages of their folder',
+                f'[--check] {FILTER_USAGE}')
+    add_paths(p, 'folders or files with blocks to fill')
+    p.add_argument('--check', action='store_true', help='report blocks out of date instead, exit 1 if any')
+    add_filter(p)
+    p.set_defaults(func=index)
+
     p = command(commands, 'ls', 'list markdown files, or external links in them, one per line',
                 f'[--external] [-z] {FILTER_USAGE}')
     add_paths(p, 'folders or files to list')
@@ -315,7 +335,7 @@ def config_defaults(top, args):
     known = {a.dest for sub in top.commands.values() for a in sub._actions}
     res = {}
     for key, value in config.options(args.command, TAKES.get(args.command, ())).items():
-        if key in CONFIG_ONLY:
+        if key in CONFIG_ONLY or isinstance(value, dict):  # a table in a command table configures more than options
             continue
         name = key.replace('-', '_')
         if name in dests:

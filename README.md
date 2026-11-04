@@ -44,6 +44,7 @@ uwiki serve  <paths> [watch options] [-p 8000] [--host 127.0.0.1] [--open]
 uwiki check  <paths> [--orphans] [--unlisted] [--mentions] [--no-folder-links] [--max-lines N]
 uwiki link   <paths> [--dry-run] [-w 70]
 uwiki llms   <paths> [-o FILE] [--title TITLE] [--check]
+uwiki index  <paths> [--check]
 uwiki ls     <paths> [--external] [-z]
 uwiki stats  <paths> [--by folder|KEY] [--top N] [--json]
 uwiki wrap   <paths> [-w 70] [--check]
@@ -62,6 +63,9 @@ uwiki lsp
   and plain text mentions of page titles, `--max-lines` reports longer pages
 - `link` links the plain text mentions `check --mentions-every` warns about: `[[Star]]s`
 - `llms` writes [llms.txt](https://llmstxt.org): a section per folder of `- [title](path): description`
+- `index` fills `<!-- generated: NAME -->` ... `<!-- /generated -->` blocks of pages
+  with the other pages of their folder, `- [title](path): description` each,
+  keeping their order and the lines linking subfolders, `--check` reports blocks out of date
 - `ls` lists the files commands take, `--external` external links, for other tools:
   `uwiki ls -z docs | xargs -0 typos`, `uwiki ls --external docs | lychee -`
 - `stats` counts pages, words, lines, headings, items, links and images by folder or front matter key
@@ -95,6 +99,12 @@ mentions-ignore = ["Go"]
 max-lines = 1500                          # a page an agent reads in one go
 max-lines-ignore = ["log.md"]             # globs from the config folder
 layers.scope = ["core", "duel", "advanced"]
+
+[index.adrs]                              # <!-- generated: adrs --> blocks
+line = "* [{title}]({path}), {date}: {description}"   # {front matter key}, {title}, {stem}, {path}
+sort = "-date"                            # by key, descending; else lines keep their order
+empty = "None yet."
+exclude = ["log.md"]
 
 [schema]                                  # keys in the order HTML shows them
 _required = ["status"]
