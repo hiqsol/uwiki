@@ -132,6 +132,18 @@ class RenderTest(unittest.TestCase):
         self.assertIn('h2.page', js)
         self.assertNotIn('console.log', js)
 
+    def test_code_is_highlighted_and_diagrams_drawn_near_window_by_pinned_cdn_libraries(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', EXTERNAL, '--html', '-o', out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            html = read(os.path.join(out, 'external.html'))
+        self.assertIn('<pre><code class="language-sh">', html)
+        self.assertNotIn('<script src=', html)
+        js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
+        self.assertIn('new IntersectionObserver', js)
+        self.assertRegex(js, r'/prism/\d+\.\d+\.\d+/')
+        self.assertRegex(js, r'/mermaid@\d+\.\d+\.\d+/')
+
     def test_previews_clone_page_for_mouse_only(self):
         js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
         self.assertIn('cloneNode(true)', js)

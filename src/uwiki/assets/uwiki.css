@@ -10,6 +10,12 @@
     --mark: rgba(255, 196, 0, 0.35);
     --problem: #ff6b6b;
     --warning: #e9a23b;
+    --code-keyword: #c792ea;
+    --code-string: #a5d38a;
+    --code-number: #e8a46a;
+    --code-function: #78b6f0;
+    --code-type: #e5c07b;
+    --code-name: #ef7f86;
     --sidebar-width: 290px;
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -28,6 +34,12 @@
         --mark: rgba(255, 196, 0, 0.45);
         --problem: #d62f2f;
         --warning: #b8650a;
+        --code-keyword: #9c27a8;
+        --code-string: #3a7d34;
+        --code-number: #a35d00;
+        --code-function: #2f5fc4;
+        --code-type: #86600a;
+        --code-name: #c0392b;
         color-scheme: light;
     }
 }
@@ -528,6 +540,45 @@ body.resizing {
 .content pre code {
     padding: 0;
     background: none;
+}
+/* Prism tokens */
+.content .token.comment, .content .token.prolog, .content .token.doctype, .content .token.cdata {
+    color: var(--fg-muted);
+    font-style: italic;
+}
+.content .token.keyword, .content .token.atrule, .content .token.selector, .content .token.important {
+    color: var(--code-keyword);
+}
+.content .token.string, .content .token.char, .content .token.attr-value, .content .token.regex,
+.content .token.url, .content .token.inserted {
+    color: var(--code-string);
+}
+.content .token.number, .content .token.boolean, .content .token.constant, .content .token.symbol {
+    color: var(--code-number);
+}
+.content .token.function {
+    color: var(--code-function);
+}
+.content .token.class-name, .content .token.builtin {
+    color: var(--code-type);
+}
+.content .token.property, .content .token.tag, .content .token.attr-name, .content .token.variable,
+.content .token.key, .content .token.deleted {
+    color: var(--code-name);
+}
+.content .token.punctuation, .content .token.operator {
+    color: var(--fg-muted);
+}
+.content .token.bold {
+    font-weight: bold;
+}
+.content .token.italic {
+    font-style: italic;
+}
+.content .mermaid {
+    margin: 0 0 1em;
+    overflow-x: auto;
+    text-align: center;
 }
 /* box drawing glyphs span the font's own line height, pre is sized as its code to keep lines no taller */
 .content pre.box-drawing {

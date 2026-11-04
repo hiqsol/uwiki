@@ -720,7 +720,9 @@
       walker.currentNode = s.head;
       while (walker.nextNode() && range.intersectsNode(walker.currentNode)) {
         var parent = walker.currentNode.parentNode;
-        if (!parent.closest(".backlinks, .problems, .front-matter, .crumb, .item-anchor")) texts.push(walker.currentNode);
+        if (!parent.closest(".backlinks, .problems, .front-matter, .crumb, .item-anchor, .mermaid")) {
+          texts.push(walker.currentNode);
+        }
       }
       texts.forEach(function (node) {
         var frag = markUp(node.data, hitWords, phrases);
@@ -763,6 +765,7 @@
       parent.replaceChild(document.createTextNode(mark.textContent), mark);
       parent.normalize();
     });
+    renderMarked();
   }
 
   // next or previous mark from the last one gone to, else from the top of the window;
@@ -918,9 +921,11 @@
       var copy = node.cloneNode(true);
       copy.removeAttribute("id");
       copy.hidden = false;
-      copy.querySelectorAll("[id]").forEach(function (n) { n.removeAttribute("id"); });
+      // a diagram's styles and arrows refer to ids in its svg
+      copy.querySelectorAll("[id]:not(svg, svg *)").forEach(function (n) { n.removeAttribute("id"); });
       body.appendChild(copy);
     });
+    codeBlocks(body).forEach(renderCode);
     el.appendChild(body);
     document.body.appendChild(el);
     if (el.scrollHeight > el.clientHeight + 1) el.classList.add("long");
@@ -1002,6 +1007,105 @@
       clearTimeout(p.timer);
       p.el.remove();
     }
+  }
+
+  // code blocks are highlighted and mermaid diagrams drawn as they near the window, by libraries loaded
+  // from CDNs on first need; offline they stay as written
+
+  var PRISM = "https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/";
+  var MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@12.2.0/dist/mermaid.esm.min.mjs";
+  var PLAIN = /^(text|txt|plain|plaintext)$/;
+  var codeObserver = null;
+  var prism = null, mermaid = null;  // promises of loaded libraries
+  var marked = [];  // blocks that came near with search marks in them, rendering would drop the marks
+  var diagrams = 0;
+
+  function bindCode() {
+    if (!("IntersectionObserver" in window)) return;
+    codeObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        codeObserver.unobserve(e.target);
+        renderCode(e.target);
+      });
+    }, { rootMargin: "400px 0px" });
+    codeBlocks(content).forEach(function (pre) { codeObserver.observe(pre); });
+  }
+
+  function codeBlocks(root) {
+    return Array.prototype.filter.call(root.querySelectorAll("pre:not([data-rendered])"), function (pre) {
+      var lang = langOf(pre);
+      return lang && !PLAIN.test(lang);
+    });
+  }
+
+  function langOf(pre) {
+    var code = pre.querySelector(":scope > code");
+    var m = code && /(?:^|\s)language-(\S+)/.exec(code.className);
+    return m ? m[1] : "";
+  }
+
+  function renderCode(pre) {
+    if (pre.querySelector("mark.hit")) {
+      marked.push(pre);
+      return;
+    }
+    pre.dataset.rendered = "";
+    if (langOf(pre) === "mermaid") draw(pre);
+    else highlight(pre.firstElementChild);
+  }
+
+  function renderMarked() {
+    if (codeObserver) marked.splice(0).forEach(function (pre) { codeObserver.observe(pre); });
+  }
+
+  function highlight(code) {
+    loadPrism().then(function (Prism) { Prism.highlightElement(code); }, function () {});
+  }
+
+  function loadPrism() {
+    if (!prism) {
+      window.Prism = { manual: true };
+      prism = loadScript(PRISM + "components/prism-core.min.js").then(function () {
+        return loadScript(PRISM + "plugins/autoloader/prism-autoloader.min.js");
+      }).then(function () {
+        window.Prism.plugins.autoloader.languages_path = PRISM + "components/";
+        return window.Prism;
+      });
+    }
+    return prism;
+  }
+
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function draw(pre) {
+    loadMermaid().then(function (m) {
+      return m.render("mermaid-" + ++diagrams, pre.textContent);
+    }).then(function (out) {
+      var div = document.createElement("div");
+      div.className = "mermaid";
+      div.innerHTML = out.svg;
+      pre.replaceWith(div);
+    }, function () {});
+  }
+
+  function loadMermaid() {
+    if (!mermaid) {
+      mermaid = import(MERMAID).then(function (mod) {
+        var light = window.matchMedia("(prefers-color-scheme: light)").matches;
+        mod.default.initialize({ startOnLoad: false, theme: light ? "default" : "dark" });
+        return mod.default;
+      });
+    }
+    return mermaid;
   }
 
   // numbered list items show their number on hover, a click copies the link to the item
@@ -1119,6 +1223,7 @@
   bindEvents();
   bindPreviews();
   bindItems();
+  bindCode();
   restoreQuery();
   spy();
 })();

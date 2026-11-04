@@ -133,6 +133,8 @@ One self-contained file, light or dark by system preference, works from `file://
   the box goes to the URL as `?q=`
 - chips of `[schema]` values with page counts, a click adds or removes one
 - pages, words and tokens shown out of all
+- code blocks highlighted by Prism and `mermaid` blocks drawn as they near the window, the libraries
+  loaded from CDNs on first need; offline, code stays plain
 
 ## Development
 
