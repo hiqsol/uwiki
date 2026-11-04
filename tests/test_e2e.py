@@ -3,6 +3,8 @@
 Run with: make test (needs the markdown package)
 """
 
+import contextlib
+import io
 import json
 import os
 import queue
@@ -31,7 +33,34 @@ ORDER = os.path.join(FIXTURES, 'order')
 ITEMS = os.path.join(FIXTURES, 'items')
 
 
+sys.path.insert(0, SRC)
+from uwiki import cli  # noqa: E402
+
+
 def run(*args, cwd=None):
+    """Runs uwiki command in this process, its exit code and output as of a subprocess."""
+    out, err = io.StringIO(), io.StringIO()
+    old = os.getcwd(), sys.argv
+    sys.argv = ['uwiki', *args]
+    try:
+        if cwd:
+            os.chdir(cwd)
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                cli.main()
+                code = 0
+            except SystemExit as e:
+                code = e.code
+        if isinstance(code, str):
+            err.write(code + '\n')
+            code = 1
+    finally:
+        os.chdir(old[0])
+        sys.argv = old[1]
+    return subprocess.CompletedProcess(args, code or 0, out.getvalue(), err.getvalue())
+
+
+def run_process(*args, cwd=None):
     return subprocess.run(
         [sys.executable, '-m', 'uwiki', *args],
         cwd=cwd, capture_output=True, text=True, env={**os.environ, 'PYTHONPATH': SRC},
@@ -419,14 +448,19 @@ class CliTest(unittest.TestCase):
 
 class CheckTest(unittest.TestCase):
     def check(self, *paths):
-        # hide markdown package: checking must work without it
+        res = run('check', *paths, cwd=FIXTURES)
+        return res.returncode, res.stdout.splitlines(), res.stderr
+
+    def test_runs_without_markdown_package(self):
+        """The one subprocess test of a command: checking needs no markdown package."""
         code = (
             f'import sys, runpy; sys.modules["markdown"] = None; sys.path.insert(0, {SRC!r}); '
-            f'sys.argv = {["uwiki", "check", *paths]!r}; '
+            'sys.argv = ["uwiki", "check", "vault", "broken"]; '
             'runpy.run_module("uwiki", run_name="__main__")'
         )
         res = subprocess.run([sys.executable, '-c', code], cwd=FIXTURES, capture_output=True, text=True)
-        return res.returncode, res.stdout.splitlines(), res.stderr
+        self.assertEqual(res.returncode, 1, res.stderr)
+        self.assertEqual(res.stdout.splitlines(), self.check('vault', 'broken')[1])
 
     def test_vault(self):
         code, lines, err = self.check('vault')
@@ -863,6 +897,14 @@ def write(path, text, mode='w'):
         f.write(text)
 
 
+def wait_for(condition, timeout=5):
+    end = time.monotonic() + timeout
+    while not condition():
+        if time.monotonic() > end:
+            raise AssertionError('timed out waiting')
+        time.sleep(0.02)
+
+
 class Background:
     """uwiki command running in background, its output lines read with a timeout."""
 
@@ -874,14 +916,6 @@ class Background:
 
     def line(self, timeout=5):
         return self.lines.get(timeout=timeout).rstrip('\n')
-
-    def quiet(self, seconds):
-        """Lines printed within given seconds."""
-        time.sleep(seconds)
-        res = []
-        while not self.lines.empty():
-            res.append(self.lines.get().rstrip('\n'))
-        return res
 
     def stop(self):
         self.proc.terminate()
@@ -907,9 +941,8 @@ class WatchTest(unittest.TestCase):
             write(os.path.join(self.vault, 'B.md'), 'Page B.\n')
             write(os.path.join(self.vault, 'attachments', 'pic.png'), 'png')
             self.assertIn('built 3 pages', watch.line())
-            self.assertEqual(watch.quiet(0.6), [])
             write(os.path.join(self.vault, 'A.md'), b'\xff\xfe broken', 'wb')
-            self.assertIn('error: Error reading', watch.line())
+            self.assertIn('error: Error reading', watch.line())  # no second build of changes close together
             self.assertIn('build failed, last good output stays', watch.line())
             self.assertIn('Page A.', read(self.out))
             os.rename(os.path.join(self.vault, 'A.md'), os.path.join(self.vault, 'C.md'))
@@ -922,11 +955,13 @@ class WatchTest(unittest.TestCase):
     def test_quiet_prints_errors_only(self):
         watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1', '-q')
         try:
-            time.sleep(0.5)
-            self.assertTrue(os.path.exists(self.out))
+            wait_for(lambda: os.path.exists(self.out))
             write(os.path.join(self.vault, 'A.md'), b'\xff', 'wb')
             self.assertIn('error: Error reading', watch.line())
-            self.assertEqual(watch.quiet(0.5), [])
+            write(os.path.join(self.vault, 'A.md'), 'Page A again.\n')
+            wait_for(lambda: 'Page A again.' in read(self.out))
+            write(os.path.join(self.vault, 'A.md'), b'\xfe', 'wb')
+            self.assertIn('error: Error reading', watch.line())  # neither "build failed" nor "built" before it
         finally:
             watch.stop()
 

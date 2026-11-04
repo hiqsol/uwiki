@@ -4,12 +4,6 @@ Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
 Dependencies stay `markdown` only: watching, serving and previews use the standard library and plain JS.
 
-## In-process tests
-
-Tests call `cli.main()` in the test process, patching `sys.argv` and capturing output and exit code,
-one subprocess smoke test stays, watch and serve tests wait on output lines instead of fixed sleeps.
-Done when the suite runs in under 5 seconds, now 17.
-
 ## Page parsed once
 
 A page is parsed once into a cached record: front matter items with their lines, malformed and unclosed

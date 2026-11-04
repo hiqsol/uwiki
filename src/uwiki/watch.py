@@ -9,8 +9,8 @@ from .vault import Scanner
 class Watcher:
     """Builds once, then again on change of any file the vault takes: pages and attachments.
 
-    Changes within `DEBOUNCE` seconds of each other make one build, a failed build keeps
-    the last good output and watching goes on.
+    Changes within `DEBOUNCE` seconds of each other, or the interval when shorter, make one build,
+    a failed build keeps the last good output and watching goes on.
     """
 
     DEBOUNCE = 0.3
@@ -72,7 +72,7 @@ class Watcher:
             if current != last:
                 break
         while True:
-            time.sleep(self.DEBOUNCE)
+            time.sleep(min(self.DEBOUNCE, self.interval))
             settled = self.snapshot()
             if settled == current:
                 return current
