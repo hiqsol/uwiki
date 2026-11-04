@@ -4,6 +4,8 @@
     --bg-code: #1e222b;
     --fg: #e3e5ea;
     --fg-muted: #8b919e;
+    --fg-nav: #dadde4;
+    --code-inline: #f28b82;
     --border: #2c313c;
     --accent: #7c93ff;
     --accent-bg: rgba(124, 147, 255, 0.14);
@@ -28,6 +30,8 @@
         --bg-code: #eff1f4;
         --fg: #1f2329;
         --fg-muted: #68707d;
+        --fg-nav: #2a2f37;
+        --code-inline: #c7254e;
         --border: #dde1e7;
         --accent: #3b5bdb;
         --accent-bg: rgba(59, 91, 219, 0.1);
@@ -170,7 +174,7 @@ a:hover {
     border: 1px solid var(--border);
     border-radius: 10px;
     background: none;
-    color: var(--fg-muted);
+    color: var(--fg-nav);
     font: inherit;
     cursor: pointer;
 }
@@ -223,7 +227,7 @@ a:hover {
     display: block;
     padding: 3px 8px 3px 20px;
     border-radius: 5px;
-    color: var(--fg-muted);
+    color: var(--fg-nav);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -526,8 +530,12 @@ body.resizing {
     padding: 0.1em 0.35em;
     border-radius: 4px;
     background: var(--bg-code);
+    color: var(--code-inline);
     font-family: var(--mono);
     font-size: 0.88em;
+}
+.content a code {
+    color: inherit;
 }
 .content pre {
     padding: 12px 16px;
@@ -540,6 +548,7 @@ body.resizing {
 .content pre code {
     padding: 0;
     background: none;
+    color: inherit;
 }
 /* Prism tokens */
 .content .token.comment, .content .token.prolog, .content .token.doctype, .content .token.cdata {
