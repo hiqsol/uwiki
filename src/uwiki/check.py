@@ -23,6 +23,8 @@ class CheckOptions:
     mentions_ignore_case: bool = False
     mentions_every: bool = False
     mentions_self_bold: bool = False
+    max_lines: int = 0
+    max_lines_ignore: tuple = ()
 
     @classmethod
     def from_values(cls, values):
@@ -300,6 +302,18 @@ class Checker:
             target = scanner.resolve(name, source.path) if name else None
         return target is not None and target.source is not None and target.source is not source
 
+    def check_length(self, scanner, source, text, report):
+        """Page no longer than max_lines, unless a max_lines_ignore glob matches it from the config folder."""
+        limit = self.options.max_lines
+        lines = text.count('\n') + (not text.endswith('\n') and bool(text))
+        if not limit or lines <= limit:
+            return
+        prefix = self.config(scanner).prefix
+        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
+        path = f'{prefix}/{path}' if prefix else path
+        if not any(Filter.compile(glob).fullmatch(path) for glob in self.options.max_lines_ignore):
+            report(limit + 1, f'{lines} lines, more than {limit}')
+
     @staticmethod
     def key_line(front, key):
         """Line of front matter key, 1 if missing."""
@@ -333,6 +347,7 @@ class Checker:
             report(1, 'unclosed frontmatter')
         self.check_schema(scanner, source, front, report)
         self.check_aliases(scanner, page, front, report)
+        self.check_length(scanner, source, text, report)
         if page.folder and page.folder.shadowed_index() is page:
             report(1, Scanner.shadowed_message(page.folder))
         converter = CheckConverter(page, scanner, report, self.options)

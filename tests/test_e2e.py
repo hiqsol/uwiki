@@ -696,6 +696,18 @@ class ConfigTest(unittest.TestCase):
             self.assertEqual(lines, ['./Bad.md:2: front matter supersedes: Gone, Bad, ../Old.md, expected page'], err)
             self.assertEqual(code, 1)
 
+    def test_max_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nmax-lines = 3\nmax-lines-ignore = ["wiki/log.md"]\n')
+            write(os.path.join(tmp, 'wiki', 'index.md'), 'See [[Long]] and [[log]].\n')
+            write(os.path.join(tmp, 'wiki', 'Long.md'), 'one\ntwo\nthree\nfour')
+            write(os.path.join(tmp, 'wiki', 'Short.md'), 'one\ntwo\nthree\n')
+            write(os.path.join(tmp, 'wiki', 'log.md'), 'one\ntwo\nthree\nfour\n')
+            code, lines, err = self.check('wiki', cwd=tmp)
+            self.assertEqual(lines, ['wiki/Long.md:4: 4 lines, more than 3'], err)
+            self.assertEqual(code, 1)
+            self.assertEqual(self.check('wiki', '--max-lines', '0', cwd=tmp)[:2], (0, []))
+
     def test_pyproject_and_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(os.path.join(tmp, 'Page.md'), '---\ntitle: x\n---\nText.\n')
