@@ -81,7 +81,7 @@ a failed build prints why and keeps the last good output, watching goes on.
 `serve` watches the same way and serves the HTML on `http://127.0.0.1:8000`,
 `--host 0.0.0.0` serves other hosts too, `-p 0` picks a free port, `--open` opens the page after the first build.
 The page reloads after a rebuild keeping its scroll position and search, `build` output never gets this script.
-Output goes to a temporary folder removed on exit unless `-o` is given, attachments are served from the vault.
+HTML only goes to a temporary folder removed on exit unless `-o` is given, attachments are served from the vault.
 
 `check` reports unresolved wiki and markdown links and headings, missing images,
 frontmatter syntax and list numbering as `path:line: message`, exits 1 if any.

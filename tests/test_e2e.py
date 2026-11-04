@@ -987,7 +987,7 @@ class ServeTest(unittest.TestCase):
         serve = Background('serve', self.vault, '-p', '0', '--interval', '0.1')
         try:
             url = re.fullmatch(r'serving (http://127\.0\.0\.1:\d+/wiki\.html)', serve.line())[1]
-            built = re.search(r'built 2 pages: (\S+)/wiki\.html, ', serve.line())
+            built = re.search(r'built 2 pages: (\S+)/wiki\.html \(', serve.line())
             outdir = built[1]
             self.assertTrue(outdir.startswith(tempfile.gettempdir()))
             status, _, html = self.get(url)

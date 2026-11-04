@@ -28,11 +28,6 @@ Done when README describes orphans once.
 only by its own kind, front matter closing with `...`, unclosed front matter leaves the page as is.
 Done when a long line in a `~~~` block is neither rewrapped nor reported.
 
-## serve writes HTML only
-
-`serve` without `-o` writes only the HTML it serves into the temporary folder, a quarter of every rebuild now.
-Done when `serve` prints one output and the test expects it.
-
 ## README by concepts
 
 Install, then concepts: vault root, folder page, reading order, link resolution, each defined once before use,

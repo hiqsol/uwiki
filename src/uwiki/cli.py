@@ -44,7 +44,7 @@ def watch(args):
     Watcher(make_build(args), args.interval, quiet=args.quiet).run()
 
 def serve(args):
-    """Builds into a temporary folder unless -o is given, so serving leaves no files behind."""
+    """Builds into a temporary folder unless -o is given, so serving leaves no files behind, HTML only there."""
     tmp = None if args.output else tempfile.TemporaryDirectory(prefix='uwiki-')
     output = args.output or tmp.name + os.sep
     title = args.title or (None if args.output else Path(Vaults.common(args.paths)).name)
@@ -52,7 +52,8 @@ def serve(args):
     options.live_reload = True
     options.attachment_base = served.FILES
     try:
-        build = Build(args.paths, output, title, args.html, args.md, args.include, args.exclude, options)
+        html = args.html or not args.output and not args.md
+        build = Build(args.paths, output, title, html, args.md, args.include, args.exclude, options)
         if 'html' not in build.outputs:
             raise UsageError('serve needs HTML output')
         try:
