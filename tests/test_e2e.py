@@ -1341,6 +1341,24 @@ class WrapTest(unittest.TestCase):
         self.assertEqual(lines[-1], self.TEXT.splitlines()[-1])
         self.assertEqual(run('wrap', '--check', '-w', '40', self.file).returncode, 0)
 
+    def test_leaves_all_code_and_front_matter(self):
+        long = 'a line of words long enough to go beyond forty columns'
+        texts = [
+            f'~~~\n{long}\n```\n{long}\n~~~\n',
+            f'---\ntitle: x\n...\n{long}\n',
+            f'---\ntitle: {long}\n',
+        ]
+        for text in texts:
+            with open(self.file, 'w', encoding='utf-8') as f:
+                f.write(text)
+            res = run('wrap', '--check', '-w', '40', self.file)
+            if text.startswith('---\ntitle: x'):
+                self.assertEqual(res.stdout, f'{self.file}:4: longer than 40 columns\n')
+            else:
+                self.assertEqual((res.returncode, res.stdout), (0, ''), text)
+                run('wrap', '-w', '40', self.file)
+                self.assertEqual(read(self.file), text)
+
     def test_folders_with_filters(self):
         os.makedirs(os.path.join(self.tmp.name, 'node_modules'))
         os.makedirs(os.path.join(self.tmp.name, 'sub'))

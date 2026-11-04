@@ -8,6 +8,9 @@ A line rewrapping leaves as is, e.g. a long URL, is not reported.
 
 import re
 
+from .convert import Converter
+from .vault import FRONT_MATTER
+
 WIDTH = 70
 TOKEN = re.compile(r'(?:\[\[[^\]]*\]\]|`[^`]*`|[^\s`\[]+|\[)+')
 ITEM = re.compile(r'^(\t*)((?:[-*+]|\d+[.)]|>) +|[a-z]\) +)?')
@@ -19,7 +22,7 @@ def columns(s):
 
 
 def is_plain(line):
-    return line.strip() and not line.lstrip().startswith(('#', '|', '```'))
+    return line.strip() and not line.lstrip().startswith(('#', '|'))
 
 
 def wrap(head, cont, words, width):
@@ -45,16 +48,16 @@ def wrap(head, cont, words, width):
 
 def rewrap(text, width=WIDTH):
     """Returns rewrapped text and numbers of the overlong lines it rewrapped."""
+    m = FRONT_MATTER.match(text)
+    if not m and text.startswith('---\n'):
+        return text, []  # unclosed front matter: all of the page may be it
     src = text.split('\n')
-    out, long, i, fence = [], [], 0, False
-    if src and src[0] == '---':
-        end = src.index('---', 1) + 1
-        out, i = src[:end], end
+    i = m[0].count('\n') if m else 0
+    out, long = src[:i], []
+    code = [False] * i + [c for _, c in Converter.fenced(src[i:])]
     while i < len(src):
         line = src[i]
-        if line.lstrip().startswith('```'):
-            fence = not fence
-        if fence or line.lstrip().startswith('```') or not is_plain(line):
+        if code[i] or not is_plain(line):
             out.append(line)
             i += 1
             continue
@@ -65,7 +68,7 @@ def rewrap(text, width=WIDTH):
             cont = m.group(1) + m.group(2)
         group = [line]
         j = i + 1
-        while j < len(src) and is_plain(src[j]) and not ITEM.match(src[j]).group(2):
+        while j < len(src) and not code[j] and is_plain(src[j]) and not ITEM.match(src[j]).group(2):
             nl = src[j]
             if cont and nl.startswith(cont) and not nl[len(cont):].startswith((' ', '\t')):
                 group.append(nl)

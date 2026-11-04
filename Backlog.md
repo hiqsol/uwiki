@@ -22,12 +22,6 @@ Done when no command but the renderer walks page text itself and the test suite 
 naming the reason, `--unlinked` goes as it is the "no page links here" reason, `stats` only counts.
 Done when README describes orphans once.
 
-## wrap leaves all code as is
-
-`wrap` takes fenced code and front matter as the other commands do: `~~~` fences, a fence closes
-only by its own kind, front matter closing with `...`, unclosed front matter leaves the page as is.
-Done when a long line in a `~~~` block is neither rewrapped nor reported.
-
 ## README by concepts
 
 Install, then concepts: vault root, folder page, reading order, link resolution, each defined once before use,
