@@ -497,6 +497,9 @@ class Converter:
                 found = not heading and not item and target.source and self.alias_item(target.source, name)
                 if found:
                     return f'[{description or title}](#{self.item_anchor(target, found[1], found[0])})'
+            elif self.names_folder_page(target, name):
+                # [[Card]] to folder page Card.md of Cards/ goes by the page's own title, [[Cards]] by the folder's
+                title = target.page.title
             else:
                 title = target.title if target else titleize(Path(name).name)
         else:
@@ -512,6 +515,14 @@ class Converter:
         else:
             anchor = target.anchor if target else cebabize(Path(name).name)
         return f'[{description or title}](#{anchor})'
+
+    @staticmethod
+    def names_folder_page(target, name):
+        """Whether a link names folder page `Card.md` of `Cards/` rather than the folder, README and index aside."""
+        if not (target and target.is_folder and target.page):
+            return False
+        page = target.page.name.lower()
+        return page == Path(name).name.lower() != target.name.lower() and page not in ('index', 'readme')
 
     @classmethod
     def parse_target(cls, text):

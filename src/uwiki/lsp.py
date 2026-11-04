@@ -22,6 +22,7 @@ HOVER_LINES = 12
 SYMBOL_WIDTH = 60
 PROBLEM = re.compile(r'(.*?):(\d+): (warning: )?(.*)')
 OPEN_WIKILINK = re.compile(r'!?\[\[([^\[\]|]*)$')
+WORD_END = re.compile(r'\w*')
 
 def uri_path(uri):
     return os.path.abspath(unquote(urlparse(uri).path))
@@ -241,12 +242,14 @@ class Server:
         return [m.span() for m in Converter.CODE.finditer(line)]
 
     def link_at(self, line, i):
-        """Link around string index: ('wiki', text) or ('md', href), with its span, else None."""
+        """Link around string index: ('wiki', text) or ('md', href), with its span, else None;
+        a wiki link takes the word ending glued to it, the s of `[[Card]]s`."""
         code = self.code_spans(line)
         inside = lambda m: any(a <= m.start() < b for a, b in code)
         for m in Converter.WIKILINK.finditer(line):
-            if m.start() <= i < m.end() and not inside(m):
-                return 'wiki', m[2], m.span()
+            end = WORD_END.match(line, m.end()).end()
+            if m.start() <= i < end and not inside(m):
+                return 'wiki', m[2], (m.start(), end)
         for m in Converter.MD_LINK.finditer(line):
             if not m[1] and m.start() <= i < m.end():
                 return 'md', m[3], m.span()
@@ -337,7 +340,9 @@ class Server:
         else:
             first = self.body_of(file)[1] - 1
             block = text[first:first + HOVER_LINES]
-        title = '#'.join([node.title, *filter(None, [heading]), item]) if item else node.title
+        name = link[0] == 'wiki' and Converter.parse_target(link[1])[0]
+        title = node.page.title if name and Converter.names_folder_page(node, name) else node.title
+        title = '#'.join([title, *filter(None, [heading]), item]) if item else title
         return {'contents': {'kind': 'markdown', 'value': f'**{title}**\n\n' + '\n'.join(block).strip()},
                 'range': self.range(lines, n, *link[2])}
 

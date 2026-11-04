@@ -962,6 +962,38 @@ class LinkMentionTest(unittest.TestCase):
             self.assertEqual(read(os.path.join(tmp, 'index.md')), '[[Card]], [[Ship]]: a [[Card]], two [[Card]]s.\n',
                              res.stderr)
 
+class FolderPageLinkTest(unittest.TestCase):
+    """[[Card]] to folder page Card.md of Cards/ goes by the page's title, [[Cards]] by the folder's."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        write(os.path.join(self.tmp.name, 'Cards', 'Card.md'), 'A card.\n')
+        write(os.path.join(self.tmp.name, 'index.md'), 'Two [[Card]]s in [[Cards]], [[Card|one]].\n')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_link_shows_name_it_takes(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', self.tmp.name, '-o', out, '--md', '--title', 'wiki')
+            md = read(os.path.join(out, 'wiki.md'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn('Two [Card](#cards)s in [Cards](#cards), [one](#cards).', md)
+
+    def test_lsp_definition_and_hover_on_word_ending(self):
+        lsp = Lsp(self.tmp.name)
+        try:
+            lsp.open('index.md')
+            for col in (6, 12):  # in [[Card]], on its s
+                res = lsp.at('textDocument/definition', 'index.md', 0, col)
+                self.assertEqual(res and res['uri'].rsplit('/', 1)[-1], 'Card.md', col)
+            res = lsp.at('textDocument/hover', 'index.md', 0, 12)
+            self.assertEqual(res['contents']['value'], '**Card**\n\nA card.')
+            self.assertEqual((res['range']['start']['character'], res['range']['end']['character']), (4, 13))
+            self.assertIsNone(lsp.at('textDocument/definition', 'index.md', 0, 13))
+        finally:
+            lsp.close()
+
 class TemplateIdTest(unittest.TestCase):
     def test_page_named_like_template_id_gets_path_anchor(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
