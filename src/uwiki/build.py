@@ -13,7 +13,7 @@ from .config import Config
 from .convert import Converter
 from .order import Links, Order
 from .stats import Stats
-from .vault import Filter, Selection, cebabize, read_front_matter, read_parts
+from .vault import Filter, Selection, cebabize, front_matter_tree, read_front, read_front_matter, read_parts
 
 ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
 
@@ -155,21 +155,46 @@ class Builder:
 
     def html_front_matter(self, node, problem=False):
         """Front matter in schema order as folded line of values unfolding into a table of keys and values,
-        none for title only."""
+        nested maps and lists of maps as tables in it, none for title only."""
         if not self.options.front_matter or node.file is None:
             return ''
-        items = self.schema.sort(read_front_matter(node.file), self.path(node))
+        items = self.schema.sort(list(front_matter_tree(read_front(node.file)).items()), self.path(node))
         if not items:
             return ''
-        text = lambda value: ', '.join(value) if isinstance(value, list) else value
-        line = ' · '.join(text(value) for key, value in items if key != 'title' and text(value))
+        line = ' · '.join(text for key, value in items if key != 'title' for text in [self.front_text(value)] if text)
         if not line:
             return ''
-        rows = ''.join(f'<tr><th>{html.escape(key)}</th><td>{html.escape(text(value))}</td></tr>'
-                       for key, value in items)
         kind = ' problem' if problem else ''
         return (f'<details class="front-matter{kind}"><summary><span>{html.escape(line)}</span></summary>'
-                f'<table>{rows}</table></details>')
+                f'{self.html_map(items)}</details>')
+
+    @classmethod
+    def front_text(cls, value):
+        """Front matter value as one line: its texts joined."""
+        if isinstance(value, dict):
+            value = list(value.values())
+        if isinstance(value, list):
+            return ', '.join(filter(None, map(cls.front_text, value)))
+        return value
+
+    @classmethod
+    def html_map(cls, items):
+        rows = ''.join(f'<tr><th>{html.escape(key)}</th><td>{cls.html_value(value)}</td></tr>' for key, value in items)
+        return f'<table>{rows}</table>'
+
+    @classmethod
+    def html_value(cls, value):
+        """Front matter value as HTML: text, list joined, map as table, list of maps as table of a row each."""
+        if isinstance(value, dict):
+            return cls.html_map(value.items())
+        if isinstance(value, list) and any(isinstance(v, dict) for v in value):
+            maps = [v if isinstance(v, dict) else {'': v} for v in value]
+            keys = list(dict.fromkeys(key for v in maps for key in v))
+            head = ''.join(f'<th>{html.escape(key)}</th>' for key in keys)
+            rows = ''.join('<tr>' + ''.join(f'<td>{cls.html_value(v.get(key, ""))}</td>' for key in keys) + '</tr>'
+                           for v in maps)
+            return f'<table><tr>{head}</tr>{rows}</table>'
+        return html.escape(cls.front_text(value))
 
     def path(self, node):
         return os.path.relpath(node.file, self.scanner.path).replace(os.sep, '/')

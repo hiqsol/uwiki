@@ -480,6 +480,14 @@ body.resizing {
 .content .front-matter td {
     color: var(--fg);
 }
+/* nested map or list of maps */
+.content .front-matter td > table {
+    margin: 0;
+    font-size: inherit;
+}
+.content .front-matter td:has(> table) {
+    padding: 0;
+}
 .content :target {
     animation: target 1.5s ease-out;
 }
