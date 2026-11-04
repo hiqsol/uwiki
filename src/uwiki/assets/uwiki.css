@@ -223,6 +223,24 @@ a:hover {
     display: none;
 }
 
+/* sidebar edge drags its width */
+#resize {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 1;
+}
+#resize:hover, body.resizing #resize {
+    background: linear-gradient(to right, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px);
+}
+body.resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+
 /* content */
 
 .content {
@@ -571,6 +589,9 @@ details.callout:not([open]) > summary {
         color: var(--fg);
         font-size: 20px;
         cursor: pointer;
+    }
+    #resize {
+        display: none;
     }
     #sidebar {
         width: min(85vw, var(--sidebar-width));

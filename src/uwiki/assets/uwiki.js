@@ -20,6 +20,7 @@
   var found = [];
   var selected = -1;
 
+  bindResize();
   addCrumbs();
   markBoxDrawing();
   processHeaders(toc, document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page"), 0);
@@ -608,6 +609,47 @@
       try {
         navigator.clipboard.writeText(location.href).then(done, function () {});
       } catch (err) {}
+    });
+  }
+
+  // sidebar width: dragging its edge sets it, double click restores the default, remembered per browser
+
+  function bindResize() {
+    var WIDTH_KEY = "uwiki-sidebar-width";
+    var handle = document.getElementById("resize");
+    var root = document.documentElement;
+    var setWidth = function (px) {
+      var max = Math.max(200, window.innerWidth * 0.7);
+      root.style.setProperty("--sidebar-width", Math.round(Math.min(Math.max(px, 160), max)) + "px");
+    };
+    try {
+      var saved = +localStorage.getItem(WIDTH_KEY);
+      if (saved) setWidth(saved);
+    } catch (e) {}
+    var dragging = false;
+    handle.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      handle.setPointerCapture(e.pointerId);
+      document.body.classList.add("resizing");
+    });
+    handle.addEventListener("pointermove", function (e) {
+      if (dragging) setWidth(e.clientX);
+    });
+    handle.addEventListener("lostpointercapture", function () {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove("resizing");
+      try {
+        localStorage.setItem(WIDTH_KEY, parseInt(root.style.getPropertyValue("--sidebar-width"), 10));
+      } catch (err) {}
+    });
+    handle.addEventListener("dblclick", function () {
+      root.style.removeProperty("--sidebar-width");
+      try {
+        localStorage.removeItem(WIDTH_KEY);
+      } catch (e) {}
     });
   }
 

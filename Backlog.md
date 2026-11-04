@@ -28,11 +28,6 @@ Done when "links resolve the same way in every command" is said once.
 The one page HTML is a lightweight, fast IDE for humans reading a wiki that is the source others,
 agents too, program in, commenting comes later. Everything below runs in the page, no build options.
 
-## Resizable sidebar
-
-Dragging the sidebar edge changes its width, double click restores the default, the page remembers it.
-Done when the width survives reload and the content reflows while dragging.
-
 ## HTML filter
 
 The search box filters, there are no search results apart from it: sidebar and content show only pages
