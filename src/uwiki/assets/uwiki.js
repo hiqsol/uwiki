@@ -233,13 +233,33 @@
     updateFold();
   }
 
+  // section of the page, its top is 16px over the page title: measuring it lays out no page far from the window
+  function boxOf(h) {
+    return h.parentNode.tagName === "SECTION" ? h.parentNode : h;
+  }
+
+  // size of a page not drawn yet, by its words, so the scrollbar fits the whole vault before pages are drawn
+  function sizePages() {
+    var width = content.clientWidth || 800;
+    pages.forEach(function (h) {
+      var box = boxOf(h), info = data.pages[h.id];
+      if (box === h) return;
+      box.style.containIntrinsicSize = "auto " + Math.round(info ? 230 + 1900 * info.words / width : 70) + "px";
+    });
+  }
+
+  function topOf(h) {
+    var box = boxOf(h);
+    return box.getBoundingClientRect().top + (box === h ? 0 : 16);
+  }
+
   // highlights TOC entry of the page being read, unfolds its branch
   function spy() {
     var pages = shownPages;
     var lo = 0, hi = pages.length - 1, current = pages[0];
     while (lo <= hi) {
       var mid = (lo + hi) >> 1;
-      if (pages[mid].getBoundingClientRect().top <= 80) {
+      if (topOf(pages[mid]) <= 80) {
         current = pages[mid];
         lo = mid + 1;
       } else {
@@ -629,6 +649,7 @@
       }
       n.state = n.next;
       n.h.hidden = n.state === "hidden";
+      if (boxOf(n.h) !== n.h) boxOf(n.h).hidden = n.state === "hidden";
       n.h.classList.toggle("context", n.state === "context");
       n.els.forEach(function (el) { el.hidden = n.state !== "shown"; });
       if (n.li) {
@@ -637,6 +658,7 @@
       }
     });
     toc.classList.toggle("filtering", filtering);
+    content.classList.toggle("filtering", filtering);
     toc.classList.toggle("none", filtering && !matched.length);
     shownPages = pages.filter(function (h) { return nodeOf.get(h).state !== "hidden"; });
     active = null;
@@ -885,7 +907,7 @@
     } else {
       cur = dir > 0 ? list.length - 1 : 0;
       for (var i = 0; i < list.length; i++) {
-        var top = list[i].getBoundingClientRect().top;
+        var top = marks.length ? list[i].getBoundingClientRect().top : topOf(list[i]);
         if (dir > 0 && top > 90) { cur = i; break; }
         if (dir < 0 && top < 0) cur = i;
       }
@@ -1287,14 +1309,20 @@
 
   function bindEvents() {
     var ticking = false;
-    window.addEventListener("scroll", function () {
+    var schedule = function () {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(function () {
         ticking = false;
         spy();
       });
-    }, { passive: true });
+    };
+    window.addEventListener("scroll", schedule, { passive: true });
+    // pages drawn as they near the window get their real size, moving the pages after them without a scroll
+    if ("ResizeObserver" in window) {
+      var resized = new ResizeObserver(schedule);
+      content.querySelectorAll(":scope > section").forEach(function (box) { resized.observe(box); });
+    }
 
     query.addEventListener("input", update);
     query.addEventListener("keydown", function (e) {
@@ -1330,6 +1358,7 @@
 
   // after all declarations above, constants among them
   bindResize();
+  sizePages();
   floatAsides();
   markBoxDrawing();
   processHeaders(toc, document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page"), 0);

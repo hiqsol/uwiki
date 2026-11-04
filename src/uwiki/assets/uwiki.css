@@ -325,9 +325,22 @@ body.resizing {
 /* content */
 
 .content {
+    --gutter: 48px;
     max-width: 52rem;
     margin-left: var(--sidebar-width);
-    padding: 24px 48px 48px;
+    padding: 24px var(--gutter) 48px;
+}
+/* a page is laid out and drawn only near the window, so a long vault opens fast;
+   it reaches into the gutter, item numbers left of their items stay in what it draws */
+.content > section {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
+    margin: 0 calc(-1 * var(--gutter));
+    padding: 0 var(--gutter);
+}
+/* a filtered page keeps its title only, the size remembered of the whole page would leave a gap */
+.content.filtering > section {
+    content-visibility: visible;
 }
 .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
     margin: 1.6em 0 0.5em;
@@ -344,7 +357,8 @@ body.resizing {
 .content h5:not(.page), .content h6:not(.page) {
     margin-top: 0.4em;
 }
-.content > :has(+ h5:not(.page), + h6:not(.page)) {
+.content > section > :has(+ h5:not(.page), + h6:not(.page)),
+.content.preview-body > :has(+ h5:not(.page), + h6:not(.page)) {
     margin-bottom: 0;
 }
 .content .page {
@@ -352,11 +366,11 @@ body.resizing {
     padding-top: 0.5rem;
     border-top: 1px solid var(--border);
 }
-.content .page:first-child {
+.content > section:first-child > .page {
     margin-top: 0;
     border-top: 0;
 }
-.content > :has(+ .page) {
+.content > section > :last-child {
     margin-bottom: 0;
 }
 /* folder of a shown page while filtering: title only, greyed */
@@ -791,10 +805,11 @@ details.callout:not([open]) > summary {
         box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
     }
     .content {
+        --gutter: 16px;
         margin-left: 0;
-        padding: 16px 16px 32px;
+        padding: 16px var(--gutter) 32px;
     }
-    .content .page:first-child {
+    .content > section:first-child > .page {
         padding-right: 48px;
     }
     /* backlinks and front matter stop floating, sit under the title */
@@ -821,5 +836,8 @@ details.callout:not([open]) > summary {
     .content {
         margin: 0;
         max-width: none;
+    }
+    .content > section {
+        content-visibility: visible;
     }
 }

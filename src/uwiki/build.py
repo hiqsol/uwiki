@@ -181,7 +181,7 @@ class Builder:
 
     def html(self, title):
         nodes = list(self.nodes())
-        content = ''.join(self.html_node(node, body) for node, body in nodes)
+        content = ''.join(f'<section>{self.html_node(node, body)}</section>\n' for node, body in nodes)
         return self.render('uwiki.html', {
             'title':    html.escape(title),
             'content':  content,
