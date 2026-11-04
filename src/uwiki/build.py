@@ -1,6 +1,7 @@
 """Builds given folders and files of a vault into single HTML and markdown file."""
 
 import html
+import json
 import os
 import re
 import time
@@ -10,7 +11,8 @@ from pathlib import Path
 from .config import Config
 from .convert import Converter
 from .order import Links, Order
-from .vault import Filter, Selection, cebabize, read_front_matter
+from .stats import Stats
+from .vault import Filter, Selection, cebabize, read_front_matter, read_parts
 
 ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
 
@@ -48,6 +50,12 @@ class Builder:
         self.order = Order(self.scanner, self.links)
         self._backlinks = None
         self._schema = None
+
+    @property
+    def schema(self):
+        if self._schema is None:
+            self._schema = Config.load(self.scanner.path).schema
+        return self._schema
 
     def inside(self, node):
         return self.selection.inside(node)
@@ -113,10 +121,7 @@ class Builder:
         none for title only."""
         if not self.options.front_matter or node.file is None:
             return ''
-        if self._schema is None:
-            self._schema = Config.load(self.scanner.path).schema
-        path = os.path.relpath(node.file, self.scanner.path).replace(os.sep, '/')
-        items = self._schema.sort(read_front_matter(node.file), path)
+        items = self.schema.sort(read_front_matter(node.file), self.path(node))
         if not items:
             return ''
         text = lambda value: ', '.join(value) if isinstance(value, list) else value
@@ -128,13 +133,35 @@ class Builder:
         return (f'<details class="front-matter"><summary><span>{html.escape(line)}</span></summary>'
                 f'<table>{rows}</table></details>')
 
+    def path(self, node):
+        return os.path.relpath(node.file, self.scanner.path).replace(os.sep, '/')
+
+    def data(self, nodes):
+        """What the page filters and counts by: front matter keys listing values in schema order,
+        built pages by anchor with vault path, front matter, words as stats counts them and tokens."""
+        pages = {}
+        for node, body in nodes:
+            if not body or node.file is None:
+                continue
+            _, _, text, _ = read_parts(node.file)
+            pages[node.anchor] = {
+                'path': self.path(node),
+                'meta': dict(read_front_matter(node.file)),
+                'words': Stats.words(text),
+                'tokens': Stats.tokens(text),
+            }
+        data = {'facets': list(self.schema.facets().items()), 'pages': pages}
+        return json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
+
     def html(self, title):
+        nodes = list(self.nodes())
         content = ''.join(
             self.converter(node).html(body, self.html_backlinks(node) + (self.html_front_matter(node) if body else ''))
-            for node, body in self.nodes())
+            for node, body in nodes)
         return self.render('uwiki.html', {
             'title':    html.escape(title),
             'content':  content,
+            'data':     self.data(nodes),
             'style':    read_asset('uwiki.css'),
             'script':   read_asset('uwiki.js') + self.reload_script(),
         })

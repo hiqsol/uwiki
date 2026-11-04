@@ -120,6 +120,15 @@ class Schema:
                 required |= keys
         return {key: (key in required, spec) for key, spec in specs.items()}
 
+    def facets(self):
+        """Keys listing their values, with the values, in schema order, folder rules adding to them."""
+        res = {}
+        for _, rules, _ in self.rules:
+            for key, spec in rules.items():
+                if isinstance(spec, list):
+                    res[key] = list(dict.fromkeys(res.get(key, []) + [str(v) for v in spec]))
+        return res
+
     def sort(self, items, path):
         """Front matter items of page at path in schema order, keys out of schema after them as they come."""
         order = {key: n for n, key in enumerate(self.keys(path))}

@@ -28,38 +28,6 @@ Done when "links resolve the same way in every command" is said once.
 The one page HTML is a lightweight, fast IDE for humans reading a wiki that is the source others,
 agents too, program in, commenting comes later. Everything below runs in the page, no build options.
 
-## HTML filter
-
-The search box filters, there are no search results apart from it: sidebar and content show only pages
-matching every term, in the reading order of the full page, a folder of a shown page stays in the sidebar greyed.
-A word matches pages having it as search matches it now, strong matches only when there are any,
-`"Note:"` or `"force discard"` matches the text exactly as written,
-`key:value` front matter keys pages have (a list matches any item, a value not matching any exactly
-matches by prefix, so typing `scope:co` already shows core), `in:folder` pages under a folder named by path or title,
-`-` before any term negates, terms of one key match any of them, all other terms all of them.
-A shown page lists under it in the sidebar its sections having the words, with their count,
-words are marked in content, Enter and Shift+Enter go to next and previous mark,
-Escape clears all but `key:value` and `in:` terms, next Escape clears the box.
-A link to a hidden page shows as broken and still previews on hover,
-backlinks keep counting all pages, ones from hidden pages greyed.
-The box is in the URL, `#q=scope:core deck`, reload keeps it.
-Done when `scope:core -status:stub deck` on a vault shows its core pages not stubs having deck,
-with deck sections listed under them, and reload keeps it.
-
-## Facet chips
-
-Always under the box: a row for every `[schema]` key listing values, a chip for each value in schema order
-with the count of pages it would show with the other terms of the box: `core 108 · duel 20 · advanced 54`,
-chips of 0 greyed, a row folds to its key name and the page remembers it.
-A click adds or removes its term in the box, chips and typed terms are one filter.
-Done when clicking `core` types `scope:core`, `duel` keeps its count, and the counts follow the box.
-
-## Stats line
-
-Under the box: shown out of all pages, words and tokens, `108/228 pages · 10k/54k words · 14k/72k tokens`,
-words counted as `stats` counts them, tokens estimated from characters.
-Done when the full page line shows the totals `uwiki stats` prints for the same paths.
-
 ## Check results in HTML
 
 `build` embeds what `check` with the vault config reports for built pages, without failing on it.

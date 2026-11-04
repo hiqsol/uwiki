@@ -45,8 +45,7 @@ class Stats:
         res = dict.fromkeys(self.COLUMNS, 0)
         res.update(path=shown, file=source.fullpath, meta=meta, pages=1,
                    lines=len(body.splitlines()))
-        for _, line in Converter.prose(body):
-            line = Converter.CODE.sub('', self.QUOTE.sub('', line))
+        for line in self.prose(body):
             res['words'] += len(line.split())
             res['headings'] += bool(Converter.HEADING.match(line))
             res['items'] += bool(self.ITEM.match(line))
@@ -55,6 +54,21 @@ class Stats:
             for embed, url in self.MDLINK.findall(line):
                 res['images' if embed else 'external' if '://' in url else 'links'] += 1
         return res
+
+    @classmethod
+    def prose(cls, body):
+        """Lines outside code, quote marks and inline code left out."""
+        for _, line in Converter.prose(body):
+            yield Converter.CODE.sub('', cls.QUOTE.sub('', line))
+
+    @classmethod
+    def words(cls, body):
+        return sum(len(line.split()) for line in cls.prose(body))
+
+    @staticmethod
+    def tokens(body):
+        """Estimate of LLM tokens: 4 characters each."""
+        return -(-len(body) // 4)
 
     @staticmethod
     def image(scanner, source, text):

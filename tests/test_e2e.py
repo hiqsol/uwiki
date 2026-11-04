@@ -587,6 +587,21 @@ class ConfigTest(unittest.TestCase):
                       '<tr><th>status</th><td>draft</td></tr><tr><th>date</th><td>2024-01-02</td></tr>'
                       '<tr><th>tags</th><td>a, b</td></tr><tr><th>title</th><td>Good: one</td></tr></table>', html)
 
+    def test_page_data_for_filter_and_stats(self):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', os.path.join(FIXTURES, 'schema'), '--html', '-o', out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            html = read(os.path.join(out, 'schema.html'))
+        data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.S)[1])
+        self.assertEqual(data['facets'], [['status', ['stub', 'draft', 'stable']]])
+        pages = {p['path']: p for p in data['pages'].values()}
+        self.assertEqual(sorted(pages), ['Bad.md', 'Good.md', 'None.md', 'docs/Guide.md', 'docs/Unlisted.md', 'index.md'])
+        self.assertEqual(pages['Good.md']['meta'], {'status': 'draft', 'date': '2024-01-02', 'tags': ['a', 'b'],
+                                                    'title': 'Good: one'})
+        stats = json.loads(run('stats', '--json', os.path.join(FIXTURES, 'schema')).stdout)['total']
+        self.assertEqual((len(pages), sum(p['words'] for p in pages.values())), (stats['pages'], stats['words']))
+        self.assertTrue(all(p['tokens'] > 0 for p in pages.values()))
+
     def test_option_defaults(self):
         code, lines, err = self.check('schema', '--include', 'drafts')
         self.assertEqual(lines[-2:], [

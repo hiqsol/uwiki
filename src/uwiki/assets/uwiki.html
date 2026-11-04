@@ -11,17 +11,20 @@
     <nav id="sidebar">
         <a id="home" href="#root">{title}</a>
         <div id="search">
-            <input id="query" type="search" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search">
+            <input id="query" type="search" placeholder="Search" autocomplete="off" spellcheck="false"
+                   aria-label="Search" title="words, &quot;exact text&quot;, key:value, in:folder, is:problem, -term">
             <kbd>/</kbd>
         </div>
+        <div id="stats"></div>
+        <div id="facets" hidden></div>
         <button id="fold" type="button" hidden></button>
-        <div id="results" hidden></div>
         <ul id="toc"></ul>
         <div id="resize" title="Drag to resize, double click to restore"></div>
     </nav>
     <main class="content">
         {content}
     </main>
+    <script type="application/json" id="data">{data}</script>
     <script>{script}</script>
 </body>
 </html>

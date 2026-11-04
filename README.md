@@ -245,8 +245,19 @@ The HTML page is self-contained, light or dark by system preference:
   folded into one line of values, `▸` unfolds a table of all keys and values the text flows around,
   under the title on narrow screens;
   `--no-front-matter` leaves it out
-- fuzzy full text search: press `/` or `Ctrl+K`, tolerates typos and abbreviations,
-  `↑` `↓` `Enter` to open a result with matched words highlighted in text, `Esc` to clear
+- search box filters: press `/` or `Ctrl+K`, sidebar and text show only pages matching all its terms,
+  in reading order, folders of shown pages stay by title, greyed:
+  a word matches by fuzzy full text search, tolerating typos and abbreviations, `"exact text"` as written,
+  `key:value` front matter (a list by any item, a value no page has exactly by prefix: `scope:co`),
+  `in:folder` pages under a folder by path or title, `-` before a term negates;
+  terms of one key match any of them, all other terms all of them: `scope:core scope:duel -status:stub deck`;
+  sections having the words list under their page in the sidebar with counts, words are highlighted in text,
+  `Enter` and `Shift+Enter` go to next and previous one, `Esc` drops words, next `Esc` the rest;
+  links to pages filtered out are struck out and still preview, backlinks from them greyed;
+  the box goes to the URL as `?q=`, so a link or reload shows the same pages
+- stats line under the box: shown out of all pages, words as `stats` counts them and tokens, 4 characters each
+- a row of chips for every front matter key `[schema]` lists values of, a chip for each value with the count
+  of pages it shows with the other terms, a click adds or removes it, a click on the key folds the row
 
 ## Development
 
