@@ -148,6 +148,7 @@ class RenderTest(unittest.TestCase):
         js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
         self.assertIn('cloneNode(true)', js)
         self.assertIn('e.pointerType !== "mouse"', js)
+        self.assertIn('a.closest("main.content, .preview, #sidebar")', js)
         self.assertNotIn('fetch(', js)
         self.assertNotIn('XMLHttpRequest', js)
 

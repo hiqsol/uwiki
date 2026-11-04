@@ -883,7 +883,7 @@
 
   function previewLink(el) {
     var a = el.closest && el.closest("a[href^='#']");
-    if (!a || !a.closest("main.content, .preview") || a.closest(".preview-title")) return null;
+    if (!a || !a.closest("main.content, .preview, #sidebar") || a.closest(".preview-title")) return null;
     var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
     if (target && !/^H[1-6]$/.test(target.tagName)) target = target.closest("li");
     return target && content.contains(target) && !a.classList.contains("item-anchor") ? a : null;
@@ -976,13 +976,22 @@
     return page;
   }
 
-  // under the link, above it when there is no room below, inside the window
+  // under the link, above it when there is no room below, inside the window;
+  // a sidebar link's beside the sidebar, so the entries around the link stay in sight
   function place(el, a) {
     var r = a.getClientRects()[0] || a.getBoundingClientRect();
     var h = el.offsetHeight, w = el.offsetWidth;
-    var top = r.bottom + 6;
-    if (top + h > window.innerHeight && r.top - h - 6 > 0) top = r.top - h - 6;
-    var left = Math.max(8, Math.min(r.left, document.documentElement.clientWidth - w - 8));
+    var width = document.documentElement.clientWidth;
+    var side = a.closest("#sidebar") ? sidebar.getBoundingClientRect().right + 8 : -1;
+    var top, left;
+    if (side >= 0 && side + w <= width - 8) {
+      top = Math.max(8, Math.min(r.top - 10, window.innerHeight - h - 8));
+      left = side;
+    } else {
+      top = r.bottom + 6;
+      if (top + h > window.innerHeight && r.top - h - 6 > 0) top = r.top - h - 6;
+      left = Math.max(8, Math.min(r.left, width - w - 8));
+    }
     el.style.top = top + window.scrollY + "px";
     el.style.left = left + window.scrollX + "px";
   }
