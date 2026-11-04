@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - run: pip install markdown-it-py
+      - run: pip install markdown-it-py linkify-it-py
       - run: python -m unittest discover tests
       - run: gh release create "$GITHUB_REF_NAME" --generate-notes
         env:

@@ -18,6 +18,7 @@ import time
 import unittest
 from urllib.parse import quote
 
+import linkify_it  # noqa: F401 -- required, build tests must not be skipped
 import markdown_it  # noqa: F401 -- required, build tests must not be skipped
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1213,7 +1214,8 @@ class CommonMarkTest(unittest.TestCase):
     """Pages render as GitHub and Obsidian show them, served ones with source lines of blocks."""
 
     PAGE = ('---\nstatus: x\n---\n# Page\n\nPara one\ncontinues.\n\n- [ ] task\n- [x] done\n\nText:\n- item\n\n'
-            '> [!note] Title with **bold**\n> body line\n\n3. three\n4. four\n\n~~gone~~\n\n| a |\n|---|\n| 1 |\n')
+            '> [!note] Title with **bold**\n> body line\n\n3. three\n4. four\n\n~~gone~~\n\n| a |\n|---|\n| 1 |\n'
+            '\nSee https://example.com/a_(b). or me@x.org, not README.md or `https://code.x`\n')
 
     @classmethod
     def setUpClass(cls):
@@ -1238,6 +1240,11 @@ class CommonMarkTest(unittest.TestCase):
         self.assertIn('<p><s>gone</s></p>', self.html)
         self.assertIn('<td>1</td>', self.html)
         self.assertIn('<div class="callout-title">Title with <strong>bold</strong></div>', self.html)
+
+    def test_bare_links_and_emails_are_linked(self):
+        self.assertIn('<p>See <a href="https://example.com/a_(b)">https://example.com/a_(b)</a>. or '
+                      '<a href="mailto:me@x.org">me@x.org</a>, not README.md or <code>https://code.x</code></p>',
+                      self.html)
 
     def test_blocks_carry_source_lines(self):
         self.assertIn('<p data-line="6">Para one', self.lines)

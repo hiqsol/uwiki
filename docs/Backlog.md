@@ -2,7 +2,7 @@
 
 Planned features in order of implementing, each with what makes it done.
 Links resolve the same way in every command, new features reuse the vault resolver, not a copy of it.
-Dependencies stay `markdown-it-py` only: watching, serving and previews use the standard library and plain JS.
+Dependencies stay `markdown-it-py` and `linkify-it-py` only: watching, serving and previews use the standard library and plain JS.
 
 ## Page parsed once
 

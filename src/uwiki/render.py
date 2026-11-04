@@ -1,4 +1,5 @@
-"""Renders markdown to HTML as GitHub and Obsidian do: CommonMark with tables, strikethrough and task lists.
+"""Renders markdown to HTML as GitHub and Obsidian do: CommonMark with tables, strikethrough, task lists
+and bare http links and emails linked.
 
 Headings take ids written after them as `## Heading {#id}`, blocks take the source lines they start at.
 """
@@ -17,7 +18,9 @@ LINE_BLOCKS = {'paragraph_open', 'heading_open', 'list_item_open', 'blockquote_o
 
 @functools.cache
 def renderer():
-    md = MarkdownIt('commonmark', {'html': True}).enable(['table', 'strikethrough'])
+    md = MarkdownIt('commonmark', {'html': True, 'linkify': True}).enable(['table', 'strikethrough', 'linkify'])
+    # links only with scheme: a bare `README.md` or `foo.com` is not a link
+    md.linkify.set({'fuzzy_link': False})
     md.core.ruler.before('inline', 'heading_ids', heading_ids)
     md.core.ruler.after('inline', 'task_lists', task_lists)
     return md

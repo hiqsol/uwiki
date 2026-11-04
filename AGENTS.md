@@ -2,7 +2,7 @@
 
 ## Tests
 
-- `make test` runs the suite via uv with the `markdown-it-py` package; tests require it and never skip
+- `make test` runs the suite via uv with the `markdown-it-py` and `linkify-it-py` packages; tests require them and never skip
 
 ## Release
 

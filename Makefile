@@ -4,7 +4,7 @@ INIT = src/uwiki/__init__.py
 VERSION = $(shell sed -n 's/^__version__ = "\(.*\)"/\1/p' $(INIT))
 
 test:
-	uv run --no-project --with markdown-it-py python -m unittest discover tests
+	uv run --no-project --with markdown-it-py --with linkify-it-py python -m unittest discover tests
 build:
 	uv build
 clean:
