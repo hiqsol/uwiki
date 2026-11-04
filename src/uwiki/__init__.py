@@ -1,6 +1,6 @@
 """uWiki: builds, checks, counts and wraps markdown wikis, e.g. Obsidian vaults."""
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 from .check import Checker, CheckOptions
 from .stats import Stats
