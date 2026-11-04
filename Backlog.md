@@ -16,13 +16,6 @@ whether by alias and its anchor.
 list numbering and item anchors share one list walker.
 Done when no command but the renderer walks page text itself and the test suite passes unchanged.
 
-## README by concepts
-
-Install, then concepts: vault root, folder page, reading order, link resolution, each defined once before use,
-then every command in 2–3 lines, config, supported syntax, the HTML page.
-Implementation details go: breadth-first walk, temporary folder, debounce, reload script.
-Done when "links resolve the same way in every command" is said once.
-
 ## HTML is a reading IDE
 
 The one page HTML is a lightweight, fast IDE for humans reading a wiki that is the source others,
