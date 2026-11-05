@@ -88,6 +88,7 @@ vim.lsp.enable('uwiki')
 up to the git work tree root, holds option defaults:
 top level ones for every command, a table for a command, `[build]` also for `watch` and `serve`.
 `[schema]` gives front matter keys `check` takes, dotted ones nested in a map or in every map of a list,
+`_required` the ones a page has, a map key every key nested in it,
 `[schema."glob"]` adds rules for pages the glob matches from the config folder, `_inherit = false` drops the ones before.
 `[check] layers` makes values of a key layers:
 a page links only to pages of its layer or earlier ones, a folder page comes no later than its pages.

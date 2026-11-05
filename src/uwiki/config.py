@@ -85,7 +85,8 @@ class Config:
         return self._schema
 
 class Schema:
-    """Front matter keys allowed, value is allowed values or a type, `_required` lists required keys.
+    """Front matter keys allowed, value is allowed values or a type, `_required` lists required keys,
+    a key with nested ones requiring every one of them.
 
     ```
     [schema]
@@ -158,10 +159,13 @@ class Schema:
         required = table.get('_required', [])
         if not isinstance(required, list) or not all(isinstance(key, str) for key in required):
             raise ConfigError(f'{self.path}: {where}._required should be a list of keys')
+        keys = set()
         for key in required:
-            if not any(k == key or k.startswith(key + '.') for k in (*specs, *known)):
+            nested = [k for k in (*specs, *known) if k == key or k.startswith(key + '.')]
+            if not nested:
                 raise ConfigError(f'{self.path}: {where}._required: {key} is not in schema')
-        return specs, set(required)
+            keys.update([key] if key in nested else nested)
+        return specs, keys
 
     def keys(self, path):
         """Rules for page at vault relative path in schema order: key: (required, spec)."""

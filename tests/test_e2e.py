@@ -695,7 +695,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_nested_keys_inherit_and_config_above_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\n_required = ["made.by", "made.at"]\n'
+            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\n_required = ["made"]\n'
                   'made.by = "string"\nmade.at = "datetime"\nsources.id = ["repo", "doc"]\n'
                   '[schema."wiki/**/index.md"]\n_inherit = false\nokf = ["1"]\n')
             write(os.path.join(tmp, 'wiki', 'index.md'), '---\nokf: 1\n---\nSee [[Flow]], [[Block]] and [[Bad]].\n')
