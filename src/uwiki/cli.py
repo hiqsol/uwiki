@@ -16,7 +16,7 @@ from .lsp import Server
 from .llms import Llms
 from .ls import Listing
 from .stats import Stats
-from .watch import Watcher
+from .watch import RESTARTED, Restart, Watcher, restart
 from .mention import link_mentions
 from .mv import Move, MoveError
 from . import serve as served
@@ -53,16 +53,21 @@ def serve(args):
     options.live_reload = True
     options.attachment_base = served.FILES
     options.source_lines = True
+    restarted = os.environ.pop(RESTARTED, '')
+    port = int(restarted) if restarted.isdigit() and not args.port else args.port  # port 0 picked: the same again
     try:
         html = args.html or not args.output and not args.md
         build = Build(args.paths, output, title, html, args.md, args.include, args.exclude, options)
         if 'html' not in build.outputs:
             raise UsageError('serve needs HTML output')
         try:
-            server = served.Server(build, args.host, args.port, args.open, args.interval, args.quiet)
+            server = served.Server(build, args.host, port, args.open and not restarted, args.interval, args.quiet)
         except OSError as e:
-            sys.exit(f'uwiki serve: cannot listen on {args.host}:{args.port}: {e.strerror}')
+            sys.exit(f'uwiki serve: cannot listen on {args.host}:{port}: {e.strerror}')
         server.run()
+    except Restart as e:
+        e.environ[RESTARTED] = str(server.port)
+        raise
     finally:
         if tmp:
             tmp.cleanup()
@@ -364,6 +369,8 @@ def main():
             p.set_defaults(**defaults)
             args = top.parse_args()
         code = args.func(args)
+    except Restart as e:
+        restart(e.environ)
     except (UsageError, ConfigError) as e:
         p.error(str(e))
     sys.exit(code or 0)

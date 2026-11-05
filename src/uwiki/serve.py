@@ -73,8 +73,8 @@ class Server:
         handler = partial(Handler, server_state=self, directory=self.outdir)
         self.httpd = ThreadingHTTPServer((host, port), handler)
         self.httpd.daemon_threads = True
-        host, port = self.httpd.server_address[:2]
-        self.url = f'http://{host}:{port}/' + quote(os.path.basename(self.page))
+        host, self.port = self.httpd.server_address[:2]
+        self.url = f'http://{host}:{self.port}/' + quote(os.path.basename(self.page))
 
     def attachments(self):
         """Attachment files of the last scan, collected once per build."""

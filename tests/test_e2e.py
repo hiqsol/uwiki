@@ -1134,9 +1134,9 @@ def wait_for(condition, timeout=5):
 class Background:
     """uwiki command running in background, its output lines read with a timeout."""
 
-    def __init__(self, *args):
+    def __init__(self, *args, src=SRC):
         self.proc = subprocess.Popen([sys.executable, '-m', 'uwiki', *args], stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT, text=True, env={**os.environ, 'PYTHONPATH': SRC})
+                                     stderr=subprocess.STDOUT, text=True, env={**os.environ, 'PYTHONPATH': src})
         self.lines = queue.Queue()
         threading.Thread(target=lambda: [self.lines.put(line) for line in self.proc.stdout], daemon=True).start()
 
@@ -1192,6 +1192,27 @@ class WatchTest(unittest.TestCase):
             watch.stop()
 
 
+    def test_restarts_on_change_of_uwiki_code(self):
+        src = os.path.join(self.tmp.name, 'src')
+        shutil.copytree(os.path.join(SRC, 'uwiki'), os.path.join(src, 'uwiki'))
+        code = os.path.join(src, 'uwiki', 'ls.py')
+        watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1', src=src)
+        try:
+            self.assertIn('built 2 pages', watch.line())
+            write(code, '# changed\n', 'a')
+            self.assertIn('uwiki code changed, restarting', watch.line())
+            self.assertIn('built 2 pages', watch.line())  # built by the new process
+            write(code, 'def (\n', 'a')
+            self.assertRegex(watch.line(), r'uwiki code fails to import, not restarting: SyntaxError')
+            write(os.path.join(self.vault, 'B.md'), 'Page B.\n')
+            self.assertIn('built 3 pages', watch.line())  # still watching with the code it runs
+            write(code, read(code).replace('def (\n', ''))
+            self.assertIn('uwiki code changed, restarting', watch.line())
+            self.assertIn('built 3 pages', watch.line())
+        finally:
+            watch.stop()
+
+
 class ServeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -1232,6 +1253,22 @@ class ServeTest(unittest.TestCase):
         finally:
             serve.stop()
         self.assertFalse(os.path.exists(outdir))
+
+    def test_restart_serves_the_same_port(self):
+        src = os.path.join(self.tmp.name, 'src')
+        shutil.copytree(os.path.join(SRC, 'uwiki'), os.path.join(src, 'uwiki'))
+        serve = Background('serve', self.vault, '-p', '0', '--interval', '0.1', src=src)
+        try:
+            serving = serve.line()
+            outdir = re.search(r'built 2 pages: (\S+)/wiki\.html \(', serve.line())[1]
+            write(os.path.join(src, 'uwiki', 'ls.py'), '# changed\n', 'a')
+            self.assertIn('uwiki code changed, restarting', serve.line())
+            self.assertEqual(serve.line(), serving)
+            self.assertIn('built 2 pages', serve.line())
+            self.assertFalse(os.path.exists(outdir))  # the temporary output of the old one is gone
+            self.assertIn('Page', self.get(serving.split()[1].replace('wiki.html', ''))[2])
+        finally:
+            serve.stop()
 
     def test_build_output_has_no_reload(self):
         with tempfile.TemporaryDirectory() as out:

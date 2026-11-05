@@ -57,7 +57,8 @@ uwiki lsp
 - `build` writes `<title>.html` and `<title>.md`, `-o out/Wiki.html` only one;
   a page shows its folders, backlinks and front matter; a link to a page left out fails the build
 - `watch` builds again on change, `serve` also serves the HTML on `http://127.0.0.1:8000`, reloading the page,
-  its blocks with `data-line` of the source line they start at
+  its blocks with `data-line` of the source line they start at;
+  both restart on change of uwiki's own code, as on upgrade, unless it fails to import
 - `check` reports unresolved links, headings and items, missing images, front matter out of `[schema]`
   and list numbering as `path:line: message`, exits 1 if any;
   `--orphans` reports orphans, `--unlisted` and `--mentions` warn about pages their folder page does not link
