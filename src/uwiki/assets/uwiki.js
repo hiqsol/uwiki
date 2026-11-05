@@ -248,6 +248,23 @@
     });
   }
 
+  // a heading or item jumped to lands below the sticky header of its page: the header is measured
+  // just before the jump, measuring every page's header would lay out pages far from the window
+  function clearHead(id) {
+    var el = id && document.getElementById(id);
+    var box = el && el.closest(".content > section");
+    if (!box || el.parentNode === box && el.classList.contains("page")) return;
+    var h = box.querySelector(":scope > .page");
+    if (h) box.style.setProperty("--head", h.offsetHeight + "px");
+  }
+  function hashId(href) {
+    try {
+      return decodeURIComponent(href.slice(href.indexOf("#") + 1));
+    } catch (e) {
+      return "";
+    }
+  }
+
   function topOf(h) {
     var box = boxOf(h);
     return box.getBoundingClientRect().top + (box === h ? 0 : 16);
@@ -958,7 +975,8 @@
     if (q) query.value = q;
     update();
     if (q && location.hash) {
-      var target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      var target = document.getElementById(hashId(location.hash));
+      clearHead(target && target.id);
       if (target) target.scrollIntoView();
     }
   }
@@ -1318,6 +1336,11 @@
       });
     };
     window.addEventListener("scroll", schedule, { passive: true });
+    // capture, so the header is measured before the browser jumps to the link target
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest('a[href^="#"]');
+      if (a) clearHead(hashId(a.getAttribute("href")));
+    }, true);
     // pages drawn as they near the window get their real size, moving the pages after them without a scroll
     if ("ResizeObserver" in window) {
       var resized = new ResizeObserver(schedule);
@@ -1366,6 +1389,7 @@
   readRefs();
   buildFacets();
   bindEvents();
+  if (location.hash) clearHead(hashId(location.hash));
   bindPreviews();
   bindItems();
   bindCode();

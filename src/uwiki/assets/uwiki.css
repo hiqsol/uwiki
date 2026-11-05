@@ -366,6 +366,24 @@ body.resizing {
     padding-top: 0.5rem;
     border-top: 1px solid var(--border);
 }
+/* page header stays on top while its page scrolls under it, the next page's header takes its place;
+   it holds its floated asides, an unfolded one scrolls in it */
+.content > section > .page {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flow-root;
+    padding-bottom: 0.3rem;
+    background: var(--bg);
+}
+.content > section > .page > details[open] {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+/* a heading or item jumped to lands below its page header, clearHead measures it */
+.content > section [id]:not(.page) {
+    scroll-margin-top: var(--head, 0);
+}
 .content > section:first-child > .page {
     margin-top: 0;
     border-top: 0;
@@ -375,6 +393,7 @@ body.resizing {
 }
 /* folder of a shown page while filtering: title only, greyed */
 .content .page.context {
+    position: static;
     opacity: 0.55;
 }
 /* link to a page filtered out, it still previews */
@@ -818,7 +837,8 @@ details.callout:not([open]) > summary {
         margin-left: 0;
         padding: 16px var(--gutter) 32px;
     }
-    .content > section:first-child > .page {
+    /* clear of the menu button */
+    .content > section > .page {
         padding-right: 48px;
     }
     /* backlinks and front matter stop floating, sit under the title */
