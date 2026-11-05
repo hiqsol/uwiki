@@ -25,6 +25,8 @@ class CheckOptions:
     mentions_self_bold: bool = False
     max_lines: int = 0
     max_lines_ignore: tuple = ()
+    max_description: int = 0
+    max_description_ignore: tuple = ()
 
     @classmethod
     def from_values(cls, values):
@@ -314,6 +316,19 @@ class Checker:
         if not any(Filter.compile(glob).fullmatch(path) for glob in self.options.max_lines_ignore):
             report(limit + 1, f'{lines} lines, more than {limit}')
 
+    def check_description(self, scanner, source, front, report):
+        """Front matter description no longer than max_description characters,
+        unless a max_description_ignore glob matches the page from the config folder."""
+        limit = self.options.max_description
+        value = dict(front_matter_items(front)).get('description') if limit and front else None
+        if not isinstance(value, str) or len(value) <= limit:
+            return
+        prefix = self.config(scanner).prefix
+        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
+        path = f'{prefix}/{path}' if prefix else path
+        if not any(Filter.compile(glob).fullmatch(path) for glob in self.options.max_description_ignore):
+            report(self.key_line(front, 'description'), f'description of {len(value)} characters, more than {limit}')
+
     @staticmethod
     def key_line(front, key):
         """Line of front matter key, 1 if missing."""
@@ -348,6 +363,7 @@ class Checker:
         self.check_schema(scanner, source, front, report)
         self.check_aliases(scanner, page, front, report)
         self.check_length(scanner, source, text, report)
+        self.check_description(scanner, source, front, report)
         if page.folder and page.folder.shadowed_index() is page:
             report(1, Scanner.shadowed_message(page.folder))
         converter = CheckConverter(page, scanner, report, self.options)

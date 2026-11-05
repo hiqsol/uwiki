@@ -739,6 +739,18 @@ class ConfigTest(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertEqual(self.check('wiki', '--max-lines', '0', cwd=tmp)[:2], (0, []))
 
+    def test_max_description(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nmax-description = 10\nmax-description-ignore = ["wiki/Skill.md"]\n')
+            write(os.path.join(tmp, 'wiki', 'index.md'), 'See [[Long]], [[Short]] and [[Skill]].\n')
+            write(os.path.join(tmp, 'wiki', 'Long.md'), '---\ntitle: Long\ndescription: eleven char\n---\nLong.\n')
+            write(os.path.join(tmp, 'wiki', 'Short.md'), '---\ndescription: ten chars.\n---\nShort.\n')
+            write(os.path.join(tmp, 'wiki', 'Skill.md'), '---\ndescription: eleven char\n---\nSkill.\n')
+            code, lines, err = self.check('wiki', cwd=tmp)
+            self.assertEqual(lines, ['wiki/Long.md:3: description of 11 characters, more than 10'], err)
+            self.assertEqual(code, 1)
+            self.assertEqual(self.check('wiki', '--max-description', '0', cwd=tmp)[:2], (0, []))
+
     def test_index(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(os.path.join(tmp, 'uwiki.toml'),

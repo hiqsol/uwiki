@@ -41,7 +41,7 @@ every other page right after the first page linking it, unlinked ones last.
 uwiki build  <paths> [-o OUTPUT] [--title TITLE] [--html | --md] [--no-backlinks] [--no-front-matter]
 uwiki watch  <paths> [build options] [-q] [--interval 0.5]
 uwiki serve  <paths> [watch options] [-p 8000] [--host 127.0.0.1] [--open]
-uwiki check  <paths> [--orphans] [--unlisted] [--mentions] [--no-folder-links] [--max-lines N]
+uwiki check  <paths> [--orphans] [--unlisted] [--mentions] [--no-folder-links] [--max-lines N] [--max-description N]
 uwiki link   <paths> [--dry-run] [-w 70]
 uwiki llms   <paths> [-o FILE] [--title TITLE] [--check]
 uwiki index  <paths> [--check]
@@ -62,7 +62,7 @@ uwiki lsp
 - `check` reports unresolved links, headings and items, missing images, front matter out of `[schema]`
   and list numbering as `path:line: message`, exits 1 if any;
   `--orphans` reports orphans, `--unlisted` and `--mentions` warn about pages their folder page does not link
-  and plain text mentions of page titles, `--max-lines` reports longer pages
+  and plain text mentions of page titles, `--max-lines` reports longer pages, `--max-description` longer front matter descriptions
 - `link` links the plain text mentions `check --mentions-every` warns about: `[[Star]]s`
 - `llms` writes [llms.txt](https://llmstxt.org): a section per folder of `- [title](path): description`
 - `index` fills `<!-- generated: NAME -->` ... `<!-- /generated -->` blocks of pages
@@ -100,6 +100,8 @@ mentions = true
 mentions-ignore = ["Go"]
 max-lines = 1500                          # a page an agent reads in one go
 max-lines-ignore = ["log.md"]             # globs from the config folder
+max-description = 250                     # a description is one sentence
+max-description-ignore = ["**/SKILL.md"]
 layers.scope = ["core", "duel", "advanced"]
 
 [index.adrs]                              # <!-- generated: adrs --> blocks
