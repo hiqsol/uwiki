@@ -93,6 +93,7 @@ class Schema:
     _required = ["status", "generated.at"]
     status = ["stub", "draft", "stable"]
     aliases = "list"
+    description = "string(250)"                # at most 250 characters
     supersedes = "page"                      # page name, `[[Page]]` or relative path, one or a list
     generated.at = "datetime"                # nested key, of a map or of every map of a list
     [schema."docs/**"]
@@ -106,6 +107,7 @@ class Schema:
     """
 
     TYPES = ('string', 'number', 'bool', 'date', 'datetime', 'page', 'list', 'any')
+    LENGTH = re.compile(r'string\((\d+)\)')  # string of at most N characters
     NUMBER = re.compile(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?')
     DATE = re.compile(r'\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)?)?')
     DATETIME = re.compile(r'\d{4}-\d\d-\d\d[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)')
@@ -152,9 +154,10 @@ class Schema:
                 continue
             if key.endswith('!'):
                 raise ConfigError(f'{self.path}: {where}."{key}": list required keys in _required instead of !')
-            if not isinstance(spec, list) and spec not in self.TYPES:
+            if not isinstance(spec, list) and spec not in self.TYPES \
+                    and not (isinstance(spec, str) and self.LENGTH.fullmatch(spec)):
                 raise ConfigError(f'{self.path}: {where}.{key}: {spec!r} is no list of values '
-                                  f'nor type: {", ".join(self.TYPES)}')
+                                  f'nor type: {", ".join(self.TYPES)}, string(N)')
             specs[key] = spec
         required = table.get('_required', [])
         if not isinstance(required, list) or not all(isinstance(key, str) for key in required):
@@ -249,6 +252,9 @@ class Schema:
             return f'{", ".join(bad)}, expected page' if bad else None
         if isinstance(value, list):
             return f'list, expected {spec}'
+        length = cls.LENGTH.fullmatch(spec)
+        if length and len(value) > int(length[1]):
+            return f'{len(value)} characters, more than {length[1]}'
         if spec == 'number' and not cls.NUMBER.fullmatch(value) \
                 or spec == 'bool' and value not in ('true', 'false') \
                 or spec == 'date' and not cls.DATE.fullmatch(value) \
