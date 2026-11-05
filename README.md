@@ -19,7 +19,8 @@ uv tool install git+https://github.com/hiqsol/uwiki
 
 **Vault**: folder of markdown pages, rooted at the nearest folder with `.obsidian`, else the one given paths share.
 Commands take its folders and files, skipping hidden ones, `node_modules` and `vendor`,
-`--exclude GLOB` skips more, `--include GLOB` takes back, globs as in `.gitignore`.
+`--exclude GLOB` skips more, `--include GLOB` takes back, globs as in `.gitignore`,
+`{a,b}` matching either.
 
 **Folder page**: `README.md`, `index.md` or page named as its folder, the contents of the folder.
 

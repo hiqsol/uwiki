@@ -715,6 +715,19 @@ class ConfigTest(unittest.TestCase):
             ], err)
             self.assertEqual(code, 1)
 
+    def test_glob_alternatives(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'wiki', 'uwiki.toml'), 'exclude = ["{drafts,old}"]\n'
+                  '[schema]\n_required = ["status"]\nstatus = ["ok"]\n'
+                  '[schema."{AGENTS.md,docs/{adr,notes}/*.md}"]\n_inherit = false\n')
+            write(os.path.join(tmp, 'wiki', 'index.md'), '---\nstatus: ok\n---\nIndex.\n')
+            for page in ('sub/AGENTS.md', 'docs/adr/A.md', 'docs/notes/N.md', 'docs/other/O.md',
+                         'drafts/D.md', 'old/X.md'):
+                write(os.path.join(tmp, 'wiki', page), 'Page.\n')
+            code, lines, err = self.check('wiki', cwd=tmp)
+            self.assertEqual(lines, ['wiki/docs/other/O.md:1: missing front matter key: status'], err)
+            self.assertEqual(code, 1)
+
     def test_page_type(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(os.path.join(tmp, 'uwiki.toml'), '[schema]\nsupersedes = "page"\n')

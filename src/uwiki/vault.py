@@ -349,7 +349,7 @@ class Filter:
     """Takes vault paths: skip list and excludes drop them, includes take them back.
 
     Glob with `/` matches path from vault root, without it any path segment, like gitignore;
-    matching folder matches everything in it.
+    matching folder matches everything in it. `{a,b}` matches either, as in shells and editorconfig.
     """
     SKIP = ('.*', 'node_modules', 'vendor')
 
@@ -358,8 +358,33 @@ class Filter:
         self.include_prefixes = [self.prefix(p) for p in include]
         self.drop = [self.compile(p) for p in (*self.SKIP, *exclude)]
 
+    @classmethod
+    def compile(cls, glob):
+        return re.compile('|'.join(f'(?:{cls.pattern(one)})' for one in cls.expand(glob)))
+
+    @classmethod
+    def expand(cls, glob):
+        """Globs the `{a,b}` alternatives of glob stand for, glob itself when it has none or one is unclosed."""
+        start = glob.find('{')
+        if start < 0:
+            return [glob]
+        depth, parts, last = 0, [], start + 1
+        for i in range(start, len(glob)):
+            if glob[i] == '{':
+                depth += 1
+            elif glob[i] == ',' and depth == 1:
+                parts.append(glob[last:i])
+                last = i + 1
+            elif glob[i] == '}':
+                depth -= 1
+                if not depth:
+                    parts.append(glob[last:i])
+                    tails = cls.expand(glob[i + 1:])
+                    return [glob[:start] + one + tail for part in parts for one in cls.expand(part) for tail in tails]
+        return [glob]
+
     @staticmethod
-    def compile(glob):
+    def pattern(glob):
         glob = glob.strip('/')
         res = '' if '/' in glob else '(?:.*/)?'
         i = 0
@@ -373,13 +398,13 @@ class Filter:
             else:
                 res += {'*': '[^/]*', '?': '[^/]'}.get(glob[i], re.escape(glob[i]))
                 i += 1
-        return re.compile(res + '(?:/.*)?')
+        return res + '(?:/.*)?'
 
     @staticmethod
     def prefix(glob):
         """Literal start of anchored glob, empty for one matching anywhere."""
         glob = glob.strip('/')
-        return re.split(r'[*?]', glob)[0] if '/' in glob else ''
+        return re.split(r'[*?{]', glob)[0] if '/' in glob else ''
 
     def takes(self, path):
         if any(p.fullmatch(path) for p in self.include):
