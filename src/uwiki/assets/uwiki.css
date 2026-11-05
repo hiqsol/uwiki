@@ -21,13 +21,13 @@
     --code-function: #78b6f0;
     --code-type: #e5c07b;
     --code-name: #ef7f86;
-    /* headings by level, pale, neither red nor blue nor cyan of code and links */
-    --h1: #ffc98a;
-    --h2: #f2e39b;
-    --h3: #b5e8a0;
-    --h4: #d7b8ff;
-    --h5: #f5b8e4;
-    --h6: #cfc6b4;
+    /* headings by level, pale and muted, neither red nor blue nor cyan of code and links */
+    --h1: #e6caa8;
+    --h2: #e0d9b4;
+    --h3: #bfd4b6;
+    --h4: #cbbfe0;
+    --h5: #dfc3d6;
+    --h6: #c6c1b8;
     --sidebar-width: 290px;
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -57,12 +57,12 @@
         --code-function: #2f5fc4;
         --code-type: #86600a;
         --code-name: #c0392b;
-        --h1: #b35c00;
-        --h2: #8a6f00;
-        --h3: #3c7d24;
-        --h4: #7d45c2;
-        --h5: #a63d8a;
-        --h6: #7a6e58;
+        --h1: #93653a;
+        --h2: #776a34;
+        --h3: #4f6b43;
+        --h4: #695a8a;
+        --h5: #835672;
+        --h6: #6c665c;
         color-scheme: light;
     }
 }
