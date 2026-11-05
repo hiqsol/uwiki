@@ -21,14 +21,13 @@
     --code-function: #78b6f0;
     --code-type: #e5c07b;
     --code-name: #ef7f86;
-    /* headings as neovim cyberdream shows markdown: orange text on a band tinted by level */
-    --heading: #ffbd5e;
-    --h1: #ffbd5e;
-    --h2: #5ef1ff;
-    --h3: #5ea1ff;
-    --h4: #bd5eff;
-    --h5: #ff5ef1;
-    --h6: #5eff6c;
+    /* headings by level, pale, neither red nor blue nor cyan of code and links */
+    --h1: #ffc98a;
+    --h2: #f2e39b;
+    --h3: #b5e8a0;
+    --h4: #d7b8ff;
+    --h5: #f5b8e4;
+    --h6: #cfc6b4;
     --sidebar-width: 290px;
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -58,13 +57,12 @@
         --code-function: #2f5fc4;
         --code-type: #86600a;
         --code-name: #c0392b;
-        --heading: #d17c00;
-        --h1: #d17c00;
-        --h2: #008c99;
-        --h3: #0057d1;
-        --h4: #a018ff;
-        --h5: #d100bf;
-        --h6: #008b0c;
+        --h1: #b35c00;
+        --h2: #8a6f00;
+        --h3: #3c7d24;
+        --h4: #7d45c2;
+        --h5: #a63d8a;
+        --h6: #7a6e58;
         color-scheme: light;
     }
 }
@@ -394,20 +392,17 @@ body.resizing {
     content-visibility: visible;
 }
 .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
-    margin: 1.6em -0.5rem 0.5em;
-    padding: 0.1em 0.5rem;
+    margin: 1.6em 0 0.25em;
     line-height: 1.3;
     font-weight: 650;
-    color: var(--heading);
-    background: color-mix(in srgb, var(--band) 7%, var(--bg));
 }
-.content h1 { font-size: 2em; --band: var(--l1, var(--h1)); }
-.content h2 { font-size: 1.65em; --band: var(--l2, var(--h2)); }
-.content h3 { font-size: 1.35em; --band: var(--l3, var(--h3)); }
-.content h4 { font-size: 1.15em; --band: var(--l4, var(--h4)); }
-.content h5 { font-size: 1.05em; --band: var(--l5, var(--h5)); }
-.content h6 { font-size: 1em; --band: var(--l6, var(--h6)); }
-/* a page's title band is of level one, its headings of the levels written, however deep its folder puts them */
+.content h1 { font-size: 2em; color: var(--l1, var(--h1)); }
+.content h2 { font-size: 1.65em; color: var(--l2, var(--h2)); }
+.content h3 { font-size: 1.35em; color: var(--l3, var(--h3)); }
+.content h4 { font-size: 1.15em; color: var(--l4, var(--h4)); }
+.content h5 { font-size: 1.05em; color: var(--l5, var(--h5)); }
+.content h6 { font-size: 1em; color: var(--l6, var(--h6)); }
+/* a page's title is of level one, its headings of the levels written, however deep its folder puts them */
 .content > section:has(> h2.page) { --l2: var(--h1); --l3: var(--h2); --l4: var(--h3); --l5: var(--h4); --l6: var(--h5); }
 .content > section:has(> h3.page) { --l3: var(--h1); --l4: var(--h2); --l5: var(--h3); --l6: var(--h4); }
 .content > section:has(> h4.page) { --l4: var(--h1); --l5: var(--h2); --l6: var(--h3); }
@@ -433,7 +428,8 @@ body.resizing {
     top: 0;
     z-index: 5;
     display: flow-root;
-    padding-bottom: 0.3rem;
+    padding-bottom: 0.1rem;
+    background: var(--bg);
 }
 .content > section > .page > details[open] {
     max-height: 50vh;
@@ -856,8 +852,6 @@ details.callout:not([open]) > summary {
 .content.preview-body h1, .content.preview-body h2, .content.preview-body h3,
 .content.preview-body h4, .content.preview-body h5, .content.preview-body h6 {
     margin: 0.8em 0 0.3em;
-    padding: 0;
-    background: none;
     font-size: 1.05em;
 }
 
