@@ -217,9 +217,14 @@ a:hover {
     margin: 0;
     padding: 4px 8px 24px;
 }
-#toc ul {
-    margin: 0;
-    padding-left: 14px;
+#toc > li ul {
+    margin: 0 0 0 9px;
+    padding-left: 5px;
+    border-left: 1px solid var(--border);
+}
+/* guide line from under the toggle of a branch, the one holding the page being read stands out */
+#toc > li ul:has(> li > a.active) {
+    border-left-color: var(--fg-muted);
 }
 #toc li {
     list-style: none;
@@ -286,6 +291,21 @@ a:hover {
     color: var(--fg-muted);
     font-size: 11px;
     font-weight: 400;
+}
+/* tokens of a page with the pages under it, of a leaf on hover, search hit counts take their place */
+#toc .size {
+    float: right;
+    margin-left: 6px;
+    color: var(--fg-muted);
+    font-size: 11px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    line-height: calc(14px * 1.6);  /* on the baseline of the title */
+    opacity: 0.75;
+}
+#toc a:not(:hover) > .size.leaf,
+#toc.filtering .size {
+    display: none;
 }
 #toc ul.hits a {
     font-size: 13px;

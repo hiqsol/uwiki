@@ -454,6 +454,27 @@
     });
   }
 
+  // tokens of a page with the pages under it right of its sidebar entry: always on a branch, on hover on a leaf
+  function showSizes() {
+    nodes.forEach(function (n) { n.tokens = 0; n.count = 0; });
+    nodes.forEach(function (n) {
+      var tokens = n.info ? n.info.tokens || 0 : 0;
+      for (var p = n; p; p = p.parent) {
+        p.tokens += tokens;
+        p.count += n.info ? 1 : 0;
+      }
+    });
+    nodes.forEach(function (n) {
+      if (!n.link || !n.tokens) return;
+      var el = document.createElement("span");
+      el.className = n.isFolder ? "size" : "size leaf";
+      el.textContent = short(n.tokens);
+      n.link.insertBefore(el, n.link.firstChild);
+      n.link.title += "\n" + n.tokens.toLocaleString("en") + " tokens"
+        + (n.count > 1 ? " in " + n.count + " pages" : "");
+    });
+  }
+
   // links to pages and backlink titles, greyed when their page is filtered out
   function readRefs() {
     var pageOfId = new Map(), cur = null;
@@ -1386,6 +1407,7 @@
   markBoxDrawing();
   processHeaders(toc, document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page"), 0);
   readNodes();
+  showSizes();
   readRefs();
   buildFacets();
   bindEvents();
