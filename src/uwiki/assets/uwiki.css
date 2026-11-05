@@ -399,7 +399,7 @@ body.resizing {
     line-height: 1.3;
     font-weight: 650;
     color: var(--heading);
-    background: color-mix(in srgb, var(--band) 15%, var(--bg));
+    background: color-mix(in srgb, var(--band) 7%, var(--bg));
 }
 .content h1 { font-size: 2em; --band: var(--l1, var(--h1)); }
 .content h2 { font-size: 1.65em; --band: var(--l2, var(--h2)); }
