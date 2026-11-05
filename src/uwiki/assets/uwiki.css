@@ -435,7 +435,6 @@ body.resizing {
 /* link to a page filtered out, it still previews */
 .content a.off {
     color: var(--fg-muted);
-    text-decoration: line-through;
 }
 .content .backlinks a.off, .content .backlinks .off {
     opacity: 0.5;
