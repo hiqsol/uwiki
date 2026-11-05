@@ -454,37 +454,51 @@
     });
   }
 
-  // tokens of a page with the pages under it right of its sidebar entry: always on a branch, on hover on a leaf
-  // with their share of all; bars from the right edge as dust draws them: the share of the entry over
-  // the share of its branch
+  // share of tokens of a page with the pages under it right of its sidebar entry, always on a branch,
+  // on hover on a leaf, tokens beside it on hover; bars from the right edge as dust draws them: the share
+  // of an entry over the lighter one of its branch
   function showSizes() {
+    nodes.forEach(function (n) {
+      if (!n.link) return;
+      n.size = document.createElement("span");
+      n.size.className = n.isFolder ? "size" : "size leaf";
+      ["tokens", "share"].forEach(function (cls) {
+        var el = document.createElement("span");
+        el.className = cls;
+        n.size.appendChild(el);
+      });
+      n.link.insertBefore(n.size, n.link.firstChild);
+    });
+    var all = sizeBy(nodes.filter(function (n) { return !!n.info; }));
+    nodes.forEach(function (n) {
+      if (n.link && n.tokens) n.link.title += "\n" + n.tokens.toLocaleString("en") + " tokens"
+        + (n.count > 1 ? " in " + n.count + " pages" : "") + ", " + percent(100 * n.tokens / all) + " of all";
+    });
+  }
+
+  // shares of the tokens of the given pages: of all, or of those found when filtering
+  function sizeBy(matched) {
     var all = 0;
     nodes.forEach(function (n) { n.tokens = 0; n.count = 0; });
-    nodes.forEach(function (n) {
-      var tokens = n.info ? n.info.tokens || 0 : 0;
+    matched.forEach(function (n) {
+      var tokens = n.info.tokens || 0;
       all += tokens;
       for (var p = n; p; p = p.parent) {
         p.tokens += tokens;
-        p.count += n.info ? 1 : 0;
+        p.count++;
       }
     });
-    if (!all) return;
     nodes.forEach(function (n) {
-      if (!n.link || !n.tokens) return;
-      var share = 100 * n.tokens / all;
-      n.link.style.setProperty("--share", share.toFixed(2));
-      if (n.parent && n.parent.link) n.link.style.setProperty("--branch", (100 * n.parent.tokens / all).toFixed(2));
-      var el = document.createElement("span");
-      el.className = n.isFolder ? "size" : "size leaf";
-      el.textContent = short(n.tokens);
-      var pct = document.createElement("span");
-      pct.className = "share";
-      pct.textContent = " · " + percent(share);
-      el.appendChild(pct);
-      n.link.insertBefore(el, n.link.firstChild);
-      n.link.title += "\n" + n.tokens.toLocaleString("en") + " tokens"
-        + (n.count > 1 ? " in " + n.count + " pages" : "") + ", " + percent(share) + " of all";
+      if (!n.size) return;
+      var share = all ? 100 * n.tokens / all : 0, style = n.link.style;
+      n.size.hidden = !n.tokens;
+      n.size.firstChild.textContent = short(n.tokens) + " · ";
+      n.size.lastChild.textContent = percent(share);
+      style.setProperty("--share", share.toFixed(2));
+      if (n.parent && n.parent.link && all) style.setProperty("--branch", (100 * n.parent.tokens / all).toFixed(2));
+      else style.removeProperty("--branch");
     });
+    return all;
   }
 
   function percent(p) {
@@ -680,6 +694,7 @@
     var filtering = prep.terms.length > 0;
     var matched = filtering ? match(prep, null) : nodes.filter(function (n) { return !!n.info; });
     setStates(matched, filtering);
+    sizeBy(matched);
     showHits(prep, matched);
     showStats(matched, filtering);
     showFacets(prep);

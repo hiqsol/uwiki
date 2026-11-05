@@ -130,9 +130,9 @@ One self-contained file, light or dark by system preference, works from `file://
   a page is laid out and drawn as it nears the window, so a long vault opens fast
 - sidebar of contents following the page being read, its edge drags its width,
   a click on a branch title folds or unfolds it too; guide lines show nesting, the one of the page
-  being read stands out; tokens of a branch with all pages under it right of its title, of a page on hover,
-  with their share of all; bars from the right edge as `dust` draws them: the share of an entry over
-  the lighter one of its branch
+  being read stands out; share of tokens of a branch with all pages under it right of its title, of a page
+  on hover, tokens beside it on hover; bars from the right edge as `dust` draws them: the share of an entry
+  over the lighter one of its branch; when filtering, shares are of pages found, beside counts of hits
 - hover preview of a link target under the folders it is in, links in it preview too,
   sidebar entries beside the sidebar
 - front matter, backlinks and what `check` reports top right of page header, problems marked at their lines;

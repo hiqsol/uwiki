@@ -244,14 +244,11 @@ a:hover {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-/* share of all tokens from the right edge: of the entry over the lighter one of its branch */
+/* share of tokens from the right edge, of all or of found pages: of the entry over the lighter one of its branch */
 #toc a[style] {
     background-image:
         linear-gradient(to left, var(--bar) calc(var(--share, 0) * 1cqw), transparent 0),
         linear-gradient(to left, var(--bar-branch) calc(var(--branch, 0) * 1cqw), transparent 0);
-}
-#toc.filtering a[style] {
-    background-image: none;
 }
 #toc a:hover {
     background-color: var(--accent-bg);
@@ -299,14 +296,19 @@ a:hover {
     padding: 8px 10px;
     color: var(--fg-muted);
 }
+/* search hits, marked as in the text */
 #toc .count {
     float: right;
-    margin-left: 6px;
-    color: var(--fg-muted);
+    margin: 3px 0 0 6px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: var(--mark);
+    color: var(--fg);
     font-size: 11px;
     font-weight: 400;
+    line-height: 16px;
 }
-/* tokens of a page with the pages under it, of a leaf on hover, share of all on hover, search hit counts take their place */
+/* share of tokens of a page with the pages under it, of a leaf on hover unless filtering, tokens on hover */
 #toc .size {
     float: right;
     margin-left: 6px;
@@ -317,9 +319,8 @@ a:hover {
     line-height: calc(14px * 1.6);  /* on the baseline of the title */
     opacity: 0.75;
 }
-#toc a:not(:hover) > .size.leaf,
-#toc a:not(:hover) .share,
-#toc.filtering .size {
+#toc:not(.filtering) a:not(:hover) > .size.leaf,
+#toc a:not(:hover) .tokens {
     display: none;
 }
 #toc ul.hits a {
