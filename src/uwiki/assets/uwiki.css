@@ -9,6 +9,8 @@
     --border: #2c313c;
     --accent: #7c93ff;
     --accent-bg: rgba(124, 147, 255, 0.14);
+    --bar: rgba(124, 147, 255, 0.22);
+    --bar-branch: rgba(124, 147, 255, 0.08);
     --link-external: #4fc1c9;
     --mark: rgba(255, 196, 0, 0.35);
     --problem: #ff6b6b;
@@ -36,6 +38,8 @@
         --border: #dde1e7;
         --accent: #3b5bdb;
         --accent-bg: rgba(59, 91, 219, 0.1);
+        --bar: rgba(59, 91, 219, 0.17);
+        --bar-branch: rgba(59, 91, 219, 0.06);
         --link-external: #0b7f86;
         --mark: rgba(255, 196, 0, 0.45);
         --problem: #d62f2f;
@@ -216,6 +220,7 @@ a:hover {
     overflow-y: auto;
     margin: 0;
     padding: 4px 8px 24px;
+    container-type: inline-size;  /* bars of all entries measured on one width, cqw */
 }
 #toc > li ul {
     margin: 0 0 0 9px;
@@ -239,13 +244,22 @@ a:hover {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* share of all tokens from the right edge: of the entry over the lighter one of its branch */
+#toc a[style] {
+    background-image:
+        linear-gradient(to left, var(--bar) calc(var(--share, 0) * 1cqw), transparent 0),
+        linear-gradient(to left, var(--bar-branch) calc(var(--branch, 0) * 1cqw), transparent 0);
+}
+#toc.filtering a[style] {
+    background-image: none;
+}
 #toc a:hover {
-    background: var(--accent-bg);
+    background-color: var(--accent-bg);
     color: var(--fg);
     text-decoration: none;
 }
 #toc a.active {
-    background: var(--accent-bg);
+    background-color: var(--accent-bg);
     color: var(--accent);
     font-weight: 600;
 }
@@ -292,7 +306,7 @@ a:hover {
     font-size: 11px;
     font-weight: 400;
 }
-/* tokens of a page with the pages under it, of a leaf on hover, search hit counts take their place */
+/* tokens of a page with the pages under it, of a leaf on hover, share of all on hover, search hit counts take their place */
 #toc .size {
     float: right;
     margin-left: 6px;
@@ -304,6 +318,7 @@ a:hover {
     opacity: 0.75;
 }
 #toc a:not(:hover) > .size.leaf,
+#toc a:not(:hover) .share,
 #toc.filtering .size {
     display: none;
 }
