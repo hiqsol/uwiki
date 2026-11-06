@@ -7,6 +7,7 @@
     --fg-nav: #dadde4;
     --code-inline: #f28b82;
     --border: #2c313c;
+    --rule: #9099aa;  /* line between pages and around previews, brighter than borders inside a page */
     --accent: #7c93ff;
     --accent-bg: rgba(124, 147, 255, 0.14);
     --bar: rgba(124, 147, 255, 0.22);
@@ -43,6 +44,7 @@
         --fg-nav: #2a2f37;
         --code-inline: #c7254e;
         --border: #dde1e7;
+        --rule: #7f8794;
         --accent: #3b5bdb;
         --accent-bg: rgba(59, 91, 219, 0.1);
         --bar: rgba(59, 91, 219, 0.17);
@@ -419,7 +421,7 @@ body.resizing {
 .content .page {
     margin-top: 1rem;
     padding-top: 0.5rem;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--rule);
 }
 /* page header stays on top while its page scrolls under it, the next page's header takes its place;
    it holds its floated asides, an unfolded one scrolls in it */
@@ -813,7 +815,7 @@ details.callout:not([open]) > summary {
     overflow: hidden;
     padding: 10px 16px 12px;
     background: var(--bg);
-    border: 1px solid var(--border);
+    border: 1px solid var(--rule);
     border-radius: 8px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
     font-size: 14px;
