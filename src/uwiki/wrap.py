@@ -1,8 +1,11 @@
 """Rewraps markdown lines longer than width (tab counts as 4).
 
 Only paragraphs and list items containing an overlong line are rewrapped,
-together with their continuation lines. Frontmatter, code blocks, tables
-and headings are left as is. Wiki links and inline code are not split.
+together with their continuation lines. A paragraph line continues the
+one before when it is indented more, starts lowercase or follows a line
+that doesn't end a sentence, so a sentence started on its own line stays
+there; an indented continuation keeps its indent as a hanging one.
+Frontmatter, code blocks, tables and headings are left as is. Wiki links and inline code are not split.
 A line rewrapping leaves as is, e.g. a long URL, is not reported.
 """
 
@@ -15,10 +18,15 @@ WIDTH = 70
 TOKEN = re.compile(r'(?:\[\[[^\]]*\]\]|`[^`]*`|[^\s`\[]+|\[)+')
 ITEM = re.compile(r'^(\t*)((?:[-*+]|\d+[.)]|>) +|[a-z]\) +)?')
 BLOCK = re.compile(r'^\s*(?:[-*+>#|]|\d+[.)])(?:\s|$)')
+SENTENCE_END = re.compile(r'[.:!?][)"\'*_]*$')
 
 
 def columns(s):
     return len(s.expandtabs(4))
+
+
+def indent(line):
+    return columns(line) - columns(line.lstrip())
 
 
 def is_plain(line):
@@ -72,7 +80,8 @@ def rewrap(text, width=WIDTH):
             nl = src[j]
             if cont and nl.startswith(cont) and not nl[len(cont):].startswith((' ', '\t')):
                 group.append(nl)
-            elif not cont and nl[:1].islower():
+            elif not cont and (indent(nl) > indent(line) or nl.lstrip()[:1].islower()
+                               or not SENTENCE_END.search(group[-1].rstrip())):
                 group.append(nl)
             else:
                 break
@@ -80,7 +89,8 @@ def rewrap(text, width=WIDTH):
         wrapped = group
         if any(columns(g) > width for g in group):
             words = TOKEN.findall(' '.join([line[m.end():]] + [g.strip() for g in group[1:]]))
-            wrapped = wrap(head, cont, words, width)
+            hang = cont or (group[1][:len(group[1]) - len(group[1].lstrip())] if len(group) > 1 else '')
+            wrapped = wrap(head, hang, words, width)
         if wrapped != group:
             long += [i + 1 + k for k, g in enumerate(group) if columns(g) > width]
         out.extend(wrapped)

@@ -1738,6 +1738,26 @@ class WrapTest(unittest.TestCase):
         self.assertNotEqual(read(os.path.join(self.tmp.name, 'sub', 'Other.md')), self.TEXT)
         self.assertEqual(read(os.path.join(self.tmp.name, 'node_modules', 'Skip.md')), self.TEXT)
 
+    def test_paragraph_continues_mid_sentence(self):
+        text = ('A line that is far too long breaks off in the middle of the\n'
+                'Sentence, which goes on.\n'
+                'A new sentence stays.\n'
+                '\n'
+                'B4. A hanging paragraph that is long enough to wrap.\n'
+                '    Its indented lines join it.\n')
+        with open(self.file, 'w', encoding='utf-8') as f:
+            f.write(text)
+        run('wrap', '-w', '40', self.file)
+        self.assertEqual(read(self.file), (
+            'A line that is far too long breaks off\n'
+            'in the middle of the Sentence, which\n'
+            'goes on.\n'
+            'A new sentence stays.\n'
+            '\n'
+            'B4. A hanging paragraph that is long\n'
+            '    enough to wrap. Its indented lines\n'
+            '    join it.\n'))
+
     def test_unbreakable_line_not_reported(self):
         text = ('1. [Rules\n'
                 '   pdf](https://example.com/a/very/long/path/to/the/rules.pdf).\n'
