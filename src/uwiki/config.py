@@ -22,20 +22,34 @@ class Config:
         self.prefix = prefix  # vault root relative to the config folder, schema globs match from there
         self._schema = None
 
+    NAMES = ('uwiki.toml', 'pyproject.toml')
+
     @classmethod
     def load(cls, root):
         """Config of the vault at given root, empty when there is none."""
-        folder = os.path.abspath(root)
-        while True:
+        for folder in cls.folders(root):
             config = cls.find(folder)
             if config:
                 data, file = config
                 prefix = os.path.relpath(os.path.abspath(root), folder).replace(os.sep, '/')
                 return cls(data, file, '' if prefix == '.' else prefix)
+        return cls()
+
+    @staticmethod
+    def folders(root):
+        """Folders a config of the vault at root is looked for in: root and up to the git work tree root."""
+        folder = os.path.abspath(root)
+        while True:
+            yield folder
             parent = os.path.dirname(folder)
             if parent == folder or os.path.exists(os.path.join(folder, '.git')):
-                return cls()
+                return
             folder = parent
+
+    @classmethod
+    def files(cls, root):
+        """Every file that is or would be config of the vault at root, existing or not."""
+        return [os.path.join(folder, name) for folder in cls.folders(root) for name in cls.NAMES]
 
     @classmethod
     def find(cls, folder):

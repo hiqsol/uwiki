@@ -61,7 +61,8 @@ def interrupt(signum, frame):
 class Server:
     """Watches as `uwiki watch` does and serves the output folder, by default on localhost only."""
 
-    def __init__(self, build, host='127.0.0.1', port=8000, open=False, interval=0.5, quiet=False, out=None):
+    def __init__(self, build, host='127.0.0.1', port=8000, open=False, interval=0.5, quiet=False, out=None,
+                 options=None):
         self.build = build
         self.page = build.outputs['html']
         self.outdir = os.path.dirname(os.path.abspath(self.page))
@@ -69,7 +70,7 @@ class Server:
         self._attachments = None, set()  # selection: attachment files of its vault
         self.open = open
         self.out = out or sys.stdout
-        self.watcher = Watcher(build, interval, quiet=quiet, out=self.out)
+        self.watcher = Watcher(build, interval, quiet=quiet, out=self.out, options=options)
         handler = partial(Handler, server_state=self, directory=self.outdir)
         self.httpd = ThreadingHTTPServer((host, port), handler)
         self.httpd.daemon_threads = True

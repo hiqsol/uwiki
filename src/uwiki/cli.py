@@ -41,8 +41,12 @@ def make_build(args):
     return Build(args.paths, args.output, args.title, args.html, args.md, args.include, args.exclude,
                  build_options(args))
 
+def given_options(args):
+    """Option defaults the vault config gives the command now, for watching to restart on their change."""
+    return lambda: config_defaults(parser(), args)
+
 def watch(args):
-    Watcher(make_build(args), args.interval, quiet=args.quiet).run()
+    Watcher(make_build(args), args.interval, quiet=args.quiet, options=given_options(args)).run()
 
 def serve(args):
     """Builds into a temporary folder unless -o is given, so serving leaves no files behind, HTML only there."""
@@ -61,7 +65,8 @@ def serve(args):
         if 'html' not in build.outputs:
             raise UsageError('serve needs HTML output')
         try:
-            server = served.Server(build, args.host, port, args.open and not restarted, args.interval, args.quiet)
+            server = served.Server(build, args.host, port, args.open and not restarted, args.interval, args.quiet,
+                                   options=given_options(args))
         except OSError as e:
             sys.exit(f'uwiki serve: cannot listen on {args.host}:{port}: {e.strerror}')
         server.run()
@@ -211,7 +216,7 @@ def parser():
     add_build_options(p)
     p.set_defaults(func=build)
 
-    p = command(commands, 'watch', 'build, then build again on change of any page or attachment',
+    p = command(commands, 'watch', 'build, then build again on change of any page, attachment or config',
                 f'{BUILD_USAGE} [-q] [--interval SECONDS]')
     add_paths(p, 'folders or files to build')
     add_build_options(p)

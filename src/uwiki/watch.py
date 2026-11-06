@@ -1,6 +1,7 @@
-"""Rebuilds on change: polls mtimes and file lists of the vault, no dependency.
+"""Rebuilds on change: polls mtimes and file lists of the vault and its config, no dependency.
 
-Restarts on change of uwiki's own code, as when editing it or upgrading.
+Restarts on change of uwiki's own code, as when editing it or upgrading,
+and on change of options the config gives the command, which it takes on start only.
 """
 
 import os
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import time
 
+from .config import Config
 from .vault import Scanner
 
 CODE = os.path.dirname(os.path.abspath(__file__))
@@ -60,17 +62,23 @@ def restart(environ):
     os.execve(command[0], command, {**os.environ, **environ})
 
 class Watcher:
-    """Builds once, then again on change of any file the vault takes: pages and attachments.
+    """Builds once, then again on change of any file the vault takes: pages and attachments,
+    or of its config: `uwiki.toml` or `pyproject.toml` wherever `Config.load` looks, ones not there yet too.
 
     Changes within `DEBOUNCE` seconds of each other, or the interval when shorter, make one build,
     a failed build keeps the last good output and watching goes on.
-    A change of uwiki code raises `Restart`, unless the code fails to import: then watching goes on.
+    A change of uwiki code raises `Restart`, so does a change of what options gives:
+    the option defaults the config gives the command, which it takes on start only; None watches no options.
+    The restart is left out when the code fails to import, a config that fails to load builds nothing,
+    watching goes on either way.
     """
 
     DEBOUNCE = 0.3
 
-    def __init__(self, build, interval=0.5, quiet=False, out=None):
+    def __init__(self, build, interval=0.5, quiet=False, out=None, options=None):
         self.build = build
+        self.options = options
+        self.given = options and options()  # option defaults the command started with
         self.interval = interval
         self.quiet = quiet
         self.out = out or sys.stdout
@@ -78,12 +86,13 @@ class Watcher:
         self.root = None
 
     def snapshot(self):
-        """Every file the vault takes with its mtime and size, outputs left out, and the uwiki code files."""
+        """Mtime and size of every file the vault takes, outputs left out, of the uwiki code and of the config."""
         if self.root is None:
             self.root = (self.build.selection or self.build.scan()).root
         scanner = Scanner(self.root, self.build.filter)
         scanner.scan(links=False)
-        return stats(f for f in scanner.file_paths() if f not in self.outputs), stats(code_files())
+        vault = stats(f for f in scanner.file_paths() if f not in self.outputs)
+        return vault, stats(code_files()), stats(Config.files(self.root))
 
     def print(self, text, error=False):
         if error or not self.quiet:
@@ -123,15 +132,28 @@ class Watcher:
                 return current
             current = settled
 
-    def code_changed(self):
-        """Raises `Restart` unless the changed code fails to import, then tells so and goes on."""
+    def restart(self, what):
+        """Raises `Restart` unless the code fails to import, then tells so and goes on."""
         stamp = time.strftime('%H:%M:%S')
         command = restart_command()
         error = command and broken(command)
         if not error:
-            self.print(f'{stamp} uwiki code changed, restarting')
+            self.print(f'{stamp} {what} changed, restarting')
             raise Restart({})
         self.print(f'{stamp} uwiki code fails to import, not restarting: {error}', error=True)
+
+    def config_changed(self):
+        """Raises `Restart` when the options the config gives change, False when it fails to load."""
+        try:
+            options = self.options and self.options()
+            Config.load(self.root).schema
+        except ValueError as e:
+            self.print(f'error: {e}', error=True)
+            self.print(f'{time.strftime("%H:%M:%S")} config fails to load, last good output stays')
+            return False
+        if options != self.given:
+            self.restart('config options')
+        return True
 
     def run(self, first=None):
         """Builds now and on every change till interrupted, calls first after the first good build."""
@@ -144,8 +166,10 @@ class Watcher:
                     first = None
                 current = self.changes(last)
                 if current[1] != last[1]:
-                    self.code_changed()
+                    self.restart('uwiki code')
                 vault_changed = current[0] != last[0]
+                if current[2] != last[2]:
+                    vault_changed = self.config_changed()
                 last = current
         except KeyboardInterrupt:
             pass

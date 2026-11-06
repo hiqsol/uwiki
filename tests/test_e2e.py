@@ -1220,6 +1220,30 @@ class WatchTest(unittest.TestCase):
             watch.stop()
 
 
+    def test_takes_config_changes(self):
+        write(os.path.join(self.vault, 'B.md'), 'Page B.\n')
+        pyproject = os.path.join(self.tmp.name, 'pyproject.toml')  # above the vault
+        config = os.path.join(self.vault, 'uwiki.toml')
+        write(pyproject, '[project]\nversion = "1"\n[tool.uwiki]\nexclude = ["B.md"]\n')
+        watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1')
+        try:
+            self.assertIn('built 2 pages', watch.line())
+            write(pyproject, '[project]\nversion = "2"\n[tool.uwiki]\nexclude = ["B.md"]\n')
+            self.assertIn('built 2 pages', watch.line())  # same options: built again, no restart
+            write(config, 'exclude = []\n')  # nearer config not there before
+            self.assertIn('config options changed, restarting', watch.line())
+            self.assertIn('built 3 pages', watch.line())
+            write(config, 'exclude = [\n')
+            self.assertRegex(watch.line(), r'^error: .*uwiki.toml: ')
+            self.assertIn('config fails to load, last good output stays', watch.line())
+            write(config, 'exclude = []\n[schema]\ntitle = "string"\n')
+            self.assertIn('built 3 pages', watch.line())  # schema is read on every build
+            os.remove(config)
+            self.assertIn('config options changed, restarting', watch.line())
+            self.assertIn('built 2 pages', watch.line())
+        finally:
+            watch.stop()
+
     def test_restarts_on_change_of_uwiki_code(self):
         src = os.path.join(self.tmp.name, 'src')
         shutil.copytree(os.path.join(SRC, 'uwiki'), os.path.join(src, 'uwiki'))
