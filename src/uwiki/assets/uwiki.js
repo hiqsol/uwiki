@@ -39,27 +39,69 @@
     }
   }
 
-  // problems the page has, backlinks and front matter blocks built from the data go before crumb and title,
-  // floating right one over the other
+  var READ_WPM = 230;  // words read a minute, for reading time
+
+  // metadata and front matter blocks built from the data go before crumb and title, floating right one over
+  // the other; metadata takes in what check reports, built into the header
   function floatAsides() {
     pages.forEach(function (h) {
-      var blocks = Array.prototype.slice.call(h.querySelectorAll(":scope > details"));
-      var info = data.pages[h.id];
-      blocks.push(backlinksBlock(data.backlinks[h.id] || []));
+      var info = data.pages[h.id], problems = h.querySelector(":scope > details.problems");
+      var blocks = [metadataBlock(info, data.backlinks[h.id] || [], problems)];
+      if (problems) problems.remove();
       if (info && data.frontMatter !== false) blocks.push(frontMatterBlock(info));
       blocks.filter(Boolean).reverse().forEach(function (block) { h.insertBefore(block, h.firstChild); });
     });
   }
 
-  // folded line of backlink titles, readRefs fills it, unfolding into links to the linking pages
-  function backlinksBlock(links) {
-    if (!links.length) return null;
-    var block = details("backlinks");
-    var summary = block.firstChild, div = document.createElement("div");
-    var b = document.createElement("b");
-    b.textContent = "Backlinks (" + links.length + "):";
-    summary.appendChild(b);
-    summary.appendChild(document.createElement("span"));
+  // metadata as folded line of problems, tokens, backlinks and file name unfolding into a table of problems
+  // with links to where they are, stats, links to linking pages, file name and folder; file name and folder
+  // only where title and crumb don't tell them, problems and backlinks only if any
+  function metadataBlock(info, links, problems) {
+    var rows = [], line = [], b = null;
+    var issues = problems ? problems.querySelector(":scope > div") : null;
+    if (issues && issues.children.length) {
+      var kind = issues.querySelector("a.problem") ? "problem" : "warning";
+      b = document.createElement("b");
+      b.className = kind;
+      b.textContent = plural(issues.children.length, kind);
+      rows.push([b.textContent, issues, "issues"]);
+    }
+    if (info) {
+      var minutes = Math.max(1, Math.round((info.words || 0) / READ_WPM));
+      rows.push(["Stats", [short(info.words || 0) + " words", short(info.tokens || 0) + " tokens",
+                           plural(minutes, "minute")].join(" · ")]);
+      line.push(short(info.tokens || 0) + " tokens");
+    }
+    if (links.length) {
+      rows.push([plural(links.length, "backlink"), backlinks(links)]);
+      line.push(plural(links.length, "backlink"));
+    }
+    if (info && info.file) {
+      rows.push(["Filename", info.file]);
+      line.push(info.file);
+    }
+    if (info && info.dir) rows.push(["Dir", info.dir]);
+    if (!rows.length) return null;
+    var block = details("metadata"), span = document.createElement("span");
+    if (b) span.appendChild(b);
+    span.appendChild(document.createTextNode((b && line.length ? " · " : "") + line.join(" · ")));
+    block.firstChild.appendChild(span);
+    var table = document.createElement("table");
+    rows.forEach(function (row) {
+      var tr = table.insertRow(), th = document.createElement("th"), td = tr.insertCell();
+      th.textContent = row[0];
+      tr.insertBefore(th, td);
+      if (row[2]) td.className = row[2];
+      if (typeof row[1] === "string") td.textContent = row[1];
+      else td.appendChild(row[1]);
+    });
+    block.appendChild(table);
+    return block;
+  }
+
+  // links to the linking pages, to the heading a link leads to
+  function backlinks(links) {
+    var div = document.createElement("div");
     links.forEach(function (link, i) {
       var anchor = Array.isArray(link) ? link[0] : link, heading = Array.isArray(link) ? link[1] : "";
       var source = document.getElementById(anchor);
@@ -69,8 +111,11 @@
       if (i) div.appendChild(document.createTextNode(", "));
       div.appendChild(a);
     });
-    block.appendChild(div);
-    return block;
+    return div;
+  }
+
+  function plural(n, word) {
+    return n + " " + word + (n === 1 ? "" : "s");
   }
 
   // front matter as folded line of values unfolding into one table of keys and values:
@@ -262,6 +307,24 @@
     var h = box.querySelector(":scope > .page");
     if (h) box.style.setProperty("--head", h.offsetHeight + "px");
   }
+  // a page header sticks: above the window it sits at the end of its page, where a jump to it would land,
+  // so it stops sticking till the jump is done; then it is at the top of the window, sticking moves it not
+  function unstick(id) {
+    var el = id && document.getElementById(id);
+    if (!el || !el.classList.contains("page") || boxOf(el) === el) return;
+    el.style.position = "static";
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { el.style.position = ""; });
+    });
+  }
+
+  // a heading or item lands below its page header, a page where it starts
+  function jumpTo(el) {
+    clearHead(el.id);
+    unstick(el.id);
+    el.scrollIntoView();
+  }
+
   function hashId(href) {
     try {
       return decodeURIComponent(href.slice(href.indexOf("#") + 1));
@@ -358,10 +421,10 @@
     }
   }
 
-  // text of the range without parts added by build, as "Backlinks"
+  // text of the range without parts added by build, as metadata
   function textOf(range) {
     var frag = range.cloneContents();
-    frag.querySelectorAll(".backlinks, .problems").forEach(function (el) { el.remove(); });
+    frag.querySelectorAll(".metadata, .problems").forEach(function (el) { el.remove(); });
     return frag.textContent;
   }
 
@@ -510,7 +573,7 @@
     return (p >= 10 ? Math.round(p) : p >= 0.1 ? p.toFixed(1).replace(/\.0$/, "") : "<0.1") + "%";
   }
 
-  // links to pages and backlink titles, greyed when their page is filtered out
+  // links to pages, greyed when their page is filtered out
   function readRefs() {
     var pageOfId = new Map(), cur = null;
     content.querySelectorAll("[id]").forEach(function (el) {
@@ -526,23 +589,9 @@
       var page = !a.classList.contains("item-anchor") && target(a);
       if (page) add(a, page);
     });
-    content.querySelectorAll(".problems a").forEach(function (a) {
+    content.querySelectorAll(".metadata .issues a").forEach(function (a) {
       var id = decodeURIComponent(a.getAttribute("href").slice(1));
       if (!document.getElementById(id)) a.setAttribute("href", "#" + id.replace(/^problem-(.*)-\d+$/, "$1"));
-    });
-    content.querySelectorAll(".backlinks").forEach(function (block) {
-      var line = block.querySelector(":scope > summary > span");
-      var links = block.querySelectorAll(":scope > div > a");
-      if (!line || !links.length) return;
-      line.textContent = "";
-      links.forEach(function (a, i) {
-        if (i) line.appendChild(document.createTextNode(", "));
-        var title = document.createElement("span");
-        title.textContent = a.textContent;
-        line.appendChild(title);
-        var page = target(a);
-        if (page) add(title, page);
-      });
     });
   }
 
@@ -803,7 +852,7 @@
     }).join(" · ") + (n ? " · " : "");
     counts.title = cols.map(function (c) { return (filtering ? c[1] + " of " : "") + c[2] + " " + c[0]; }).join(", ");
     problems.hidden = !n;
-    problems.textContent = n + (n === 1 ? " problem" : " problems");
+    problems.textContent = plural(n, "problem");
     var on = parse(query.value).some(isProblemTerm);
     problems.classList.toggle("on", on);
     problems.title = on ? "Show all pages" : "Show only pages with problems";
@@ -926,7 +975,7 @@
       walker.currentNode = s.head;
       while (walker.nextNode() && range.intersectsNode(walker.currentNode)) {
         var parent = walker.currentNode.parentNode;
-        if (!parent.closest(".backlinks, .problems, .front-matter, .crumb, .item-anchor, .mermaid")) {
+        if (!parent.closest(".metadata, .problems, .front-matter, .crumb, .item-anchor, .mermaid")) {
           texts.push(walker.currentNode);
         }
       }
@@ -1042,8 +1091,7 @@
     update();
     if (q && location.hash) {
       var target = document.getElementById(hashId(location.hash));
-      clearHead(target && target.id);
-      if (target) target.scrollIntoView();
+      if (target) jumpTo(target);
     }
   }
 
@@ -1154,7 +1202,7 @@
     for (var n = target.nextElementSibling; n; n = n.nextElementSibling) {
       if (n.classList.contains("page")) break;
       if (!page && /^H[1-6]$/.test(n.tagName) && +n.tagName[1] <= level) break;
-      if (!n.classList.contains("backlinks") && !n.classList.contains("problems")) nodes.push(n);
+      if (!n.classList.contains("metadata") && !n.classList.contains("problems")) nodes.push(n);
     }
     return nodes;
   }
@@ -1459,10 +1507,13 @@
       });
     };
     window.addEventListener("scroll", schedule, { passive: true });
-    // capture, so the header is measured before the browser jumps to the link target
+    // capture, so the header is measured or a page header unstuck before the browser jumps to the link target
     document.addEventListener("click", function (e) {
       var a = e.target.closest && e.target.closest('a[href^="#"]');
-      if (a) clearHead(hashId(a.getAttribute("href")));
+      if (!a) return;
+      var id = hashId(a.getAttribute("href"));
+      clearHead(id);
+      unstick(id);
     }, true);
     // pages drawn as they near the window get their real size, moving the pages after them without a scroll
     if ("ResizeObserver" in window) {

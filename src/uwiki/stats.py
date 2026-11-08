@@ -67,8 +67,8 @@ class Stats:
 
     @staticmethod
     def tokens(body):
-        """Estimate of LLM tokens: 4 characters each."""
-        return -(-len(body) // 4)
+        """Estimate of LLM tokens: 4 bytes of UTF-8 each, so text in other scripts than Latin counts more."""
+        return -(-len(body.encode('utf-8', 'surrogateescape')) // 4)
 
     @staticmethod
     def image(scanner, source, text):

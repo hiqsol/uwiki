@@ -544,7 +544,7 @@ main.content {
 .content a.off {
     color: var(--fg-muted);
 }
-.content .backlinks a.off, .content .backlinks .off {
+.content .metadata a.off {
     opacity: 0.5;
     text-decoration: none;
 }
@@ -558,8 +558,8 @@ main.content {
 .content .page .crumb a {
     color: var(--accent);
 }
-/* problems over backlinks over front matter float right of the header, folded to one line each */
-.content .front-matter, .content .backlinks, .content .problems {
+/* metadata over front matter float right of the header, folded to one line each */
+.content .front-matter, .content .metadata {
     float: right;
     clear: right;
     max-width: min(45%, 24rem);
@@ -569,13 +569,13 @@ main.content {
     letter-spacing: normal;
     line-height: 1.5;
 }
-.content .backlinks, .content .problems {
+.content .metadata {
     margin-bottom: 0;
 }
-.content .front-matter[open], .content .backlinks[open], .content .problems[open] {
+.content .front-matter[open], .content .metadata[open] {
     max-width: min(60%, 32rem);
 }
-.content .front-matter > summary, .content .backlinks > summary, .content .problems > summary {
+.content .front-matter > summary, .content .metadata > summary {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -585,50 +585,38 @@ main.content {
     cursor: pointer;
 }
 .content .front-matter > summary::-webkit-details-marker,
-.content .backlinks > summary::-webkit-details-marker,
-.content .problems > summary::-webkit-details-marker {
+.content .metadata > summary::-webkit-details-marker {
     display: none;
 }
-.content .front-matter > summary::before, .content .backlinks > summary::before,
-.content .problems > summary::before {
+.content .front-matter > summary::before, .content .metadata > summary::before {
     content: "▸";
     font-size: calc(13px * var(--text-scale));
 }
-.content .front-matter[open] > summary::before, .content .backlinks[open] > summary::before,
-.content .problems[open] > summary::before {
+.content .front-matter[open] > summary::before, .content .metadata[open] > summary::before {
     content: "▾";
 }
-.content .front-matter > summary > span, .content .backlinks > summary > span,
-.content .problems > summary > span {
+.content .front-matter > summary > span, .content .metadata > summary > span {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: calc(14px * var(--text-scale));
 }
-.content .front-matter[open] > summary > span, .content .backlinks[open] > summary > span,
-.content .problems[open] > summary > span {
+.content .front-matter[open] > summary > span, .content .metadata[open] > summary > span {
     display: none;
 }
-.content .backlinks > summary > b, .content .problems > summary > b {
-    flex: none;
-    font-size: calc(14px * var(--text-scale));
+.content .metadata > summary b {
     font-weight: 600;
 }
-.content .backlinks > div, .content .problems > div {
-    margin: 2px 0 0;
-    padding: 3px 10px;
-    font-size: calc(14px * var(--text-scale));
-    background: var(--bg-alt);
-}
-.content .problems > summary > b, .content .problems a.problem, .content .problem-at.problem::before,
-.content .front-matter.problem > summary {
+.content .metadata > summary b.problem, .content .metadata .issues a.problem,
+.content .problem-at.problem::before, .content .front-matter.problem > summary {
     color: var(--problem);
 }
-.content .problems a.warning, .content .problem-at.warning::before {
+.content .metadata > summary b.warning, .content .metadata .issues a.warning,
+.content .problem-at.warning::before {
     color: var(--warning);
 }
-.content .problems > div > a {
+.content .metadata .issues a {
     display: block;
 }
 .content .problem-at::before {
@@ -637,23 +625,23 @@ main.content {
     font-size: 0.9em;
     cursor: help;
 }
-.content .front-matter table {
+.content .front-matter table, .content .metadata table {
     margin: 2px 0 0;
     font-size: calc(14px * var(--text-scale));
     background: var(--bg-alt);
 }
-.content .front-matter th, .content .front-matter td {
+.content .front-matter th, .content .front-matter td, .content .metadata th, .content .metadata td {
     padding: 3px 10px;
     vertical-align: top;
     text-align: left;
     overflow-wrap: anywhere;
 }
-.content .front-matter th {
+.content .front-matter th, .content .metadata th {
     color: var(--fg-muted);
     font-weight: 600;
     white-space: nowrap;
 }
-.content .front-matter td {
+.content .front-matter td, .content .metadata td {
     color: var(--fg);
 }
 /* next map of a list of maps under the same key */
@@ -984,19 +972,18 @@ details.callout:not([open]) > summary {
     .content > section > .page {
         padding-right: 48px;
     }
-    /* backlinks and front matter stop floating, sit under the title */
+    /* metadata and front matter stop floating, sit under the title */
     .content .page:has(> details) {
         display: flex;
         flex-direction: column;
     }
-    .content .front-matter, .content .front-matter[open],
-    .content .backlinks, .content .backlinks[open], .content .problems, .content .problems[open] {
+    .content .front-matter, .content .front-matter[open], .content .metadata, .content .metadata[open] {
         float: none;
         order: 1;
         max-width: 100%;
         margin: 4px 0 0;
     }
-    .content .front-matter > summary, .content .backlinks > summary, .content .problems > summary {
+    .content .front-matter > summary, .content .metadata > summary {
         justify-content: flex-start;
     }
 }

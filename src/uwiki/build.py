@@ -13,7 +13,7 @@ from .config import Config
 from .convert import Converter
 from .order import Links, Order
 from .stats import Stats
-from .vault import Filter, Selection, cebabize, front_matter_items, front_matter_tree, read_parts
+from .vault import Filter, Selection, cebabize, front_matter_items, front_matter_tree, read_parts, titleize
 
 ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
 
@@ -151,7 +151,8 @@ class Builder:
         """What the page filters, counts and shows beside page titles by: front matter keys listing values
         in schema order, built pages by anchor with vault path, top level front matter in schema order with
         nested maps and lists of maps as such, words as stats counts them, tokens and what check reports,
-        backlinks by anchor as anchors of linking pages, with headings links lead to."""
+        file name and folder path where its title and folders don't tell them, backlinks by anchor as anchors
+        of linking pages, with headings links lead to."""
         pages, backlinks = {}, {}
         for node, body in nodes:
             links = [[source.anchor, heading] if heading else source.anchor for source, heading in self.backlinks(node)]
@@ -174,11 +175,28 @@ class Builder:
                 'tokens': Stats.tokens(text),
                 'problems': len(self.issues.get(os.path.realpath(node.file), [])),
             })
+            page.update(self.named(node, path))
             pages[node.anchor] = page
         data = {'facets': list(self.schema.facets().items()), 'pages': pages, 'backlinks': backlinks}
         if not self.options.front_matter:
             data['frontMatter'] = False
         return json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
+
+    @staticmethod
+    def named(node, path):
+        """File name of the page unless its title is the name, folder path unless the folder titles
+        above it are the names of the folders."""
+        res = {}
+        folder, name = os.path.split(path)
+        if titleize(os.path.splitext(name)[0]) != node.title:
+            res['file'] = name
+        f = node if node.is_folder else node.folder
+        while f and f.folder:
+            if f.title != f.default_title:
+                res['dir'] = folder + '/'
+                break
+            f = f.folder
+        return res
 
     def html(self, title):
         nodes = list(self.nodes())

@@ -56,7 +56,7 @@ uwiki lsp
 `uwiki <command> --help` lists all options.
 
 - `build` writes `<title>.html` and `<title>.md`, `-o out/Wiki.html` only one;
-  a page shows its folders, backlinks and front matter; a link to a page left out fails the build
+  a page shows its folders, metadata and front matter; a link to a page left out fails the build
 - `watch` builds again on change of a page, attachment or the config, `serve` also serves the HTML
   on `http://127.0.0.1:8000`, reloading the page, its blocks with `data-line` of the source line they start at;
   both restart on change of uwiki's own code, as on upgrade, unless it fails to import,
@@ -139,8 +139,11 @@ One self-contained file, light or dark by system preference, works from `file://
   over the lighter one of its branch; when filtering, shares are of pages found, beside counts of hits
 - hover preview of a link target under the folders it is in, links in it preview too,
   sidebar entries beside the sidebar
-- front matter, backlinks and what `check` reports top right of page header, problems marked at their lines;
-  nested front matter keys beside the key above them in the same table
+- metadata and front matter top right of page header, problems marked at their lines;
+  metadata folds to problems, tokens, backlinks and file name, unfolds to what `check` reports, words, tokens
+  and reading time, backlinks, file name and folder; file name and folder only where title and folders
+  don't tell them; nested front matter keys beside the key above them in the same table
+- tokens estimated as 4 bytes of UTF-8 each, so text in other scripts than Latin counts more
 - `/` focuses the box filtering pages: words, `"exact text"`, `key:value` front matter, `in:folder`,
   `is:problem`, `-term`, e.g. `scope:core -status:stub deck`; `Enter` goes to the next match,
   the box goes to the URL as `?q=`, `×` clears it

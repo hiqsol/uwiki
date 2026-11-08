@@ -326,6 +326,21 @@ class MarkdownLinksTest(unittest.TestCase):
         self.assertIn('<h4 id="decision--context">Context</h4>', self.html)
         self.assertIn('<a href="#docs">Documentation</a>', section(self.html, 'docs'))
 
+    def test_file_and_folder_where_title_and_crumb_dont_tell_them(self):
+        pages = {p['path']: (p.get('file'), p.get('dir')) for p in page_data(self.html)['pages'].values()}
+        self.assertEqual(pages, {
+            'index.md': ('index.md', None),
+            'docs/index.md': ('index.md', 'docs/'),  # folder titled Documentation
+            'docs/Guide.md': (None, 'docs/'),
+            'docs/Setup.md': (None, 'docs/'),
+            'docs/Broken.md': (None, 'docs/'),
+            'docs/Decision.md': ('Decision.md', 'docs/'),
+        })
+        pages = {p['path']: (p.get('file'), p.get('dir')) for p in page_data(self.vault)['pages'].values()}
+        self.assertEqual(pages['MyPage.md'], (None, None))
+        self.assertEqual(pages['Projects/Alpha/Notes.md'], (None, None))
+        self.assertEqual(pages['Projects/Project.md'], ('Project.md', None))
+
     def test_breadcrumbs_show_every_folder(self):
         self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>', self.vault)
 
@@ -1650,6 +1665,12 @@ class StatsTest(unittest.TestCase):
         self.assertEqual((notes['links'], notes['images']), (4, 2))
         self.assertEqual(data['total']['pages'], 9)
         self.assertEqual(data['total']['words'], sum(p['words'] for p in data['pages']))
+
+    def test_tokens_by_utf8_bytes(self):
+        from uwiki.stats import Stats
+        self.assertEqual(Stats.tokens('word'), 1)
+        self.assertEqual(Stats.tokens('words'), 2)
+        self.assertEqual(Stats.tokens('слово'), 3)  # 10 bytes: Cyrillic counts twice as much as Latin
 
     def test_orphans_and_folder_pages(self):
         data = json.loads(self.stats('vault', '--json'))
