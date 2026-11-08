@@ -13,6 +13,8 @@
   var stats = document.getElementById("stats");
   var facets = document.getElementById("facets");
   var fold = document.getElementById("fold");
+  var counts = document.getElementById("counts");
+  var problems = document.getElementById("problems");
   var pages = Array.prototype.slice.call(document.querySelectorAll(".content .page"));
   var data = readData();
   var tocLinks = {};
@@ -216,11 +218,13 @@
     return button;
   }
 
-  // one button for the whole tree: expands all when any branch is collapsed, else collapses all
+  // one triangle for the whole tree, as a branch has: expands all when any branch is collapsed, else collapses all
   function updateFold() {
-    var branches = toc.querySelectorAll("li > .toggle");
-    fold.hidden = !branches.length;
-    fold.textContent = toc.querySelector("li.collapsed") ? "Expand all" : "Collapse all";
+    var collapsed = !!toc.querySelector("li.collapsed");
+    fold.hidden = !toc.querySelector("li > .toggle");
+    fold.classList.toggle("collapsed", collapsed);
+    fold.title = collapsed ? "Expand all" : "Collapse all";
+    fold.setAttribute("aria-label", fold.title);
   }
 
   function foldAll() {
@@ -244,7 +248,8 @@
     pages.forEach(function (h) {
       var box = boxOf(h), info = data.pages[h.id];
       if (box === h) return;
-      box.style.containIntrinsicSize = "auto " + Math.round(info ? 230 + 1900 * info.words / width : 70) + "px";
+      var height = info ? 230 + 1900 * scale * scale * info.words / width : 70;
+      box.style.containIntrinsicSize = "auto " + Math.round(height * (info ? 1 : scale)) + "px";
     });
   }
 
@@ -792,11 +797,20 @@
     var sum = function (list, key) { return list.reduce(function (a, n) { return a + (n.info[key] || 0); }, 0); };
     var cols = [["pages", matched.length, all.length], ["words", sum(matched, "words"), sum(all, "words")],
                 ["tokens", sum(matched, "tokens"), sum(all, "tokens")]];
-    var problems = sum(matched, "problems");
-    stats.textContent = cols.map(function (c) {
+    var n = sum(matched, "problems");
+    counts.textContent = cols.map(function (c) {
       return (filtering ? short(c[1]) + "/" : "") + short(c[2]) + " " + c[0];
-    }).join(" · ") + (problems ? " · " + problems + " problems" : "");
-    stats.title = cols.map(function (c) { return (filtering ? c[1] + " of " : "") + c[2] + " " + c[0]; }).join(", ");
+    }).join(" · ") + (n ? " · " : "");
+    counts.title = cols.map(function (c) { return (filtering ? c[1] + " of " : "") + c[2] + " " + c[0]; }).join(", ");
+    problems.hidden = !n;
+    problems.textContent = n + (n === 1 ? " problem" : " problems");
+    var on = parse(query.value).some(isProblemTerm);
+    problems.classList.toggle("on", on);
+    problems.title = on ? "Show all pages" : "Show only pages with problems";
+  }
+
+  function isProblemTerm(t) {
+    return t.kind === "key" && t.key === "is" && !t.neg && "problems".startsWith(t.value);
   }
 
   function short(n) {
@@ -870,10 +884,10 @@
     });
   }
 
-  // adds key:value to the box, or removes it when there
-  function toggleTerm(key, value) {
+  // adds key:value to the box, or removes it when there, or terms same as it when given
+  function toggleTerm(key, value, same) {
     var q = query.value;
-    var found = parse(q).filter(function (t) {
+    var found = parse(q).filter(same || function (t) {
       return t.kind === "key" && t.key === key && !t.neg && t.value === value.toLowerCase();
     });
     if (found.length) {
@@ -1375,6 +1389,63 @@
     });
   }
 
+  // text size of pages and previews: buttons by the title and + and - keys step it, 0 restores it,
+  // remembered per browser; the text at the top of the window stays there
+
+  var SCALE_KEY = "uwiki-text-scale";
+  var MIN_SCALE = 0.6, MAX_SCALE = 2;
+  var scale = 1;
+
+  function bindZoom() {
+    try {
+      var saved = +localStorage.getItem(SCALE_KEY);
+      if (saved) setScale(saved);
+    } catch (e) {}
+    document.getElementById("smaller").addEventListener("click", function () { zoom(-1); });
+    document.getElementById("larger").addEventListener("click", function () { zoom(1); });
+    document.addEventListener("keydown", function (e) {
+      if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+      var dir = e.key == "+" || e.key == "=" ? 1 : e.key == "-" ? -1 : e.key == "0" ? 0 : null;
+      if (dir === null) return;
+      e.preventDefault();
+      zoom(dir);
+    });
+  }
+
+  // a step is a tenth of the default size
+  function zoom(dir) {
+    var next = dir ? Math.round(scale * 10 + dir) / 10 : 1;
+    next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
+    if (next === scale) return;
+    var anchor = textAtTop();
+    var top = anchor && anchor.getBoundingClientRect().top;
+    setScale(next);
+    sizePages();
+    if (anchor) window.scrollBy(0, anchor.getBoundingClientRect().top - top);
+    try {
+      if (scale === 1) localStorage.removeItem(SCALE_KEY);
+      else localStorage.setItem(SCALE_KEY, scale);
+    } catch (e) {}
+  }
+
+  // element of page text near the top of the window, under the sticky header of its page
+  function textAtTop() {
+    var x = content.getBoundingClientRect().left + content.clientWidth / 2, y = 40;
+    var el = document.elementFromPoint(x, y);
+    var head = el && el.closest(".content > section > .page");
+    if (head) el = document.elementFromPoint(x, head.getBoundingClientRect().bottom + 8);
+    return el && content.contains(el) && el !== content && !el.closest(".page") ? el : null;
+  }
+
+  function setScale(s) {
+    scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+    var root = document.documentElement;
+    if (scale === 1) root.style.removeProperty("--text-scale");
+    else root.style.setProperty("--text-scale", scale);
+    document.getElementById("smaller").disabled = scale <= MIN_SCALE;
+    document.getElementById("larger").disabled = scale >= MAX_SCALE;
+  }
+
   // events
 
   function bindEvents() {
@@ -1400,6 +1471,11 @@
     }
 
     query.addEventListener("input", update);
+    document.getElementById("clear").addEventListener("click", function () {
+      query.value = "";
+      update();
+      query.focus();
+    });
     query.addEventListener("keydown", function (e) {
       if (e.key == "Enter") {
         e.preventDefault();
@@ -1422,6 +1498,7 @@
     });
 
     fold.addEventListener("click", foldAll);
+    problems.addEventListener("click", function () { toggleTerm("is", "problem", isProblemTerm); });
 
     document.getElementById("menu").addEventListener("click", function () {
       document.body.classList.toggle("nav-open");
@@ -1433,6 +1510,7 @@
 
   // after all declarations above, constants among them
   bindResize();
+  bindZoom();
   sizePages();
   floatAsides();
   markBoxDrawing();

@@ -9,15 +9,19 @@
 <body>
     <button id="menu" type="button" aria-label="Toggle navigation">&#9776;</button>
     <nav id="sidebar">
-        <a id="home" href="#root">{title}</a>
+        <div id="top">
+            <a id="home" href="#root">{title}</a>
+            <button id="smaller" type="button" aria-label="Smaller text" title="Smaller text (-)">&minus;</button>
+            <button id="larger" type="button" aria-label="Larger text" title="Larger text (+), double click restores">+</button>
+        </div>
         <div id="search">
             <input id="query" type="search" placeholder="Search" autocomplete="off" spellcheck="false"
                    aria-label="Search" title="words, &quot;exact text&quot;, key:value, in:folder, is:problem, -term">
             <kbd>/</kbd>
+            <button id="clear" type="button" aria-label="Clear search" title="Clear">&times;</button>
         </div>
-        <div id="stats"></div>
         <div id="facets" hidden></div>
-        <button id="fold" type="button" hidden></button>
+        <div id="stats"><button id="fold" type="button" hidden>&#9660;</button><span id="counts"></span><button id="problems" type="button" hidden></button></div>
         <ul id="toc"></ul>
         <div id="resize" title="Drag to resize, double click to restore"></div>
     </nav>

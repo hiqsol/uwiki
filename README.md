@@ -143,9 +143,12 @@ One self-contained file, light or dark by system preference, works from `file://
   nested front matter keys beside the key above them in the same table
 - `/` focuses the box filtering pages: words, `"exact text"`, `key:value` front matter, `in:folder`,
   `is:problem`, `-term`, e.g. `scope:core -status:stub deck`; `Enter` goes to the next match,
-  the box goes to the URL as `?q=`
+  the box goes to the URL as `?q=`, `×` clears it
 - chips of `[schema]` values with page counts, a click adds or removes one
-- pages, words and tokens shown out of all
+- pages, words and tokens shown out of all under the chips, after a triangle folding or unfolding the whole tree;
+  a click on the count of problems shows only pages with problems
+- `−` and `+` by the title or the `-` and `+` keys make the text of pages and previews smaller or larger,
+  `0` restores it, remembered per browser
 - code blocks highlighted by Prism and `mermaid` blocks drawn as they near the window, the libraries
   loaded from CDNs on first need; offline, code stays plain
 

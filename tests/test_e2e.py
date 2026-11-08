@@ -1033,6 +1033,11 @@ class TemplateIdTest(unittest.TestCase):
         self.assertIn('href="#rules-home">Home</a>', html)
         self.assertEqual(html.count('id="home"'), 1)
 
+    def test_every_template_id_is_reserved(self):
+        from uwiki.vault import TEMPLATE_IDS
+        template = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.html'))
+        self.assertEqual(set(re.findall(r'\bid="([^"]+)"', template)), set(TEMPLATE_IDS))
+
 class AliasItemTest(unittest.TestCase):
     """An alias bold in a list item leads to that item."""
 

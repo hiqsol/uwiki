@@ -235,7 +235,8 @@ def titleize(name):
     return ' '.join(w[0].upper() + w[1:] for w in words)
 
 # ids of the HTML page template, no page anchor takes them
-TEMPLATE_IDS = ('home', 'menu', 'sidebar', 'search', 'query', 'stats', 'facets', 'fold', 'toc', 'resize', 'data')
+TEMPLATE_IDS = ('top', 'home', 'smaller', 'larger', 'menu', 'sidebar', 'search', 'query', 'clear', 'stats', 'counts',
+                'problems', 'facets', 'fold', 'toc', 'resize', 'data')
 
 @functools.lru_cache(maxsize=1 << 16)
 def cebabize(name):

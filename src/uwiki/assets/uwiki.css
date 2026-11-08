@@ -30,6 +30,7 @@
     --h5: #dfc3d6;
     --h6: #c6c1b8;
     --sidebar-width: 290px;
+    --text-scale: 1;  /* of the text of pages and previews, set by the size buttons */
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     color-scheme: dark;
@@ -109,15 +110,45 @@ a:hover {
     font-size: 14px;
     z-index: 10;
 }
+#top {
+    display: flex;
+    align-items: flex-start;
+    padding: 0 12px 0 0;
+}
 #home {
-    display: block;
-    padding: 18px 20px 10px;
+    flex: 1;
+    min-width: 0;
+    padding: 18px 8px 10px 20px;
     color: var(--fg);
     font-size: 18px;
     font-weight: 700;
 }
 #home:hover {
     text-decoration: none;
+}
+/* text size of pages, see --text-scale */
+#smaller, #larger {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    margin-top: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--fg-muted);
+    font: inherit;
+    font-size: 17px;
+    line-height: 24px;
+    cursor: pointer;
+}
+#smaller:hover:not(:disabled), #larger:hover:not(:disabled) {
+    background: var(--accent-bg);
+    color: var(--accent);
+}
+#smaller:disabled, #larger:disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 #search {
     position: relative;
@@ -156,32 +187,85 @@ a:hover {
 #query:focus + kbd, #query:not(:placeholder-shown) + kbd {
     display: none;
 }
-
-#fold {
-    align-self: flex-end;
-    margin: -4px 14px 0;
-    padding: 0 4px;
+/* clears the box, in place of / once it has text */
+#clear {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    padding: 0;
     border: 0;
+    border-radius: 4px;
     background: none;
     color: var(--fg-muted);
     font: inherit;
-    font-size: 12px;
+    font-size: 18px;
+    line-height: 24px;
     cursor: pointer;
+}
+#clear:hover {
+    background: var(--accent-bg);
+    color: var(--accent);
+}
+#query:placeholder-shown ~ #clear {
+    display: none;
+}
+
+/* the fold triangle lines up with the toggles of the tree under it, the counts with its titles, wrapped ones too */
+#stats {
+    margin: 0 14px 4px 8px;
+    padding-left: 20px;
+    text-indent: -20px;
+    color: var(--fg-muted);
+    font-size: 12px;
+}
+#stats:has(#fold[hidden]) {
+    padding-left: 6px;
+    text-indent: 0;
+}
+#fold {
+    width: 20px;
+    text-indent: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--fg-muted);
+    font-size: 10px;
+    line-height: inherit;
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+#fold.collapsed {
+    transform: rotate(-90deg);
 }
 #fold:hover {
     color: var(--accent);
 }
 #sidebar:has(#toc.filtering) #fold {
-    display: none;
+    visibility: hidden;
 }
-
-#stats {
-    margin: -4px 14px 6px;
-    color: var(--fg-muted);
-    font-size: 12px;
+/* filters pages with problems, again shows all */
+#problems {
+    padding: 0 3px;
+    text-indent: 0;
+    border: 0;
+    border-radius: 3px;
+    background: none;
+    color: var(--problem);
+    font: inherit;
+    cursor: pointer;
+}
+#problems:hover {
+    text-decoration: underline;
+}
+#problems.on {
+    background: var(--accent-bg);
+    color: var(--accent);
 }
 #facets {
-    margin: 0 14px 6px;
+    margin: 0 14px 4px;
     font-size: 12px;
 }
 .facet {
@@ -377,9 +461,12 @@ body.resizing {
 
 .content {
     --gutter: 48px;
-    max-width: 52rem;
+    max-width: calc(52rem * var(--text-scale));
     margin-left: var(--sidebar-width);
     padding: 24px var(--gutter) 48px;
+}
+main.content {
+    font-size: calc(16px * var(--text-scale));
 }
 /* a page is laid out and drawn only near the window, so a long vault opens fast;
    it reaches into the gutter, item numbers left of their items stay in what it draws */
@@ -464,7 +551,7 @@ body.resizing {
 .content .page .crumb {
     display: block;
     color: var(--fg-muted);
-    font-size: 13px;
+    font-size: calc(13px * var(--text-scale));
     font-weight: 500;
     letter-spacing: 0.02em;
 }
@@ -505,7 +592,7 @@ body.resizing {
 .content .front-matter > summary::before, .content .backlinks > summary::before,
 .content .problems > summary::before {
     content: "▸";
-    font-size: 13px;
+    font-size: calc(13px * var(--text-scale));
 }
 .content .front-matter[open] > summary::before, .content .backlinks[open] > summary::before,
 .content .problems[open] > summary::before {
@@ -517,7 +604,7 @@ body.resizing {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale));
 }
 .content .front-matter[open] > summary > span, .content .backlinks[open] > summary > span,
 .content .problems[open] > summary > span {
@@ -525,13 +612,13 @@ body.resizing {
 }
 .content .backlinks > summary > b, .content .problems > summary > b {
     flex: none;
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale));
     font-weight: 600;
 }
 .content .backlinks > div, .content .problems > div {
     margin: 2px 0 0;
     padding: 3px 10px;
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale));
     background: var(--bg-alt);
 }
 .content .problems > summary > b, .content .problems a.problem, .content .problem-at.problem::before,
@@ -552,7 +639,7 @@ body.resizing {
 }
 .content .front-matter table {
     margin: 2px 0 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale));
     background: var(--bg-alt);
 }
 .content .front-matter th, .content .front-matter td {
@@ -612,7 +699,7 @@ body.resizing {
     top: 0;
     padding: 0 4px;
     color: var(--fg-muted);
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale));
     line-height: inherit;
     white-space: nowrap;
     opacity: 0;
@@ -810,15 +897,15 @@ details.callout:not([open]) > summary {
 .preview {
     position: absolute;
     z-index: 30;
-    width: min(32rem, calc(100vw - 16px));
-    max-height: 22rem;
+    width: min(calc(32rem * var(--text-scale)), calc(100vw - 16px));
+    max-height: calc(22rem * var(--text-scale));
     overflow: hidden;
     padding: 10px 16px 12px;
     background: var(--bg);
     border: 1px solid var(--rule);
     border-radius: 8px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale));
     line-height: 1.5;
 }
 .preview.long::after {
@@ -833,13 +920,13 @@ details.callout:not([open]) > summary {
     display: block;
     margin-bottom: 4px;
     color: var(--fg);
-    font-size: 15px;
+    font-size: calc(15px * var(--text-scale));
     font-weight: 650;
 }
 .preview-crumb {
     display: block;
     color: var(--fg-muted);
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale));
     font-weight: 500;
     letter-spacing: 0.02em;
 }
