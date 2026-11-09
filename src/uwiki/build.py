@@ -253,7 +253,7 @@ class Builder:
         if not config.path:
             return '<h2>Config</h2><p>none: no <code>uwiki.toml</code> nor <code>[tool.uwiki]</code> in <code>pyproject.toml</code></p>'
         shown = os.path.relpath(config.path, self.scanner.path).replace(os.sep, '/')
-        return f'<h2>{html.escape(shown)}</h2><pre>{html.escape(config.text())}</pre>'
+        return f'<h2>{html.escape(shown)}</h2><pre><code class="language-toml">{html.escape(config.text())}</code></pre>'
 
     def reload_script(self):
         if not self.options.live_reload:

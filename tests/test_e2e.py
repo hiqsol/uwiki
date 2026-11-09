@@ -1227,10 +1227,10 @@ class TemplateIdTest(unittest.TestCase):
             html = read(os.path.join(out, 'wiki.html'))
         self.assertEqual(res.returncode, 0, res.stderr)
         box = html[html.index('<dialog id="_config_box"'):]
-        self.assertIn('<pre>paths = [&quot;.&quot;]\ntitle = &quot;wiki&quot;\ninclude = []\nexclude = [&quot;drafts&quot;]\n'
-                      'backlinks = false\nfront-matter = true\n</pre>', box)
-        self.assertIn('<h2>uwiki.toml</h2><pre># drafts stay out\nexclude = [&quot;drafts&quot;]\n[schema]\n'
-                      'status = [&quot;a&lt;b&quot;]\n</pre>', box)
+        self.assertIn('<pre><code class="language-toml">paths = [&quot;.&quot;]\ntitle = &quot;wiki&quot;\ninclude = []\nexclude = [&quot;drafts&quot;]\n'
+                      'backlinks = false\nfront-matter = true\n</code></pre>', box)
+        self.assertIn('<h2>uwiki.toml</h2><pre><code class="language-toml"># drafts stay out\nexclude = [&quot;drafts&quot;]\n[schema]\n'
+                      'status = [&quot;a&lt;b&quot;]\n</code></pre>', box)
 
     def test_config_window_shows_pyproject_table_as_toml(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
@@ -1239,8 +1239,8 @@ class TemplateIdTest(unittest.TestCase):
             write(os.path.join(tmp, 'index.md'), 'Home.\n')
             run('build', tmp, '-o', out + os.sep)
             html = read(os.path.join(out, 'T.html'))
-        self.assertIn('<h2>pyproject.toml</h2><pre>[tool.uwiki]\nexclude = [&quot;d&quot;]\n\n'
-                      '[tool.uwiki.build]\ntitle = &quot;T&quot;\n</pre>', html)
+        self.assertIn('<h2>pyproject.toml</h2><pre><code class="language-toml">[tool.uwiki]\nexclude = [&quot;d&quot;]\n\n'
+                      '[tool.uwiki.build]\ntitle = &quot;T&quot;\n</code></pre>', html)
 
     def test_config_without_file_says_none(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:

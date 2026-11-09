@@ -766,38 +766,38 @@ main.content {
     background: none;
     color: inherit;
 }
-/* Prism tokens */
-.content .token.comment, .content .token.prolog, .content .token.doctype, .content .token.cdata {
+/* Prism tokens, of page code blocks and of the config window */
+.token.comment, .token.prolog, .token.doctype, .token.cdata {
     color: var(--fg-muted);
     font-style: italic;
 }
-.content .token.keyword, .content .token.atrule, .content .token.selector, .content .token.important {
+.token.keyword, .token.atrule, .token.selector, .token.important {
     color: var(--code-keyword);
 }
-.content .token.string, .content .token.char, .content .token.attr-value, .content .token.regex,
-.content .token.url, .content .token.inserted {
+.token.string, .token.char, .token.attr-value, .token.regex,
+.token.url, .token.inserted {
     color: var(--code-string);
 }
-.content .token.number, .content .token.boolean, .content .token.constant, .content .token.symbol {
+.token.number, .token.boolean, .token.constant, .token.symbol {
     color: var(--code-number);
 }
-.content .token.function {
+.token.function {
     color: var(--code-function);
 }
-.content .token.class-name, .content .token.builtin {
+.token.class-name, .token.builtin {
     color: var(--code-type);
 }
-.content .token.property, .content .token.tag, .content .token.attr-name, .content .token.variable,
-.content .token.key, .content .token.deleted {
+.token.property, .token.tag, .token.attr-name, .token.variable,
+.token.key, .token.deleted {
     color: var(--code-name);
 }
-.content .token.punctuation, .content .token.operator {
+.token.punctuation, .token.operator {
     color: var(--fg-muted);
 }
-.content .token.bold {
+.token.bold {
     font-weight: bold;
 }
-.content .token.italic {
+.token.italic {
     font-style: italic;
 }
 .content .mermaid {
@@ -1013,7 +1013,11 @@ dialog.box pre {
     line-height: 1.45;
     tab-size: 4;
 }
-dialog.box pre:empty {
+dialog.box pre code {
+    color: inherit;
+    font-size: inherit;
+}
+dialog.box pre:has(> code:empty) {
     display: none;
 }
 dialog.box h2 {

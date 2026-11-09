@@ -1527,6 +1527,7 @@
     if (previews.length) closePreviews(0);
     var time = box.querySelector("time");
     if (time) showBuilt(time);
+    codeBlocks(box).forEach(renderCode);  // config as TOML, highlighted once
     box.showModal();
     box.focus();  // the box, not its close button, so no focus ring on open
   }
