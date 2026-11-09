@@ -24,6 +24,9 @@ Commands take its folders and files, skipping hidden ones, `node_modules` and `v
 
 **Folder page**: `README.md`, `index.md` or page named as its folder, the contents of the folder.
 
+**Title** of a page: front matter `title`, else the heading it starts with, else its name;
+`AGENTS.md` is always titled `AGENTS.md`, the name tools look for.
+
 **Reading order** of `build`, `llms` and the HTML sidebar: folder page, then pages in the order it links them,
 every other page right after the first page linking it, unlinked ones last.
 

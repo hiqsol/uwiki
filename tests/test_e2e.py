@@ -378,7 +378,7 @@ class ProjectTest(unittest.TestCase):
         self.assertNotIn('id="claude"', self.html)
         self.assertEqual(self.html.count('Agent rules.'), 1)
         root = section(self.html, 'root')
-        self.assertEqual(root.count('<a href="#agents">Agents</a>'), 2)
+        self.assertEqual(root.count('<a href="#agents">AGENTS.md</a>'), 2)
         self.assertIn('<a href="#agents">claude</a>', root)
 
     def test_symlink_to_folder_is_alias(self):
@@ -1170,6 +1170,19 @@ class TemplateIdTest(unittest.TestCase):
         self.assertLess(abs(age.total_seconds()), 60)
         self.assertIn('id="help"', html, 'page Help keeps its anchor')
         self.assertNotIn('Live:', html, 'built, not served')
+
+    def test_agents_md_is_titled_by_its_name(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            write(os.path.join(tmp, 'index.md'), 'See [[AGENTS]].\n')
+            write(os.path.join(tmp, 'AGENTS.md'), '---\ntitle: Agents Guide\n---\n# How to write\n\nRules.\n')
+            write(os.path.join(tmp, 'sub', 'agents.md'), '# Lower Case\n')
+            res = run('build', tmp, '-o', out, '--title', 'wiki')
+            html = read(os.path.join(out, 'wiki.html'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn('data-title="AGENTS.md">AGENTS.md</h2>', html)
+        self.assertIn('>How to write</h3>', html, 'its heading stays, under the title')
+        self.assertIn('<a href="#agents">AGENTS.md</a>', html)
+        self.assertIn('>Lower Case</h', html, 'only the name tools look for')
 
     def test_title_is_of_index_page_file_name_of_folder(self):
         with tempfile.TemporaryDirectory() as parent:

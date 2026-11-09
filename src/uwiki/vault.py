@@ -41,8 +41,13 @@ def read_front(path):
     except (OSError, TypeError, UnicodeDecodeError):
         return ''
 
+# files titled by their name whatever front matter or heading they have: names tools look for
+NAME_TITLED = ('AGENTS.md',)
+
 def read_title(path):
-    """Front matter title, else heading the file starts with, if any."""
+    """Front matter title, else heading the file starts with, if any; file name of NAME_TITLED files."""
+    if path and os.path.basename(path) in NAME_TITLED:
+        return os.path.basename(path)
     title = front_matter_value(read_front(path), 'title')
     if title:
         return title
