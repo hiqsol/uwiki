@@ -66,7 +66,7 @@ uwiki lsp
   `--orphans` reports orphans, `--unlisted` and `--mentions` warn about pages their folder page does not link
   and plain text mentions of page titles, outside `index` blocks and pages `--mentions-exclude` matches,
   `--max-lines` reports longer pages, `--acyclic KEY` pages a chain of pages that front matter key names
-  leads back to; `--stale-days N` warns about pages whose latest `--stale-date KEY` is older,
+  leads back to, `[check] inverse` page valued keys that do not name each other back; `--stale-days N` warns about pages whose latest `--stale-date KEY` is older,
   `--stale-until KEY` about pages whose date in that key has come; `[check.code-paths]` reports code spans
   ending in `.md` or holding a `/` in matching pages that name no file or folder in the folder it gives
 - `link` links the plain text mentions `check --mentions-every` warns about: `[[Star]]s`
@@ -109,6 +109,7 @@ mentions-exclude = ["prompts/**"]         # pages, globs from the config folder
 max-lines = 1500                          # a page an agent reads in one go
 max-lines-ignore = ["log.md"]             # globs from the config folder
 acyclic = ["supersedes", "superseded_by"] # no chain of these page valued keys leads back
+inverse.supersedes = "superseded_by"      # a page B supersedes names B in superseded_by, and back
 stale-days = 183                          # warn when the latest of these dates is older
 stale-date = ["verified.at", "generated.at"]
 stale-until = "stale_after"               # warn once this date has come

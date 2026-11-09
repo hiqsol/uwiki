@@ -98,6 +98,15 @@ class Config:
         return layers
 
     @property
+    def inverse(self):
+        """Page valued front matter keys with the key naming back, `[check] inverse.supersedes = "superseded_by"`."""
+        table = self.data.get('check', {})
+        pairs = table.get('inverse', {}) if isinstance(table, dict) else {}
+        if not isinstance(pairs, dict) or not all(isinstance(v, str) for v in pairs.values()):
+            raise ConfigError(f'{self.path}: check.inverse should be a table of keys with the key naming back')
+        return pairs
+
+    @property
     def code_paths(self):
         """Page globs with the folder code spans in those pages name paths in, `[check.code-paths]
         "skills/**/map.md" = "docs"`, both from the config folder."""

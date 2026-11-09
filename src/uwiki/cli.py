@@ -351,7 +351,7 @@ def parser():
 
 TAKES = {'watch': ('build',), 'serve': ('build',), 'link': ('check', 'wrap')}
 NOT_OPTIONS = {'paths', 'func', 'command', 'help', 'version'}
-CONFIG_ONLY = {'layers', 'code-paths'}  # config keys no command line option takes
+CONFIG_ONLY = {'layers', 'code-paths', 'inverse'}  # config keys no command line option takes
 
 def config_defaults(top, args):
     """Defaults of command options from the config of the vault given paths are in."""

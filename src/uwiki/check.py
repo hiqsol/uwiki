@@ -179,7 +179,21 @@ class Checker:
             self.check_mentions()
         self.check_layers()
         self.check_acyclic()
+        self.check_inverse()
         return self.problems
+
+    def check_inverse(self):
+        """Page valued front matter keys naming each other back, `[check] inverse.supersedes = "superseded_by"`:
+        a page one key of a page names, names that page in the other key, both ways."""
+        for page, (scanner, shown) in self.checked.items():
+            for key, back in self.config(scanner).inverse.items():
+                for there, here in ((key, back), (back, key)):
+                    for target in self.named_by(scanner, page, there):
+                        if page not in self.named_by(scanner, target, here):
+                            path = os.path.relpath(target.file, scanner.path).replace(os.sep, '/')
+                            front = read_parts(page.source.fullpath)[1]
+                            self.add(page, shown, self.key_line(front, there),
+                                     f'{there} {path}, whose {here} does not name it')
 
     def check_acyclic(self):
         """Chains of page valued front matter keys, `[check] acyclic = ["supersedes"]`, lead back to no page,

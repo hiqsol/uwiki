@@ -776,6 +776,26 @@ class ConfigTest(unittest.TestCase):
             code, lines, err = self.check('.', '--acyclic', 'refines', cwd=tmp)
             self.assertIn('./E.md:2: refines chain leads back to it: E.md -> C.md -> E.md', lines)
 
+    def test_inverse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\ninverse.supersedes = "superseded_by"\n'
+                  '[schema]\nsupersedes = "page"\nsuperseded_by = "page"\nstatus = "string"\n')
+            write(os.path.join(tmp, 'index.md'), 'See [[A]], [[B]], [[C]], [[D]] and [[E]].\n')
+            write(os.path.join(tmp, 'A.md'), '---\nsuperseded_by: B\n---\nA.\n')
+            write(os.path.join(tmp, 'B.md'), '---\nstatus: x\nsupersedes: [A, "[[C]]"]\n---\nB.\n')
+            write(os.path.join(tmp, 'C.md'), 'C.\n')
+            write(os.path.join(tmp, 'D.md'), '---\nsuperseded_by: ./E.md\n---\nD.\n')
+            write(os.path.join(tmp, 'E.md'), 'E.\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(lines, [
+                './B.md:3: supersedes C.md, whose superseded_by does not name it',
+                './D.md:2: superseded_by E.md, whose supersedes does not name it',
+            ], err)
+            self.assertEqual(code, 1)
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\ninverse = ["supersedes"]\n')
+            self.assertIn('check.inverse should be a table of keys with the key naming back',
+                          self.check('.', cwd=tmp)[2])
+
     def test_stale(self):
         today = datetime.date.today()
         day = lambda days: (today - datetime.timedelta(days=days)).isoformat()
