@@ -11,9 +11,10 @@ from pathlib import Path
 
 from . import __version__
 from .check import Checker, CheckOptions
-from .config import Config
+from .config import Config, dumps
 from .convert import Converter
 from .order import Links, Order
+from .source import Source
 from .stats import Stats
 from .vault import Filter, Selection, cebabize, front_matter_items, front_matter_tree, read_parts, titleize
 
@@ -42,8 +43,9 @@ class Builder:
 
     SEP = ' › '
 
-    def __init__(self, selection, outdir='.', options=None, build_id='', issues=None):
+    def __init__(self, selection, outdir='.', options=None, build_id='', issues=None, settings=None):
         self.selection = selection
+        self.settings = settings or {}  # build options as config and command line give them, help shows them
         self.scanner = selection.scanner
         self.outdir = outdir
         self.options = options or BuildOptions()
@@ -54,13 +56,17 @@ class Builder:
         self.links = Links(self.scanner)
         self.order = Order(self.scanner, self.links)
         self._backlinks = None
-        self._schema = None
+        self._config = None
+
+    @property
+    def config(self):
+        if self._config is None:
+            self._config = Config.load(self.scanner.path)
+        return self._config
 
     @property
     def schema(self):
-        if self._schema is None:
-            self._schema = Config.load(self.scanner.path).schema
-        return self._schema
+        return self.config.schema
 
     def inside(self, node):
         return self.selection.inside(node)
@@ -207,6 +213,9 @@ class Builder:
             'title':    html.escape(title),
             'version':  __version__,
             'built':    datetime.now().astimezone().isoformat(timespec='seconds'),
+            'source':   self.html_source(),
+            'settings': html.escape(dumps(self.settings)) if self.settings else '',
+            'config':   self.html_config(),
             'content':  content,
             'data':     self.data(nodes),
             'style':    read_asset('uwiki.css'),
@@ -223,6 +232,28 @@ class Builder:
             converter.problems = text
             aside = self.html_problems(node, text, rest)
         return converter.html(body, aside, self.options.source_lines)
+
+    def html_source(self):
+        """Where in git the pages are built from, for the help: ` from repo at commit on branch`."""
+        source = Source.of(self.scanner.path)
+        if not source:
+            return ''
+        link = lambda url, text: f'<a href="{html.escape(url)}" target="_blank" rel="noopener">{text}</a>' if url else text
+        res = f' from {link(source.url, html.escape(source.repo))} at' if source.repo else ' from commit'
+        res += f' {link(source.commit_url, f"<code>{html.escape(source.commit)}</code>")}'
+        if source.branch:
+            res += f' on {html.escape(source.branch)}'
+        if source.dirty:
+            res += ', with uncommitted changes'
+        return res
+
+    def html_config(self):
+        """Vault config file as it is, for the config window of the help."""
+        config = self.config
+        if not config.path:
+            return '<h2>Config</h2><p>none: no <code>uwiki.toml</code> nor <code>[tool.uwiki]</code> in <code>pyproject.toml</code></p>'
+        shown = os.path.relpath(config.path, self.scanner.path).replace(os.sep, '/')
+        return f'<h2>{html.escape(shown)}</h2><pre>{html.escape(config.text())}</pre>'
 
     def reload_script(self):
         if not self.options.live_reload:
@@ -302,13 +333,21 @@ class Build:
             return {}  # the build reports it
         return checker.issues
 
+    def settings(self, selection):
+        """Options the build runs with, config defaults and command line merged, paths from the vault root."""
+        root = selection.scanner.path
+        rel = lambda path: os.path.relpath(os.path.abspath(path), root).replace(os.sep, '/')
+        return {'paths': [rel(p) for p in self.paths], 'title': self.title,
+                'include': self.include, 'exclude': self.exclude,
+                'backlinks': self.options.backlinks, 'front-matter': self.options.front_matter}
+
     def run(self):
         """Scans vault, renders and writes outputs; returns problems instead of writing if any."""
         selection = self.scan()
         outdir = os.path.dirname(os.path.abspath(next(iter(self.outputs.values()))))
         build_id = str(time.time_ns())
         issues = self.check(selection) if 'html' in self.outputs else {}
-        builder = Builder(selection, outdir, self.options, build_id, issues)
+        builder = Builder(selection, outdir, self.options, build_id, issues, self.settings(selection))
         texts = {kind: builder.html(self.title) if kind == 'html' else builder.md() for kind in self.outputs}
         if builder.problems:
             return list(builder.problems)

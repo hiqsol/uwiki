@@ -1163,17 +1163,108 @@ class TemplateIdTest(unittest.TestCase):
             res = run('build', tmp, '-o', out, '--title', 'wiki')
             html = read(os.path.join(out, 'wiki.html'))
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn('<button id="help"', html)
-        self.assertIn(f'</a> {__version__},', html)
+        self.assertIn('<button id="_help"', html)
+        self.assertIn(f'</a> {__version__}.', html)
         built = re.search(r'<time datetime="([^"]+)">', html)[1]
         age = datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(built)
         self.assertLess(abs(age.total_seconds()), 60)
-        self.assertEqual(html.count('id="help"'), 1, 'page Help takes another anchor')
+        self.assertIn('id="help"', html, 'page Help keeps its anchor')
+        self.assertNotIn('Live:', html, 'built, not served')
+
+    def test_help_tells_git_commit_built_from(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            git = lambda *args: subprocess.run(['git', '-C', tmp, '-c', 'user.name=t', '-c', 'user.email=t@t',
+                                                '-c', 'commit.gpgsign=false', *args],
+                                               check=True, capture_output=True, text=True).stdout.strip()
+            git('init', '-q', '-b', 'trunk')
+            git('remote', 'add', 'origin', 'git@github.com:me/wiki.git')
+            write(os.path.join(tmp, 'index.md'), 'Home.\n')
+            git('add', '.')
+            git('commit', '-q', '-m', 'first')
+            sha = git('rev-parse', '--short', 'HEAD')
+            run('build', tmp, '-o', out, '--title', 'wiki')
+            clean = read(os.path.join(out, 'wiki.html'))
+            write(os.path.join(tmp, 'new.md'), 'New.\n')
+            run('build', tmp, '-o', out, '--title', 'wiki')
+            dirty = read(os.path.join(out, 'wiki.html'))
+        self.assertIn(' from <a href="https://github.com/me/wiki" target="_blank" rel="noopener">me/wiki</a> at '
+                      f'<a href="https://github.com/me/wiki/commit/{sha}" target="_blank" rel="noopener">'
+                      f'<code>{sha}</code></a> on trunk.', clean)
+        self.assertIn(f'</a> on trunk, with uncommitted changes.', dirty)
+
+    def test_help_out_of_git_tells_no_commit(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out, \
+                mock.patch.dict(os.environ, {'GIT_CEILING_DIRECTORIES': os.path.dirname(tmp)}):
+            write(os.path.join(tmp, 'index.md'), 'Home.\n')
+            run('build', tmp, '-o', out, '--title', 'wiki')
+            html = read(os.path.join(out, 'wiki.html'))
+        self.assertRegex(html, r'</time>\.\s*<button')
+
+    def test_config_window_shows_build_options_and_config_file(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            write(os.path.join(tmp, 'uwiki.toml'), '# drafts stay out\nexclude = ["drafts"]\n[schema]\nstatus = ["a<b"]\n')
+            write(os.path.join(tmp, 'index.md'), 'Home.\n')
+            res = run('build', tmp, '-o', out, '--title', 'wiki', '--no-backlinks')
+            html = read(os.path.join(out, 'wiki.html'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        box = html[html.index('<dialog id="_config_box"'):]
+        self.assertIn('<pre>paths = [&quot;.&quot;]\ntitle = &quot;wiki&quot;\ninclude = []\nexclude = [&quot;drafts&quot;]\n'
+                      'backlinks = false\nfront-matter = true\n</pre>', box)
+        self.assertIn('<h2>uwiki.toml</h2><pre># drafts stay out\nexclude = [&quot;drafts&quot;]\n[schema]\n'
+                      'status = [&quot;a&lt;b&quot;]\n</pre>', box)
+
+    def test_config_window_shows_pyproject_table_as_toml(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            write(os.path.join(tmp, 'pyproject.toml'), '[project]\nname = "x"\n[tool.uwiki]\nexclude = ["d"]\n'
+                                                       '[tool.uwiki.build]\ntitle = "T"\n')
+            write(os.path.join(tmp, 'index.md'), 'Home.\n')
+            run('build', tmp, '-o', out + os.sep)
+            html = read(os.path.join(out, 'T.html'))
+        self.assertIn('<h2>pyproject.toml</h2><pre>[tool.uwiki]\nexclude = [&quot;d&quot;]\n\n'
+                      '[tool.uwiki.build]\ntitle = &quot;T&quot;\n</pre>', html)
+
+    def test_config_without_file_says_none(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            write(os.path.join(tmp, 'index.md'), 'Home.\n')
+            run('build', tmp, '-o', out, '--title', 'wiki')
+            html = read(os.path.join(out, 'wiki.html'))
+        self.assertIn('<h2>Config</h2><p>none:', html)
 
     def test_every_template_id_is_reserved(self):
-        from uwiki.vault import TEMPLATE_IDS
+        from uwiki.vault import TEMPLATE_IDS, cebabize
         template = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.html'))
-        self.assertEqual(set(re.findall(r'\bid="([^"]+)"', template)), set(TEMPLATE_IDS))
+        ids = set(re.findall(r'\bid="([^"]+)"', template))
+        self.assertEqual({i for i in ids if not i.startswith('_')}, set(TEMPLATE_IDS))
+        for i in ids - set(TEMPLATE_IDS):
+            self.assertNotIn('_', cebabize(i), 'no anchor takes an id with _')
+
+class SourceTest(unittest.TestCase):
+    """Remote URLs as the help links them, credentials dropped, local ones not linked."""
+
+    def test_web_of_remotes(self):
+        from uwiki.source import web
+        for remote, expected in [
+            ('git@github.com:hiqsol/uwiki.git', ('hiqsol/uwiki', 'https://github.com/hiqsol/uwiki')),
+            ('ssh://git@gitlab.com:2222/a/b/c.git', ('a/b/c', 'https://gitlab.com/a/b/c')),
+            ('https://user:token@github.com/hiqsol/uwiki.git', ('hiqsol/uwiki', 'https://github.com/hiqsol/uwiki')),
+            ('https://git.example.org/x/y/', ('x/y', 'https://git.example.org/x/y')),
+            ('/srv/git/wiki.git', ('', '')),
+            ('', ('', '')),
+        ]:
+            self.assertEqual(web(remote), expected, remote)
+
+class TomlDumpTest(unittest.TestCase):
+    """Config data written back as TOML reads as the same data."""
+
+    def test_round_trip(self):
+        import tomllib
+        from uwiki.config import dumps
+        data = {'exclude': ['build'], 'q': 'a"b\\c\nd', 'n': 1.5, 'on': True, 'when': datetime.date(2024, 1, 2),
+                'build': {'title': 'x'}, 'schema': {'_required': ['status'], 'status': ['a', 'b'],
+                                                   'docs/**': {'owner': 'string'}}, 'maps': [{'a': 1}]}
+        self.assertEqual(tomllib.loads(dumps(data)), data)
+        self.assertEqual(tomllib.loads(dumps(data, ('tool', 'uwiki')))['tool']['uwiki'], data)
 
 class AliasItemTest(unittest.TestCase):
     """An alias bold in a list item leads to that item."""

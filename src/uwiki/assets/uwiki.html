@@ -13,7 +13,7 @@
             <a id="home" href="#root">{title}</a>
             <button id="smaller" type="button" aria-label="Smaller text" title="Smaller text (-)">&minus;</button>
             <button id="larger" type="button" aria-label="Larger text" title="Larger text (+), double click restores">+</button>
-            <button id="help" type="button" aria-label="Help" title="Help (?)" aria-haspopup="dialog">?</button>
+            <button id="_help" type="button" aria-label="Help" title="Help (?)" aria-haspopup="dialog">?</button>
         </div>
         <div id="search">
             <input id="query" type="search" placeholder="Search" autocomplete="off" spellcheck="false"
@@ -29,17 +29,22 @@
     <main class="content">
         {content}
     </main>
-    <dialog id="help-box" aria-label="Help" tabindex="-1">
+    <dialog id="_help_box" class="box" aria-label="Help" tabindex="-1">
         <div>
             <button type="button" class="close" aria-label="Close" title="Close (Esc)">&times;</button>
             <p><b>{title}</b> is a markdown wiki built into this one page by
-                <a href="https://github.com/hiqsol/uwiki" target="_blank" rel="noopener">uWiki</a> {version},
-                built <time datetime="{built}">{built}</time>.</p>
+                <a href="https://github.com/hiqsol/uwiki" target="_blank" rel="noopener">uWiki</a> {version}.</p>
+            <p>Built <time datetime="{built}">{built}</time>{source}.
+                <button type="button" class="link" data-open="_config_box">Config used</button></p>
+            <p class="live" hidden></p>
             <h2>Keys</h2>
             <dl>
                 <dt><kbd>/</kbd> <kbd>Ctrl K</kbd></dt><dd>search pages</dd>
                 <dt><kbd>Enter</kbd> <kbd>Shift Enter</kbd></dt><dd>next, previous match</dd>
                 <dt><kbd>Esc</kbd></dt><dd>drop words, then key terms, then leave search</dd>
+                <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>next, previous page</dd>
+                <dt><kbd>t</kbd></dt><dd>top of the wiki</dd>
+                <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>fold, unfold the whole sidebar tree</dd>
                 <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>larger, smaller text</dd>
                 <dt><kbd>0</kbd></dt><dd>text of default size</dd>
                 <dt><kbd>?</kbd></dt><dd>this help</dd>
@@ -59,6 +64,15 @@
                 <dt>sidebar edge</dt><dd>drag to resize, double click restores</dd>
                 <dt>chip, problem count</dt><dd>add or drop it in search</dd>
             </dl>
+        </div>
+    </dialog>
+    <dialog id="_config_box" class="box" aria-label="Config used" tabindex="-1">
+        <div>
+            <button type="button" class="close" aria-label="Close" title="Close (Esc)">&times;</button>
+            <p>Config this page was built with.</p>
+            <h2>Build options</h2>
+            <pre>{settings}</pre>
+            {config}
         </div>
     </dialog>
     <script type="application/json" id="data">{data}</script>

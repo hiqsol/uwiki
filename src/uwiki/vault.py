@@ -234,9 +234,10 @@ def titleize(name):
         return name
     return ' '.join(w[0].upper() + w[1:] for w in words)
 
-# ids of the HTML page template, no page anchor takes them
-TEMPLATE_IDS = ('top', 'home', 'smaller', 'larger', 'help', 'menu', 'sidebar', 'search', 'query', 'clear', 'stats',
-                'counts', 'problems', 'facets', 'fold', 'toc', 'resize', 'help-box', 'data')
+# ids of the HTML page template, no page anchor takes them; ones starting with _ need no listing,
+# no anchor has _ as cebabize splits words at it
+TEMPLATE_IDS = ('top', 'home', 'smaller', 'larger', 'menu', 'sidebar', 'search', 'query', 'clear', 'stats', 'counts',
+                'problems', 'facets', 'fold', 'toc', 'resize', 'data')
 
 @functools.lru_cache(maxsize=1 << 16)
 def cebabize(name):

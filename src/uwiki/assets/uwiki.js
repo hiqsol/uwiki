@@ -272,8 +272,9 @@
     fold.setAttribute("aria-label", fold.title);
   }
 
-  function foldAll() {
-    var collapse = !toc.querySelector("li.collapsed");
+  // collapses all for true, expands for false, else flips as the triangle does
+  function foldAll(collapse) {
+    if (typeof collapse !== "boolean") collapse = !toc.querySelector("li.collapsed");
     toc.querySelectorAll("li > .toggle").forEach(function (button) {
       var li = button.parentNode;
       li.classList.toggle("collapsed", collapse);
@@ -1495,32 +1496,74 @@
   }
 
   // help: ? or the button by the title opens it, Esc, a click outside or another ? closes it;
+  // a [data-open] button in a box opens that box over it, Esc goes back;
   // the build time shows in local time with how long ago it was
 
   function bindHelp() {
-    var box = document.getElementById("help-box");
-    var button = document.getElementById("help");
-    if (!box.showModal) {
+    var help = document.getElementById("_help_box");
+    var button = document.getElementById("_help");
+    if (!help.showModal) {
       button.hidden = true;
       return;
     }
-    var open = function () {
-      if (previews.length) closePreviews(0);
-      showBuilt(box.querySelector("time"));
-      box.showModal();
-      box.focus();  // the box, not its close button, so no focus ring on open
-    };
-    button.addEventListener("click", open);
-    box.addEventListener("click", function (e) {
-      if (e.target === box || e.target.closest(".close")) box.close();
+    button.addEventListener("click", function () { openBox(help); });
+    document.querySelectorAll("dialog.box").forEach(function (box) {
+      box.addEventListener("click", function (e) {
+        var opener = e.target.closest("[data-open]");
+        if (opener) openBox(document.getElementById(opener.dataset.open));
+        else if (e.target === box || e.target.closest(".close")) box.close();
+      });
     });
     document.addEventListener("keydown", function (e) {
       if (e.key != "?" || e.ctrlKey || e.metaKey || e.altKey) return;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
       e.preventDefault();
-      if (box.open) box.close();
-      else open();
+      if (help.open) closeBoxes();
+      else openBox(help);
     });
+  }
+
+  function openBox(box) {
+    if (previews.length) closePreviews(0);
+    var time = box.querySelector("time");
+    if (time) showBuilt(time);
+    box.showModal();
+    box.focus();  // the box, not its close button, so no focus ring on open
+  }
+
+  function closeBoxes() {
+    document.querySelectorAll("dialog.box[open]").forEach(function (box) { box.close(); });
+  }
+
+  // reading keys: j and k go to the next and previous page, t to the top, [ and ] fold and unfold the tree
+  function bindReading() {
+    document.addEventListener("keydown", function (e) {
+      if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
+          || document.querySelector("dialog.box[open]")) return;
+      if (e.key == "j" || e.key == "k") pageStep(e.key == "j" ? 1 : -1);
+      else if (e.key == "t") window.scrollTo(0, 0);
+      else if (e.key == "[" || e.key == "]") foldAll(e.key == "[");
+      else return;
+      e.preventDefault();
+    });
+  }
+
+  // from the page being read, as spy finds it; back from inside a page goes to its start first
+  function pageStep(dir) {
+    var list = shownPages;
+    var lo = 0, hi = list.length - 1, cur = -1;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (topOf(list[mid]) <= 80) {
+        cur = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    var i = dir > 0 ? cur + 1 : cur >= 0 && topOf(list[cur]) < -8 ? cur : cur - 1;
+    if (i < 0) window.scrollTo(0, 0);
+    else if (i < list.length) jumpTo(list[i]);
   }
 
   function showBuilt(time) {
@@ -1590,8 +1633,7 @@
       var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
       if ((e.key == "/" && !typing) || (e.key == "k" && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
-        var help = document.getElementById("help-box");
-        if (help.open) help.close();
+        closeBoxes();
         document.body.classList.add("nav-open");
         query.focus();
         query.select();
@@ -1613,6 +1655,7 @@
   bindResize();
   bindZoom();
   bindHelp();
+  bindReading();
   sizePages();
   floatAsides();
   markBoxDrawing();

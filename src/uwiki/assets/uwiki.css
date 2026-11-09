@@ -151,7 +151,7 @@ a:hover {
     cursor: default;
 }
 /* opens the help, a key cap like / of the search box */
-#help {
+#_help {
     flex: none;
     width: 20px;
     height: 20px;
@@ -166,7 +166,7 @@ a:hover {
     line-height: 18px;
     cursor: pointer;
 }
-#help:hover {
+#_help:hover {
     border-color: var(--accent);
     color: var(--accent);
 }
@@ -952,9 +952,10 @@ details.callout:not([open]) > summary {
     font-size: 1.05em;
 }
 
-/* help: what this page is, its keys and search terms, when it was built */
+/* help: what this page is, when and from what it was built, its keys and search terms;
+   the config window over it: build options and the vault config file */
 
-#help-box {
+dialog.box {
     width: min(540px, calc(100vw - 32px));
     max-height: calc(100vh - 48px);
     padding: 0;
@@ -967,17 +968,55 @@ details.callout:not([open]) > summary {
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
     outline: none;
 }
-#help-box::backdrop {
+dialog.box::backdrop {
     background: rgba(0, 0, 0, 0.4);
 }
-#help-box > div {
+dialog.box > div {
     position: relative;
     padding: 18px 22px 20px;
 }
-#help-box p {
-    margin: 0 28px 0 0;
+#_config_box {
+    width: min(760px, calc(100vw - 32px));
 }
-#help-box h2 {
+dialog.box p {
+    margin: 0 28px 6px 0;
+}
+dialog.box p.live {
+    color: var(--fg-muted);
+}
+dialog.box p.live.lost {
+    color: var(--warning);
+}
+dialog.box a code {
+    color: inherit;
+}
+/* a link that opens a window, not a page */
+dialog.box button.link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+}
+dialog.box button.link:hover {
+    text-decoration: underline;
+}
+dialog.box pre {
+    margin: 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    border-radius: 6px;
+    background: var(--bg-code);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.45;
+    tab-size: 4;
+}
+dialog.box pre:empty {
+    display: none;
+}
+dialog.box h2 {
     margin: 16px 0 6px;
     color: var(--fg-muted);
     font-size: 12px;
@@ -985,16 +1024,16 @@ details.callout:not([open]) > summary {
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }
-#help-box dl {
+dialog.box dl {
     display: grid;
     grid-template-columns: 150px 1fr;  /* the same in every list, wide enough for its widest keys */
     gap: 3px 16px;
     margin: 0;
 }
-#help-box dt, #help-box dd {
+dialog.box dt, dialog.box dd {
     margin: 0;
 }
-#help-box kbd {
+dialog.box kbd {
     display: inline-block;
     min-width: 20px;
     padding: 0 5px;
@@ -1006,12 +1045,12 @@ details.callout:not([open]) > summary {
     font-size: 12px;
     text-align: center;
 }
-#help-box code {
+dialog.box code {
     color: var(--code-inline);
     font-family: var(--mono);
     font-size: 13px;
 }
-#help-box .close {
+dialog.box .close {
     position: absolute;
     top: 10px;
     right: 10px;
@@ -1027,7 +1066,7 @@ details.callout:not([open]) > summary {
     line-height: 26px;
     cursor: pointer;
 }
-#help-box .close:hover {
+dialog.box .close:hover {
     background: var(--accent-bg);
     color: var(--accent);
 }
@@ -1089,7 +1128,7 @@ details.callout:not([open]) > summary {
 }
 
 @media print {
-    #sidebar, #menu, .preview, #help-box {
+    #sidebar, #menu, .preview, dialog.box {
         display: none;
     }
     .content {

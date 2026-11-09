@@ -38,10 +38,25 @@
     }
   } catch (e) {}
 
+  // the help tells whether the server answers, since when not
+  var live = document.querySelector("#_help_box .live");
+  var lost = null;
+  function status(ok) {
+    if (!live) return;
+    if (!ok && !lost) lost = new Date();
+    if (ok) lost = null;
+    live.hidden = false;
+    live.classList.toggle("lost", !ok);
+    live.textContent = ok ? "Live: served by uwiki serve, reloads when a page changes."
+      : "Live: the server has not answered since " + lost.toTimeString().slice(0, 5) + ", trying again.";
+  }
+  status(true);
+
   function check() {
     fetch("/__uwiki/build", { cache: "no-store" }).then(function (r) {
       return r.ok ? r.text() : BUILD;
     }).then(function (build) {
+      status(true);
       if (build === BUILD) return setTimeout(check, 700);
       try {
         var at = position();
@@ -50,6 +65,7 @@
       } catch (e) {}
       location.reload();
     }, function () {
+      status(false);
       setTimeout(check, 2000);
     });
   }

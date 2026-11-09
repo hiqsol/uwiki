@@ -6,6 +6,7 @@ Top level keys are defaults of options of every command taking them, e.g. `exclu
 `[schema]` declares front matter keys, see Schema.
 """
 
+import json
 import os
 import re
 import tomllib
@@ -116,11 +117,48 @@ class Config:
             raise ConfigError(f'{self.path}: check.code-paths should be a table of page globs with folders')
         return paths
 
+    def text(self):
+        """Config as its file has it: uwiki.toml whole, comments too, `[tool.uwiki]` of pyproject.toml
+        as TOML; empty without config."""
+        if not self.path:
+            return ''
+        if os.path.basename(self.path) == 'uwiki.toml':
+            with open(self.path, encoding='utf-8') as f:
+                return f.read()
+        return dumps(self.data, ('tool', 'uwiki'))
+
     @property
     def schema(self):
         if self._schema is None:
             self._schema = Schema(self.data.get('schema', {}), self.path, self.prefix)
         return self._schema
+
+BARE_KEY = re.compile(r'[A-Za-z0-9_-]+')
+
+def toml_key(key):
+    return key if BARE_KEY.fullmatch(key) else json.dumps(key, ensure_ascii=False)
+
+def toml_value(value):
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)  # its escapes are TOML ones
+    if isinstance(value, list):
+        return '[' + ', '.join(map(toml_value, value)) + ']'
+    if isinstance(value, dict):
+        return '{' + ', '.join(f'{toml_key(k)} = {toml_value(v)}' for k, v in value.items()) + '}'
+    return value.isoformat()  # date, time, datetime
+
+def dumps(data, table=()):
+    """Data as TOML, keys before tables, under given table name."""
+    lines = [f'[{".".join(map(toml_key, table))}]'] if table else []
+    lines += [f'{toml_key(k)} = {toml_value(v)}' for k, v in data.items() if not isinstance(v, dict)]
+    for key, value in data.items():
+        if isinstance(value, dict):
+            lines += ['', dumps(value, (*table, key)).rstrip('\n')]
+    return '\n'.join(lines).strip('\n') + '\n'
 
 class Schema:
     """Front matter keys allowed, value is allowed values or a type, `_required` lists required keys,

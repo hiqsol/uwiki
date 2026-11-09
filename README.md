@@ -163,8 +163,10 @@ One self-contained file, light or dark by system preference, works from `file://
   a click on the count of problems shows only pages with problems
 - `−` and `+` by the title or the `-` and `+` keys make the text of pages and previews smaller or larger,
   `0` restores it, remembered per browser
-- `?` by the title or the `?` key opens help: what the page is, uWiki version and build time, keys,
-  search terms and mouse gestures
+- `j` and `k` go to the next and previous page, `t` to the top, `[` and `]` fold and unfold the whole tree
+- `?` by the title or the `?` key opens help: what the page is, uWiki version, build time and the git
+  commit built from, keys, search terms and mouse gestures; under `serve` whether the server answers;
+  its config link shows build options and the vault config file as they were
 - code blocks highlighted by Prism and `mermaid` blocks drawn as they near the window, the libraries
   loaded from CDNs on first need; offline, code stays plain
 
