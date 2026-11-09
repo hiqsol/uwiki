@@ -118,7 +118,9 @@ def check(args):
                            mentions_ignore_case=args.mentions_ignore_case, mentions_every=args.mentions_every,
                            mentions_self_bold=args.mentions_self_bold,
                            mentions_exclude=tuple(args.mentions_exclude), max_lines=args.max_lines,
-                           max_lines_ignore=tuple(args.max_lines_ignore))
+                           max_lines_ignore=tuple(args.max_lines_ignore), acyclic=tuple(args.acyclic),
+                           stale_days=args.stale_days, stale_date=tuple(args.stale_date),
+                           stale_until=args.stale_until)
     checker = Checker(args.paths, args.include, args.exclude, options)
     code = report(checker.check())
     for warning in checker.warnings:
@@ -236,7 +238,8 @@ def parser():
 
     p = command(commands, 'check', 'check unresolved links and headings, missing images, '
                                    'frontmatter syntax and list numbering',
-                f'[--no-folder-links] [--orphans] [--unlisted] [--mentions] [--max-lines N] {FILTER_USAGE}')
+                f'[--no-folder-links] [--orphans] [--unlisted] [--mentions] [--max-lines N] [--acyclic KEY] '
+                f'[--stale-days N --stale-date KEY] [--stale-until KEY] {FILTER_USAGE}')
     add_paths(p, 'folders or files to check')
     p.add_argument('--no-folder-links', action='store_true', help='report links to folders, not files')
     p.add_argument('--orphans', action='store_true',
@@ -260,6 +263,15 @@ def parser():
     p.add_argument('--max-lines', type=int, default=0, metavar='N', help='report pages longer than N lines')
     p.add_argument('--max-lines-ignore', action='append', default=[], metavar='GLOB',
                    help='pages max-lines leaves alone, glob from the config folder; repeatable')
+    p.add_argument('--acyclic', action='append', default=[], metavar='KEY',
+                   help='report pages a chain of the pages this front matter key names leads back to; repeatable')
+    p.add_argument('--stale-days', type=int, default=0, metavar='N',
+                   help='warn about pages whose latest --stale-date is more than N days ago, exit code stays as is')
+    p.add_argument('--stale-date', action='append', default=[], metavar='KEY',
+                   help='front matter date key a page is aged from, dotted for nested ones, the latest wins; '
+                        'repeatable')
+    p.add_argument('--stale-until', default='', metavar='KEY',
+                   help='warn about pages whose date in this front matter key has come, exit code stays as is')
     add_filter(p)
     p.set_defaults(func=check)
 
@@ -339,7 +351,7 @@ def parser():
 
 TAKES = {'watch': ('build',), 'serve': ('build',), 'link': ('check', 'wrap')}
 NOT_OPTIONS = {'paths', 'func', 'command', 'help', 'version'}
-CONFIG_ONLY = {'layers'}  # config keys no command line option takes
+CONFIG_ONLY = {'layers', 'code-paths'}  # config keys no command line option takes
 
 def config_defaults(top, args):
     """Defaults of command options from the config of the vault given paths are in."""

@@ -65,7 +65,10 @@ uwiki lsp
   and list numbering as `path:line: message`, exits 1 if any;
   `--orphans` reports orphans, `--unlisted` and `--mentions` warn about pages their folder page does not link
   and plain text mentions of page titles, outside `index` blocks and pages `--mentions-exclude` matches,
-  `--max-lines` reports longer pages
+  `--max-lines` reports longer pages, `--acyclic KEY` pages a chain of pages that front matter key names
+  leads back to; `--stale-days N` warns about pages whose latest `--stale-date KEY` is older,
+  `--stale-until KEY` about pages whose date in that key has come; `[check.code-paths]` reports code spans
+  ending in `.md` or holding a `/` in matching pages that name no file or folder in the folder it gives
 - `link` links the plain text mentions `check --mentions-every` warns about: `[[Star]]s`
 - `llms` writes [llms.txt](https://llmstxt.org): a section per folder of `- [title](path): description`
 - `index` fills `<!-- generated: NAME -->` ... `<!-- /generated -->` blocks of pages
@@ -105,6 +108,11 @@ mentions-ignore = ["Go"]                  # terms
 mentions-exclude = ["prompts/**"]         # pages, globs from the config folder
 max-lines = 1500                          # a page an agent reads in one go
 max-lines-ignore = ["log.md"]             # globs from the config folder
+acyclic = ["supersedes", "superseded_by"] # no chain of these page valued keys leads back
+stale-days = 183                          # warn when the latest of these dates is older
+stale-date = ["verified.at", "generated.at"]
+stale-until = "stale_after"               # warn once this date has come
+code-paths."skills/**/map.md" = "docs"    # `a/b.md` in such pages names docs/a/b.md
 layers.scope = ["core", "duel", "advanced"]
 
 [index.adrs]                              # <!-- generated: adrs --> blocks

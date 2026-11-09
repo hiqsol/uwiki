@@ -3,6 +3,7 @@
 import os
 import re
 from dataclasses import dataclass, fields
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -26,6 +27,10 @@ class CheckOptions:
     mentions_exclude: tuple = ()
     max_lines: int = 0
     max_lines_ignore: tuple = ()
+    acyclic: tuple = ()
+    stale_days: int = 0
+    stale_date: tuple = ()
+    stale_until: str = ''
 
     @classmethod
     def from_values(cls, values):
@@ -145,8 +150,12 @@ class Checker:
     """Checks vault consistency the way builder sees it, reports problems as `path:line: message`."""
 
     FRONT_MATTER_START = re.compile(r'\A---[ \t]*\r?\n')
+    DAY = re.compile(r'\d{4}-\d\d-\d\d')
+    FENCE = re.compile(r' {0,3}(`{3,}|~{3,})')
+    CODE_SPAN = re.compile(r'(`+)([^`\n]+?)\1(?!`)')
+    CODE_PATH = re.compile(r'[\w.-]+(?:/[\w.-]+)*/?')
 
-    def __init__(self, paths, include=(), exclude=(), options=None):
+    def __init__(self, paths, include=(), exclude=(), options=None, today=None):
         self.vaults = Vaults(paths, Filter(include, exclude))
         self.options = options or CheckOptions()
         self.problems = []
@@ -155,6 +164,8 @@ class Checker:
         self.links = {}  # scanner: links of its pages
         self.checked = {}  # checked page: (scanner, path to show)
         self.configs = {}  # scanner: its vault config
+        self.today = today or datetime.now(timezone.utc).date()
+        self.edges = {}  # (page, key): pages its page valued key names
 
     def check(self):
         for scanner, page, shown in self.vaults.files():
@@ -167,7 +178,120 @@ class Checker:
         if self.options.mentions:
             self.check_mentions()
         self.check_layers()
+        self.check_acyclic()
         return self.problems
+
+    def check_acyclic(self):
+        """Chains of page valued front matter keys, `[check] acyclic = ["supersedes"]`, lead back to no page,
+        each key a chain of its own."""
+        for key in self.options.acyclic:
+            for page, (scanner, shown) in self.checked.items():
+                cycle = self.cycle(scanner, page, key)
+                if cycle:
+                    show = lambda node: os.path.relpath(node.file, scanner.path).replace(os.sep, '/')
+                    front = read_parts(page.source.fullpath)[1]
+                    self.add(page, shown, self.key_line(front, key),
+                             f'{key} chain leads back to it: {" -> ".join(show(node) for node in cycle)}')
+
+    def cycle(self, scanner, page, key):
+        """Pages from page back to it by values of key, breadth first so the shortest, None if none lead back."""
+        parents = {}
+        queue = [page]
+        while queue:
+            node = queue.pop(0)
+            for target in self.named_by(scanner, node, key):
+                if target is page:
+                    chain = [node]
+                    while chain[-1] is not page:
+                        chain.append(parents[chain[-1]])
+                    return [*reversed(chain), page]
+                if target not in parents:
+                    parents[target] = node
+                    queue.append(target)
+        return None
+
+    def named_by(self, scanner, page, key):
+        """Pages front matter key of page names, as `page` typed values name them."""
+        if (page, key) not in self.edges:
+            res = []
+            if page.source is not None:
+                try:
+                    front = read_parts(page.source.fullpath)[1]
+                except (OSError, UnicodeDecodeError):
+                    front = ''
+                value = front_matter_tree(front).get(key) if front else None
+                for name in value if isinstance(value, list) else [value]:
+                    target = self.page_named(scanner, page.source, name) if isinstance(name, str) else None
+                    if target is not None:
+                        res.append(target)
+            self.edges[page, key] = res
+        return self.edges[page, key]
+
+    def check_stale(self, scanner, source, front, report):
+        """Warns about a page whose latest date of stale_date keys is more than stale_days days ago, or whose
+        stale_until date has come: nobody wrote or verified it since, or the snapshot it holds stopped holding."""
+        o = self.options
+        if not front or not (o.stale_days and o.stale_date or o.stale_until):
+            return
+        tree = front_matter_tree(front)
+        if o.stale_days:
+            dates = [(self.day(value), key) for key in o.stale_date for value in self.values_at(tree, key)]
+            dates = [(day, key) for day, key in dates if day is not None]
+            if dates:
+                day, key = max(dates)
+                ago = (self.today - day).days
+                if ago > o.stale_days:
+                    report(self.key_line(front, key.split('.')[0]),
+                           f'stale: {key} {day.isoformat()}, {ago} days ago, more than {o.stale_days}')
+        if o.stale_until:
+            until = [day for day in map(self.day, self.values_at(tree, o.stale_until)) if day is not None]
+            if until and min(until) <= self.today:
+                report(self.key_line(front, o.stale_until.split('.')[0]),
+                       f'stale: {o.stale_until} {min(until).isoformat()} passed')
+
+    @classmethod
+    def values_at(cls, tree, key):
+        """Text values of dotted key in front matter tree, in a map or in every map of a list."""
+        head, _, rest = key.partition('.')
+        value = tree.get(head) if isinstance(tree, dict) else None
+        for item in value if isinstance(value, list) else [value]:
+            if rest:
+                yield from cls.values_at(item, rest)
+            elif isinstance(item, str):
+                yield item
+
+    @classmethod
+    def day(cls, value):
+        """Date a front matter date or datetime value starts with, None if it does not."""
+        m = cls.DAY.match(value.strip())
+        try:
+            return date.fromisoformat(m[0]) if m else None
+        except ValueError:
+            return None
+
+    def check_code_paths(self, scanner, source, text, front, report):
+        """Code spans naming a path, ending in `.md` or holding a `/`, in pages a `[check.code-paths]` glob
+        matches, name a file or folder in the folder it gives: pages shown as text, not linked, still point
+        where they say."""
+        config = self.config(scanner)
+        bases = [base for glob, base in config.code_paths.items() if self.matches(scanner, source, [glob])]
+        if not bases:
+            return
+        folder = os.path.dirname(config.path)
+        fence = None
+        for n, line in enumerate(text.splitlines()[front.count('\n'):], front.count('\n') + 1):
+            m = self.FENCE.match(line)
+            if m and (fence is None or m[1][0] == fence[0] and len(m[1]) >= len(fence)):
+                fence = m[1] if fence is None else None
+                continue
+            if fence is not None:
+                continue
+            for span in self.CODE_SPAN.finditer(line):
+                path = span[2].strip()
+                if not self.CODE_PATH.fullmatch(path) or not (path.endswith('.md') or '/' in path):
+                    continue
+                if not any(os.path.exists(os.path.join(folder, base, path)) for base in bases):
+                    report(n, f'missing path: {path} in {", ".join(bases)}')
 
     def add(self, page, shown, line, message, warning=False):
         """Reports problem or warning of page as `path:line: message`, keeps it by page file too."""
@@ -294,16 +418,21 @@ class Checker:
         for key, message in schema.problems(front_matter_tree(front) if front else {}, path, resolve):
             report(self.key_line(front, key), message)
 
-    @staticmethod
-    def names_page(scanner, source, value):
+    @classmethod
+    def names_page(cls, scanner, source, value):
         """Value names a page other than source: by name or `[[Page]]` as links do, or by path relative to it."""
+        return cls.page_named(scanner, source, value) is not None
+
+    @staticmethod
+    def page_named(scanner, source, value):
+        """Page other than source value names, see names_page, None if none."""
         name = value[2:-2].partition('|')[0] if value.startswith('[[') and value.endswith(']]') else value
         name = name.partition('#')[0].strip()
         if name.endswith('.md') or name.startswith('.'):
             target = scanner.resolve_path(name, source.path)
         else:
             target = scanner.resolve(name, source.path) if name else None
-        return target is not None and target.source is not None and target.source is not source
+        return target if target is not None and target.source is not None and target.source is not source else None
 
     def check_length(self, scanner, source, text, report):
         """Page no longer than max_lines, unless a max_lines_ignore glob matches it from the config folder."""
@@ -355,6 +484,8 @@ class Checker:
         self.check_schema(scanner, source, front, report)
         self.check_aliases(scanner, page, front, report)
         self.check_length(scanner, source, text, report)
+        self.check_stale(scanner, source, front, lambda line, msg: self.add(page, shown, line, msg, True))
+        self.check_code_paths(scanner, source, text, front, report)
         if page.folder and page.folder.shadowed_index() is page:
             report(1, Scanner.shadowed_message(page.folder))
         converter = CheckConverter(page, scanner, report, self.options)

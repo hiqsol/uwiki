@@ -4,6 +4,7 @@ Run with: make test (needs the markdown package)
 """
 
 import contextlib
+import datetime
 import io
 import json
 import os
@@ -754,6 +755,68 @@ class ConfigTest(unittest.TestCase):
             code, lines, err = self.check('.', cwd=tmp)
             self.assertEqual(lines, ['./Bad.md:2: front matter supersedes: Gone, Bad, ../Old.md, expected page'], err)
             self.assertEqual(code, 1)
+
+    def test_acyclic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nacyclic = ["supersedes"]\n'
+                  '[schema]\nsupersedes = "page"\nrefines = "page"\n')
+            write(os.path.join(tmp, 'index.md'), 'See [[A]], [[B]], [[C]], [[D]] and [[E]].\n')
+            write(os.path.join(tmp, 'A.md'), '---\nsupersedes: B\n---\nA.\n')
+            write(os.path.join(tmp, 'B.md'), '---\nsupersedes: [D, "[[C]]"]\n---\nB.\n')
+            write(os.path.join(tmp, 'C.md'), '---\nrefines: E\nsupersedes: ./A.md\n---\nC.\n')
+            write(os.path.join(tmp, 'D.md'), '---\nsupersedes: E\n---\nD.\n')
+            write(os.path.join(tmp, 'E.md'), '---\nrefines: C\n---\nE.\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(lines, [
+                './A.md:2: supersedes chain leads back to it: A.md -> B.md -> C.md -> A.md',
+                './B.md:2: supersedes chain leads back to it: B.md -> C.md -> A.md -> B.md',
+                './C.md:3: supersedes chain leads back to it: C.md -> A.md -> B.md -> C.md',
+            ], err)
+            self.assertEqual(code, 1)
+            code, lines, err = self.check('.', '--acyclic', 'refines', cwd=tmp)
+            self.assertIn('./E.md:2: refines chain leads back to it: E.md -> C.md -> E.md', lines)
+
+    def test_stale(self):
+        today = datetime.date.today()
+        day = lambda days: (today - datetime.timedelta(days=days)).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nstale-days = 10\n'
+                  'stale-date = ["verified.at", "made.at"]\nstale-until = "stale_after"\n')
+            write(os.path.join(tmp, 'index.md'), 'See [[Old]], [[Checked]], [[Snapshot]] and [[Fresh]].\n')
+            write(os.path.join(tmp, 'Old.md'), f'---\nmade: {{ by: me, at: {day(11)}T01:02:03Z }}\n---\nOld.\n')
+            write(os.path.join(tmp, 'Checked.md'), f'---\nmade: {{ by: me, at: {day(30)}T01:02:03Z }}\n'
+                  f'verified:\n  - by: a\n    at: {day(20)}\n  - by: b\n    at: {day(3)}\n---\nChecked.\n')
+            write(os.path.join(tmp, 'Snapshot.md'), f'---\nmade: {{ by: me, at: {day(1)} }}\n'
+                  f'stale_after: {day(0)}\n---\nSnapshot.\n')
+            write(os.path.join(tmp, 'Fresh.md'), f'---\nmade: {{ by: me, at: {day(10)} }}\n'
+                  f'stale_after: {day(-1)}\n---\nFresh.\n')
+            code, lines, err = self.check('.', cwd=tmp)
+            self.assertEqual(lines, [
+                f'./Old.md:2: warning: stale: made.at {day(11)}, 11 days ago, more than 10',
+                f'./Snapshot.md:3: warning: stale: stale_after {day(0)} passed',
+            ], err)
+            self.assertEqual(code, 0)
+            self.assertEqual(self.check('.', '--stale-days', '0', '--stale-until', '', cwd=tmp)[:2], (0, []))
+
+    def test_code_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[check.code-paths]\n"skills/**/map.md" = "wiki"\n')
+            write(os.path.join(tmp, 'wiki', 'index.md'), 'See [[Guide]].\n')
+            write(os.path.join(tmp, 'wiki', 'Guide.md'), '`gone.md` here is not checked.\n')
+            write(os.path.join(tmp, 'wiki', 'sub', 'index.md'), 'Sub.\n')
+            write(os.path.join(tmp, 'skills', 'one', 'map.md'),
+                  '---\nname: map\n---\nRead `Guide.md`, `sub/index.md`, `sub/` and ``gone.md``,\n'
+                  'not `example.com`, `sed -n`, `/abs:x` or `<x>/y/`.\n\n```\n`old/page.md`\n```\n'
+                  'Then `sub/Nope.md`.\n')
+            code, lines, err = self.check('skills', cwd=tmp)
+            self.assertEqual(lines, [
+                'skills/one/map.md:4: missing path: gone.md in wiki',
+                'skills/one/map.md:10: missing path: sub/Nope.md in wiki',
+            ], err)
+            self.assertEqual(code, 1)
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\ncode-paths = ["wiki"]\n')
+            self.assertIn('check.code-paths should be a table of page globs with folders',
+                          self.check('skills', cwd=tmp)[2])
 
     def test_max_lines(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -98,6 +98,16 @@ class Config:
         return layers
 
     @property
+    def code_paths(self):
+        """Page globs with the folder code spans in those pages name paths in, `[check.code-paths]
+        "skills/**/map.md" = "docs"`, both from the config folder."""
+        table = self.data.get('check', {})
+        paths = table.get('code-paths', {}) if isinstance(table, dict) else {}
+        if not isinstance(paths, dict) or not all(isinstance(v, str) for v in paths.values()):
+            raise ConfigError(f'{self.path}: check.code-paths should be a table of page globs with folders')
+        return paths
+
+    @property
     def schema(self):
         if self._schema is None:
             self._schema = Schema(self.data.get('schema', {}), self.path, self.prefix)
