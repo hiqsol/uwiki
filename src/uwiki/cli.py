@@ -52,7 +52,7 @@ def serve(args):
     """Builds into a temporary folder unless -o is given, so serving leaves no files behind, HTML only there."""
     tmp = None if args.output else tempfile.TemporaryDirectory(prefix='uwiki-')
     output = args.output or tmp.name + os.sep
-    title = args.title or (None if args.output else Path(Vaults.common(args.paths)).name)
+    name = None if args.output else Path(Vaults.common(args.paths)).name  # of the file in the temporary folder
     options = build_options(args)
     options.live_reload = True
     options.attachment_base = served.FILES
@@ -61,7 +61,7 @@ def serve(args):
     port = int(restarted) if restarted.isdigit() and not args.port else args.port  # port 0 picked: the same again
     try:
         html = args.html or not args.output and not args.md
-        build = Build(args.paths, output, title, html, args.md, args.include, args.exclude, options)
+        build = Build(args.paths, output, args.title, html, args.md, args.include, args.exclude, options, name)
         if 'html' not in build.outputs:
             raise UsageError('serve needs HTML output')
         try:
@@ -134,11 +134,11 @@ def llms(args):
     if not args.title and not single:
         raise UsageError('--title is required unless one folder is listed')
     output = args.output or os.path.join(single, 'llms.txt')
-    title = args.title or Path(os.path.abspath(single)).name
     try:
         selection = Selection(args.paths, Filter(args.include, args.exclude))
     except ValueError as e:
         raise UsageError(str(e)) from e
+    title = args.title or selection.index_title() or Path(os.path.abspath(single)).name
     selection.scanner.root.default_title = title
     text = Llms(selection, output, title, args.summary).text()
     if args.check:
@@ -186,7 +186,8 @@ def add_filter(p):
                    help='take matching ones even if skipped or excluded; repeatable')
 
 def add_build_options(p, output='current'):
-    p.add_argument('--title', help='default: name of the one folder built, or of -o file')
+    p.add_argument('--title', help='default: title of the index page of the folder built, else its name, '
+                                   'else of -o file; names output files, else the folder does')
     p.add_argument('--html', action='store_true', help='write HTML only (default: both HTML and markdown)')
     p.add_argument('--md', action='store_true', help='write single markdown file only')
     p.add_argument('-o', '--output',
@@ -296,7 +297,7 @@ def parser():
     p = command(commands, 'llms', 'write llms.txt: every page with its description, one section per folder',
                 f'[--title TITLE] [-o FILE] [--summary TEXT] [--check] {FILTER_USAGE}')
     add_paths(p, 'folders or files to list')
-    p.add_argument('--title', help='default: name of the one folder listed')
+    p.add_argument('--title', help='default: title of the index page of the one folder listed, else its name')
     p.add_argument('-o', '--output', help='default: llms.txt in the one folder listed, links are relative to it')
     p.add_argument('--summary', help='quote under the title, default: description of the folder page '
                                      'of the folder given paths share')

@@ -55,7 +55,8 @@ uwiki lsp
 
 `uwiki <command> --help` lists all options.
 
-- `build` writes `<title>.html` and `<title>.md`, `-o out/Wiki.html` only one;
+- `build` writes `<name>.html` and `<name>.md`, named by `--title` or the folder, `-o out/Wiki.html` only one;
+  the wiki is titled as its index page is (`README.md`, `index.md`), unless `--title` is given;
   a page shows its folders, metadata and front matter; a link to a page left out fails the build
 - `watch` builds again on change of a page, attachment or the config, `serve` also serves the HTML
   on `http://127.0.0.1:8000`, reloading the page, its blocks with `data-line` of the source line they start at;

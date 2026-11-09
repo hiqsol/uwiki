@@ -763,6 +763,14 @@ class Selection:
     def selected(self, node):
         return node in self.shown
 
+    def index_title(self):
+        """Title of the folder page of the folder given paths share, if it is built: the one place
+        a vault names itself, front matter title or leading heading; None without one."""
+        top = self.common
+        if top is not None and top.page and self.selected(top):
+            return read_title(top.file)
+        return None
+
     def shows(self, node):
         """Whether build shows node: selected one with its text, folder on the way to it by its title."""
         return node in self.shown or node in self.ancestors

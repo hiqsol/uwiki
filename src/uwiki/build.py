@@ -270,18 +270,23 @@ class Builder:
 class Build:
     """Build of given folders and files into one HTML and one markdown file, as `uwiki build` takes options.
 
-    Output is a folder, written `<title>.html` and `<title>.md` in it, or a file name:
+    Output is a folder, written `<name>.html` and `<name>.md` in it, or a file name:
     without extension both are written, with `.html` or `.md` only one.
+    The name is the given title, else the name argument, else of the one folder built or of the -o file.
+    The title is the given one, else of the index page of the folder built, else the name.
     """
 
     KINDS = ('html', 'md')
 
-    def __init__(self, paths, output=None, title=None, html=False, md=False, include=(), exclude=(), options=None):
+    def __init__(self, paths, output=None, title=None, html=False, md=False, include=(), exclude=(), options=None,
+                 name=None):
         self.paths = list(paths)
         self.options = options or BuildOptions()
         self.include, self.exclude = list(include), list(exclude)
         self.filter = Filter(include, exclude)
-        self.outputs, self.title = self.targets(self.paths, output, title, html, md)
+        self.given_title = title
+        self.outputs, self.name = self.targets(self.paths, output, title or name, html, md)
+        self.title = title or self.name  # till scan reads the index page
         self.selection = None
         self.warnings = []
         self.build_id = ''
@@ -319,6 +324,7 @@ class Build:
         except ValueError as e:
             raise UsageError(str(e)) from e
         scanner = self.selection.scanner
+        self.title = self.given_title or self.selection.index_title() or self.name
         scanner.root.default_title = self.title
         self.warnings = [os.path.join(self.selection.shown_root, w) for w in scanner.warnings]
         return self.selection

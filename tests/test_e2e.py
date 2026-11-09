@@ -1171,6 +1171,24 @@ class TemplateIdTest(unittest.TestCase):
         self.assertIn('id="help"', html, 'page Help keeps its anchor')
         self.assertNotIn('Live:', html, 'built, not served')
 
+    def test_title_is_of_index_page_file_name_of_folder(self):
+        with tempfile.TemporaryDirectory() as parent:
+            tmp = os.path.join(parent, 'mywiki')
+            write(os.path.join(tmp, 'README.md'), '# My Wiki\n\nHome.\n')
+            write(os.path.join(tmp, 'notes', 'index.md'), '---\ntitle: Notes Front\n---\n# Notes Heading\n')
+            res = run('build', tmp, '-o', parent + os.sep)
+            html = read(os.path.join(parent, 'mywiki.html'))
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertIn('<title>My Wiki</title>', html)
+            self.assertIn('<a id="home" href="#root">My Wiki</a>', html)
+            run('build', os.path.join(tmp, 'notes'), '-o', parent + os.sep)
+            self.assertIn('<title>Notes Front</title>', read(os.path.join(parent, 'notes.html')))
+            run('build', tmp, '-o', parent + os.sep, '--title', 'Given')
+            self.assertIn('<title>Given</title>', read(os.path.join(parent, 'Given.html')))
+            os.remove(os.path.join(tmp, 'README.md'))
+            run('build', tmp, '-o', os.path.join(parent, 'out.html'))
+            self.assertIn('<title>mywiki</title>', read(os.path.join(parent, 'out.html')), 'no index page: folder name')
+
     def test_help_tells_git_commit_built_from(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
             git = lambda *args: subprocess.run(['git', '-C', tmp, '-c', 'user.name=t', '-c', 'user.email=t@t',
@@ -1343,7 +1361,7 @@ class LlmsTest(unittest.TestCase):
             res = run('llms', LINKCHECK, '-o', output, '--check')
             self.assertEqual((res.returncode, res.stdout), (1, f'{output}: out of date, rerun without --check\n'))
             run('llms', LINKCHECK, '-o', output, '--summary', 'Line one.\nLine two.')
-            self.assertIn('# linkcheck\n\n> Line one.\n> Line two.\n\n## Home', read(output))
+            self.assertIn('# Home\n\n> Line one.\n> Line two.\n\n## Home', read(output))  # title of index.md
             res = run('llms', LINKCHECK, '-o', output, '--summary', 'Line one.\nLine two.', '--check')
             self.assertEqual((res.returncode, res.stdout), (0, ''))
 
