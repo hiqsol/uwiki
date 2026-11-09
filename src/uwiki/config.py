@@ -72,6 +72,11 @@ class Config:
         except (OSError, tomllib.TOMLDecodeError) as e:
             raise ConfigError(f'{file}: {e}') from e
 
+    def matches(self, path, globs):
+        """Whether a glob from the config folder matches path, relative to the vault root."""
+        path = f'{self.prefix}/{path}' if self.prefix else path
+        return any(Filter.compile(glob).fullmatch(path) for glob in globs)
+
     def options(self, command, takes=('build',)):
         """Option defaults for command: top level ones, then of its own table and of tables it takes."""
         res = {k: v for k, v in self.data.items() if not isinstance(v, dict)}

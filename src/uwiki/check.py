@@ -23,6 +23,7 @@ class CheckOptions:
     mentions_ignore_case: bool = False
     mentions_every: bool = False
     mentions_self_bold: bool = False
+    mentions_exclude: tuple = ()
     max_lines: int = 0
     max_lines_ignore: tuple = ()
 
@@ -179,9 +180,11 @@ class Checker:
 
     def check_mentions(self):
         """Warns about plain text mentions of another page title or alias: the first one of a page the page does not
-        link, or every one with mentions_every."""
+        link, or every one with mentions_every; pages a mentions_exclude glob matches have none."""
         mentions = {}
         for page, (scanner, shown) in self.checked.items():
+            if self.matches(scanner, page.source, self.options.mentions_exclude):
+                continue
             if scanner not in mentions:
                 o = self.options
                 mentions[scanner] = Mentions(scanner, o.mentions_ignore, o.mentions_min_length, o.mentions_ignore_case)
@@ -308,11 +311,15 @@ class Checker:
         lines = text.count('\n') + (not text.endswith('\n') and bool(text))
         if not limit or lines <= limit:
             return
-        prefix = self.config(scanner).prefix
-        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
-        path = f'{prefix}/{path}' if prefix else path
-        if not any(Filter.compile(glob).fullmatch(path) for glob in self.options.max_lines_ignore):
+        if not self.matches(scanner, source, self.options.max_lines_ignore):
             report(limit + 1, f'{lines} lines, more than {limit}')
+
+    def matches(self, scanner, source, globs):
+        """Whether a glob matches the source page's path from the config folder."""
+        if not globs or source is None:
+            return False
+        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
+        return self.config(scanner).matches(path, globs)
 
     @staticmethod
     def key_line(front, key):

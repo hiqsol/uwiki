@@ -17,7 +17,9 @@ class Index:
     Lines linking a subfolder are written by hand and stay.
     """
 
-    BLOCK = re.compile(r'(<!-- generated: ([\w-]+) -->\n)(.*?)(<!-- /generated -->)', re.DOTALL)
+    OPENING = '<!-- generated: '
+    CLOSING = '<!-- /generated -->'
+    BLOCK = re.compile(f'({re.escape(OPENING)}([\\w-]+) -->\n)(.*?)({re.escape(CLOSING)})', re.DOTALL)
     LINK = re.compile(r'\[[^\]]*\]\(<?([^)\s>]+)>?\)')
     FIELD = re.compile(r'\{([\w.-]+)\}')
     LINE = '- [{title}]({path}): {description}'
@@ -33,7 +35,7 @@ class Index:
         for scanner, node, shown in self.vaults.files():
             page = node.source
             text = read_parts(page.fullpath)[0]
-            if '<!-- generated: ' not in text:
+            if self.OPENING not in text:
                 continue
             folder = node if node.is_folder else node.folder
             new = self.BLOCK.sub(lambda m: self.block(m, scanner, folder, page, shown), text)

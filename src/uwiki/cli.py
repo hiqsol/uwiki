@@ -96,7 +96,7 @@ def mv(args):
 def link(args):
     vaults = Vaults(args.paths, Filter(args.include, args.exclude))
     changes = link_mentions(vaults, args.mentions_ignore, args.mentions_min_length, args.mentions_ignore_case,
-                            args.mentions_self_bold, args.width, args.dry_run)
+                            args.mentions_self_bold, args.width, args.dry_run, tuple(args.mentions_exclude))
     for shown, lines in changes:
         if args.dry_run:
             for n, old, new in lines:
@@ -116,7 +116,8 @@ def check(args):
                            unlisted=args.unlisted, mentions=args.mentions, mentions_ignore=args.mentions_ignore,
                            mentions_min_length=args.mentions_min_length,
                            mentions_ignore_case=args.mentions_ignore_case, mentions_every=args.mentions_every,
-                           mentions_self_bold=args.mentions_self_bold, max_lines=args.max_lines,
+                           mentions_self_bold=args.mentions_self_bold,
+                           mentions_exclude=tuple(args.mentions_exclude), max_lines=args.max_lines,
                            max_lines_ignore=tuple(args.max_lines_ignore))
     checker = Checker(args.paths, args.include, args.exclude, options)
     code = report(checker.check())
@@ -254,6 +255,8 @@ def parser():
                    help='warn about every plain text mention, also of pages the page links')
     p.add_argument('--mentions-self-bold', action='store_true',
                    help='warn about a mention of the page itself not in bold, a term rather than a word')
+    p.add_argument('--mentions-exclude', action='append', default=[], metavar='GLOB',
+                   help='pages mentions leaves alone, glob from the config folder; repeatable')
     p.add_argument('--max-lines', type=int, default=0, metavar='N', help='report pages longer than N lines')
     p.add_argument('--max-lines-ignore', action='append', default=[], metavar='GLOB',
                    help='pages max-lines leaves alone, glob from the config folder; repeatable')
@@ -263,7 +266,7 @@ def parser():
     p = command(commands, 'link', 'link every plain text mention of a page title or alias, as check --mentions '
                                   'finds them, rewrap lines it makes too long',
                 f'[--dry-run] [-w {WIDTH}] [--mentions-ignore TERM] [--mentions-min-length N] '
-                f'[--mentions-ignore-case] [--mentions-self-bold] {FILTER_USAGE}')
+                f'[--mentions-ignore-case] [--mentions-self-bold] [--mentions-exclude GLOB] {FILTER_USAGE}')
     add_paths(p, 'folders or files to link mentions in')
     p.add_argument('--dry-run', action='store_true', help='print every changed line instead, before and after')
     p.add_argument('-w', '--width', type=int, default=WIDTH, help=f'rewrap lines longer than this, default: {WIDTH}')
@@ -273,6 +276,8 @@ def parser():
                    help='shortest title or alias to link, default: 3')
     p.add_argument('--mentions-ignore-case', action='store_true', help='mentions match in any case')
     p.add_argument('--mentions-self-bold', action='store_true', help='make mentions of the page itself bold')
+    p.add_argument('--mentions-exclude', action='append', default=[], metavar='GLOB',
+                   help='pages not to link mentions in, glob from the config folder; repeatable')
     add_filter(p)
     p.set_defaults(func=link)
 

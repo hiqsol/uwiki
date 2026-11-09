@@ -1,9 +1,12 @@
 """Plain text mentions of page titles and aliases, as `check --mentions` warns about them and `link` links them."""
 
+import os
 import re
 from dataclasses import dataclass
 
+from .config import Config
 from .convert import Converter
+from .index import Index
 from .vault import read_aliases
 from .wrap import WIDTH, rewrap
 
@@ -22,7 +25,8 @@ class Mention:
 
 class Mentions:
     """Titles and aliases as whole words, plurals too, with the first letter as written and the rest in any case,
-    outside code, headings, links and bold definitions; terms naming two pages are left out."""
+    outside code, headings, links, bold definitions and generated blocks `index` fills from front matter;
+    terms naming two pages are left out."""
 
     SKIP = re.compile(r"""(`+).*?\1|!?\[\[.*?\]\]|!?\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])|<[^>]*>|https?://\S+"""
                       r"""|\*\*[^*\n]+?\*\*""")
@@ -104,8 +108,14 @@ class Mentions:
         """Line indexes and prose lines with code, links and bold blanked, and how much of each an ignored name
         wrapped from the line before covers: `Star` of `Twilight\\nStar`, `Imperium` of `Twilight\\nImperium`
         are no mentions."""
-        res, bold = [], False  # bold wrapped from the line before
+        res, bold, generated = [], False, False  # bold wrapped from the line before, inside a generated block
         for n, line in Converter.prose(text):
+            if line.lstrip().startswith(Index.OPENING):
+                generated = True
+            if generated:
+                generated = Index.CLOSING not in line
+                res.append((n, ''))
+                continue
             if Converter.HEADING.match(line) or Converter.LINK_DEF.match(line) or not line.strip():
                 bold = False
                 res.append((n, ''))
@@ -148,14 +158,21 @@ class Mentions:
         return f'[[{name}\\|{text}]]' if table else f'[[{name}|{text}]]'
 
 
-def link_mentions(vaults, ignore=(), min_length=3, ignore_case=False, self_bold=False, width=WIDTH, dry_run=False):
-    """Links every plain mention in pages of vaults, with self_bold makes mentions of the page itself bold,
-    rewraps lines longer than width, yields path shown and its changed lines as (line number, old, new);
-    dry run writes nothing."""
-    mentions = {}
+def link_mentions(vaults, ignore=(), min_length=3, ignore_case=False, self_bold=False, width=WIDTH, dry_run=False,
+                  exclude=()):
+    """Links every plain mention in pages of vaults but those an exclude glob from the config folder matches,
+    with self_bold makes mentions of the page itself bold, rewraps lines longer than width, yields path shown and
+    its changed lines as (line number, old, new); dry run writes nothing."""
+    mentions, configs = {}, {}
     for scanner, page, shown in vaults.files():
         if scanner not in mentions:
             mentions[scanner] = Mentions(scanner, ignore, min_length, ignore_case)
+            configs[scanner] = Config.load(scanner.path)
+        if page.source is None:
+            continue
+        path = os.path.relpath(page.source.fullpath, scanner.path).replace(os.sep, '/')
+        if configs[scanner].matches(path, exclude):
+            continue
         found = list(mentions[scanner].find(page, own=self_bold))
         if not found:
             continue

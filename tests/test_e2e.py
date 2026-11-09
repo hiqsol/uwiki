@@ -948,6 +948,31 @@ class MentionTest(unittest.TestCase):
             './Action.md:2: warning: unlinked mention: Force discard',
         ], res.stderr)
 
+    def test_generated_blocks_have_no_mentions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'Star.md'), 'Star.\n')
+            write(os.path.join(tmp, 'Space.md'), 'Space.\n')
+            index = ('<!-- generated: pages -->\n* [Space](Space.md) - holds a Star\n<!-- /generated -->\n\n'
+                     '[[Space]]: a Star too\n')
+            write(os.path.join(tmp, 'index.md'), index)
+            res = run('check', '.', '--mentions', cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), ['./index.md:5: warning: unlinked mention: Star'], res.stderr)
+            run('link', '.', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'index.md')), index.replace('a Star too', 'a [[Star]] too'))
+
+    def test_excluded_pages_have_no_mentions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nmentions = true\nmentions-exclude = ["wiki/prompts/**"]\n')
+            write(os.path.join(tmp, 'wiki', 'Star.md'), 'Star.\n')
+            write(os.path.join(tmp, 'wiki', 'Space.md'), 'Space has a Star.\n')
+            write(os.path.join(tmp, 'wiki', 'prompts', 'ask.md'), 'Ask about a Star.\n')
+            res = run('check', 'wiki', cwd=tmp)
+            self.assertEqual([line for line in res.stdout.splitlines() if 'mention' in line],
+                             ['wiki/Space.md:1: warning: unlinked mention: Star'], res.stderr)
+            run('link', 'wiki', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'wiki', 'Space.md')), 'Space has a [[Star]].\n')
+            self.assertEqual(read(os.path.join(tmp, 'wiki', 'prompts', 'ask.md')), 'Ask about a Star.\n')
+
 
 class LinkMentionTest(unittest.TestCase):
     def test_links_every_mention_and_rewraps(self):
