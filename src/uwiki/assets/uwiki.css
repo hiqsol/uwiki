@@ -207,26 +207,24 @@ a:hover {
 #query:focus + kbd, #query:not(:placeholder-shown) + kbd {
     display: none;
 }
-/* clears the box, in place of / once it has text */
+/* clears the box, in place of / once it has text, a key cap as / is: the x key clears too */
 #clear {
     position: absolute;
     top: 50%;
-    right: 5px;
+    right: 8px;
     transform: translateY(-50%);
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
+    padding: 0 6px;
+    border: 1px solid var(--border);
     border-radius: 4px;
-    background: none;
+    background: var(--bg);
     color: var(--fg-muted);
-    font: inherit;
-    font-size: 18px;
-    line-height: 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
     cursor: pointer;
 }
 #clear:hover {
-    background: var(--accent-bg);
+    border-color: var(--accent);
     color: var(--accent);
 }
 #query:placeholder-shown ~ #clear {
@@ -977,6 +975,83 @@ dialog.box > div {
 }
 #_config_box {
     width: min(760px, calc(100vw - 32px));
+}
+/* go to page: near the top, so the list grows down from where the eye is */
+#_goto_box {
+    width: min(600px, calc(100vw - 32px));
+    margin-top: 12vh;
+}
+#_goto_box > div {
+    padding: 10px;
+}
+#_goto_box input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    font-size: 15px;
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-bg);
+}
+#_goto_box ul {
+    max-height: min(420px, 55vh);
+    margin: 8px 0 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+#_goto_box li a {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 5px 10px;
+    border-radius: 5px;
+    color: var(--fg);
+}
+#_goto_box li a:hover {
+    text-decoration: none;
+}
+#_goto_box li[aria-selected="true"] a {
+    background: var(--accent-bg);
+}
+#_goto_box li a.off .title {
+    color: var(--fg-muted);  /* the search hides it, going there clears the search */
+}
+#_goto_box .title {
+    flex: none;
+    max-width: 70%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#_goto_box .title b {
+    color: var(--accent);
+}
+#_goto_box .crumb {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--fg-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#_goto_box li.none {
+    padding: 5px 10px;
+    color: var(--fg-muted);
+}
+#_goto_box p.hint {
+    margin: 8px 2px 0;
+    color: var(--fg-muted);
+    font-size: 12px;
+}
+#_goto_box p.hint kbd {
+    margin-left: 6px;
+}
+#_goto_box p.hint kbd:first-child {
+    margin-left: 0;
 }
 dialog.box p {
     margin: 0 28px 6px 0;

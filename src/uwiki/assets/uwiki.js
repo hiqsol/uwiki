@@ -1529,11 +1529,200 @@
     if (time) showBuilt(time);
     codeBlocks(box).forEach(renderCode);  // config as TOML, highlighted once
     box.showModal();
-    box.focus();  // the box, not its close button, so no focus ring on open
+    (box.querySelector("input") || box).focus();  // the box, not its close button, so no focus ring on open
   }
 
   function closeBoxes() {
     document.querySelectorAll("dialog.box[open]").forEach(function (box) { box.close(); });
+  }
+
+  // go to page: Ctrl K opens a box finding pages and folders by letters of their names in order,
+  // the best first: title matches over alias ones over path ones, whole words and starts of words
+  // over scattered letters; a page the search hides is shown by clearing the search
+
+  var GOTO_MAX = 50;  // entries listed
+  var gotoBox = null, gotoInput = null, gotoList = null, gotoAt = 0;
+  var gotoItems = null;  // [{node, title, aliases, path}], made on first open
+
+  function bindGoto() {
+    gotoBox = document.getElementById("_goto_box");
+    if (!gotoBox.showModal) return;
+    gotoInput = gotoBox.querySelector("input");
+    gotoList = gotoBox.querySelector("ul");
+    gotoInput.addEventListener("input", function () { listGoto(gotoInput.value); });
+    gotoInput.addEventListener("keydown", function (e) {
+      var down = e.key == "ArrowDown" || (e.ctrlKey && e.key == "n");
+      var up = e.key == "ArrowUp" || (e.ctrlKey && e.key == "p");
+      if (down || up) {
+        e.preventDefault();
+        selectGoto(gotoAt + (down ? 1 : -1));
+      } else if (e.key == "Enter") {
+        e.preventDefault();
+        var a = gotoList.children[gotoAt] && gotoList.children[gotoAt].firstChild;
+        if (a) a.click();
+      }
+    });
+    gotoList.addEventListener("pointermove", function (e) {
+      var li = e.target.closest("li");
+      if (li) selectGoto(Array.prototype.indexOf.call(gotoList.children, li));
+    });
+    // before the link is followed: its page shown, the box closed
+    gotoList.addEventListener("click", function (e) {
+      var a = e.target.closest("a");
+      if (!a) return;
+      var node = nodeOf.get(document.getElementById(hashId(a.getAttribute("href"))));
+      if (node && node.state === "hidden") {
+        query.value = "";
+        update();
+      }
+      gotoBox.close();
+      document.body.classList.remove("nav-open");
+    }, true);
+  }
+
+  function openGoto() {
+    if (!gotoInput) return;
+    if (gotoBox.open) return gotoBox.close();
+    closeBoxes();
+    if (!gotoItems) {
+      gotoItems = nodes.map(function (n) {
+        var path = n.info ? n.info.path : crumbOf(n.h);
+        return { node: n, title: titleOf(n.h), aliases: (n.h.dataset.aliases || "").toLowerCase(),
+                 path: path.toLowerCase() };
+      });
+    }
+    gotoInput.value = "";
+    listGoto("");
+    openBox(gotoBox);
+  }
+
+  function listGoto(q) {
+    var terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    var found = [];
+    gotoItems.forEach(function (item, i) {
+      var res = terms.length ? scoreGoto(item, terms) : { score: 0, at: [] };
+      if (res) found.push({ item: item, score: res.score, at: res.at, i: i });
+    });
+    found.sort(function (a, b) { return b.score - a.score || a.i - b.i; });
+    gotoList.textContent = "";
+    found.slice(0, GOTO_MAX).forEach(function (f) {
+      var li = document.createElement("li");
+      li.setAttribute("role", "option");
+      var a = document.createElement("a");
+      a.href = "#" + f.item.node.h.id;
+      a.tabIndex = -1;
+      var title = document.createElement("span");
+      title.className = "title";
+      markLetters(title, f.item.title, f.at);
+      a.appendChild(title);
+      var where = crumbOf(f.item.node.h);
+      if (where) {
+        var crumb = document.createElement("span");
+        crumb.className = "crumb";
+        crumb.textContent = where;
+        a.appendChild(crumb);
+      }
+      if (f.item.node.state === "hidden") a.classList.add("off");
+      li.appendChild(a);
+      gotoList.appendChild(li);
+    });
+    if (!found.length) {
+      var none = document.createElement("li");
+      none.className = "none";
+      none.textContent = "no page has these letters in order";
+      gotoList.appendChild(none);
+    }
+    selectGoto(0);
+  }
+
+  function selectGoto(i) {
+    var items = gotoList.querySelectorAll("li[role=option]");
+    if (!items.length) return;
+    gotoAt = Math.max(0, Math.min(items.length - 1, i));
+    items.forEach(function (li, j) { li.setAttribute("aria-selected", j === gotoAt ? "true" : "false"); });
+    items[gotoAt].scrollIntoView({ block: "nearest" });
+  }
+
+  // every term in the title, an alias or the path, the best place for each; title letters to mark
+  var GOTO_WEIGHTS = { title: 1, aliases: 0.8, path: 0.5 };
+  function scoreGoto(item, terms) {
+    var total = 0, at = [], inTitle = true;
+    var title = item.title.toLowerCase();
+    for (var t = 0; t < terms.length; t++) {
+      var best = null, where = null;
+      ["title", "aliases", "path"].forEach(function (field) {
+        var m = fuzzy(terms[t], field === "title" ? title : item[field]);
+        if (m && (!best || m.score * GOTO_WEIGHTS[field] > best.score)) {
+          best = { score: m.score * GOTO_WEIGHTS[field], at: m.at };
+          where = field;
+        }
+      });
+      if (!best) return null;
+      total += best.score;
+      if (where === "title") at = at.concat(best.at);
+      else inTitle = false;
+    }
+    return { score: total + (inTitle ? 40 : 0) - title.length / 10, at: at };
+  }
+
+  // term in s: whole, else its letters in order; score and where the letters are
+  var WORD_START = /[\s\-_/.,:()[\]'"›]/;
+  function fuzzy(term, s) {
+    var i = s.indexOf(term);
+    if (i >= 0) {
+      var at = [];
+      for (var k = 0; k < term.length; k++) at.push(i + k);
+      var start = i === 0 || WORD_START.test(s[i - 1]);
+      return { score: 100 + 12 * term.length + (i === 0 ? 40 : start ? 25 : 0) + (term === s ? 60 : 0), at: at };
+    }
+    return letters(term, s, true) || letters(term, s, false);
+  }
+
+  // letters in order, preferring for each one right after the last or at a start of a word,
+  // which can skip past letters the rest needs, so then the earliest ones
+  function letters(term, s, prefer) {
+    var res = [], score = 0, from = 0;
+    for (var j = 0; j < term.length; j++) {
+      var c = term[j], pos = -1;
+      for (var p = from; p < s.length; p++) {
+        if (s[p] !== c) continue;
+        if (pos < 0) pos = p;
+        if (!prefer) break;
+        if (p === res[res.length - 1] + 1 || p === 0 || WORD_START.test(s[p - 1])) {
+          pos = p;
+          break;
+        }
+      }
+      if (pos < 0) return null;
+      var after = res.length && pos === res[res.length - 1] + 1;
+      score += 4 + (after ? 8 : 0) + (pos === 0 || WORD_START.test(s[pos - 1]) ? 7 : 0);
+      res.push(pos);
+      from = pos + 1;
+    }
+    return { score: score - (res[res.length - 1] - res[0] + 1 - term.length) / 2, at: res };
+  }
+
+  function markLetters(el, text, at) {
+    var set = new Set(at), run = "", inMark = false;
+    var flush = function () {
+      if (!run) return;
+      if (inMark) {
+        var b = document.createElement("b");
+        b.textContent = run;
+        el.appendChild(b);
+      } else {
+        el.appendChild(document.createTextNode(run));
+      }
+      run = "";
+    };
+    for (var i = 0; i < text.length; i++) {
+      if (set.has(i) !== inMark) {
+        flush();
+        inMark = !inMark;
+      }
+      run += text[i];
+    }
+    flush();
   }
 
   // reading keys: j and k go to the next and previous page, t to the top, [ and ] fold and unfold the tree
@@ -1632,12 +1821,20 @@
 
     document.addEventListener("keydown", function (e) {
       var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-      if ((e.key == "/" && !typing) || (e.key == "k" && (e.ctrlKey || e.metaKey))) {
+      if (e.key == "k" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        openGoto();
+      } else if (e.key == "/" && !typing) {
         e.preventDefault();
         closeBoxes();
         document.body.classList.add("nav-open");
         query.focus();
         query.select();
+      } else if (e.key == "x" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && query.value
+                 && !document.querySelector("dialog.box[open]")) {
+        e.preventDefault();
+        query.value = "";
+        update();
       }
     });
 
@@ -1657,6 +1854,7 @@
   bindZoom();
   bindHelp();
   bindReading();
+  bindGoto();
   sizePages();
   floatAsides();
   markBoxDrawing();

@@ -158,7 +158,9 @@ One self-contained file, light or dark by system preference, works from `file://
 - tokens estimated as 4 bytes of UTF-8 each, so text in other scripts than Latin counts more
 - `/` focuses the box filtering pages: words, `"exact text"`, `key:value` front matter, `in:folder`,
   `is:problem`, `-term`, e.g. `scope:core -status:stub deck`; `Enter` goes to the next match,
-  the box goes to the URL as `?q=`, `×` clears it
+  the box goes to the URL as `?q=`, `×` or the `x` key clears it
+- `Ctrl K` goes to a page or folder by letters of its name in order, e.g. `dkbld` for Deck Building:
+  title matches first, then aliases, then paths; whole words and starts of words before scattered letters
 - chips of `[schema]` values with page counts, a click adds or removes one
 - pages, words and tokens shown out of all under the chips, after a triangle folding or unfolding the whole tree;
   a click on the count of problems shows only pages with problems

@@ -19,7 +19,7 @@
             <input id="query" type="search" placeholder="Search" autocomplete="off" spellcheck="false"
                    aria-label="Search" title="words, &quot;exact text&quot;, key:value, in:folder, is:problem, -term">
             <kbd>/</kbd>
-            <button id="clear" type="button" aria-label="Clear search" title="Clear">&times;</button>
+            <button id="clear" type="button" aria-label="Clear search" title="Clear (x)">&times;</button>
         </div>
         <div id="facets" hidden></div>
         <div id="stats"><button id="fold" type="button" hidden>&#9660;</button><span id="counts"></span><button id="problems" type="button" hidden></button></div>
@@ -29,6 +29,14 @@
     <main class="content">
         {content}
     </main>
+    <dialog id="_goto_box" class="box goto" aria-label="Go to page" tabindex="-1">
+        <div>
+            <input type="text" placeholder="Go to page" autocomplete="off" spellcheck="false" aria-label="Go to page"
+                   role="combobox" aria-controls="_goto_list" aria-expanded="true">
+            <ul id="_goto_list" role="listbox"></ul>
+            <p class="hint"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose <kbd>Enter</kbd> go <kbd>Esc</kbd> close</p>
+        </div>
+    </dialog>
     <dialog id="_help_box" class="box" aria-label="Help" tabindex="-1">
         <div>
             <button type="button" class="close" aria-label="Close" title="Close (Esc)">&times;</button>
@@ -39,9 +47,11 @@
             <p class="live" hidden></p>
             <h2>Keys</h2>
             <dl>
-                <dt><kbd>/</kbd> <kbd>Ctrl K</kbd></dt><dd>search pages</dd>
+                <dt><kbd>Ctrl K</kbd></dt><dd>go to a page by its name, letters in order</dd>
+                <dt><kbd>/</kbd></dt><dd>search pages</dd>
                 <dt><kbd>Enter</kbd> <kbd>Shift Enter</kbd></dt><dd>next, previous match</dd>
                 <dt><kbd>Esc</kbd></dt><dd>drop words, then key terms, then leave search</dd>
+                <dt><kbd>x</kbd></dt><dd>clear search</dd>
                 <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>next, previous page</dd>
                 <dt><kbd>t</kbd></dt><dd>top of the wiki</dd>
                 <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>fold, unfold the whole sidebar tree</dd>
