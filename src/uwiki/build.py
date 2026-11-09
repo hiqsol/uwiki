@@ -5,9 +5,11 @@ import json
 import os
 import re
 import time
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import __version__
 from .check import Checker, CheckOptions
 from .config import Config
 from .convert import Converter
@@ -203,6 +205,8 @@ class Builder:
         content = ''.join(f'<section>{self.html_node(node, body)}</section>\n' for node, body in nodes)
         return self.render('uwiki.html', {
             'title':    html.escape(title),
+            'version':  __version__,
+            'built':    datetime.now().astimezone().isoformat(timespec='seconds'),
             'content':  content,
             'data':     self.data(nodes),
             'style':    read_asset('uwiki.css'),

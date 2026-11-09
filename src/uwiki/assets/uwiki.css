@@ -150,6 +150,26 @@ a:hover {
     opacity: 0.35;
     cursor: default;
 }
+/* opens the help, a key cap like / of the search box */
+#help {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 20px 0 0 6px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: none;
+    color: var(--fg-muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 18px;
+    cursor: pointer;
+}
+#help:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
 #search {
     position: relative;
     margin: 0 14px 10px;
@@ -932,6 +952,86 @@ details.callout:not([open]) > summary {
     font-size: 1.05em;
 }
 
+/* help: what this page is, its keys and search terms, when it was built */
+
+#help-box {
+    width: min(540px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-alt);
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.5;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+    outline: none;
+}
+#help-box::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+#help-box > div {
+    position: relative;
+    padding: 18px 22px 20px;
+}
+#help-box p {
+    margin: 0 28px 0 0;
+}
+#help-box h2 {
+    margin: 16px 0 6px;
+    color: var(--fg-muted);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+#help-box dl {
+    display: grid;
+    grid-template-columns: 150px 1fr;  /* the same in every list, wide enough for its widest keys */
+    gap: 3px 16px;
+    margin: 0;
+}
+#help-box dt, #help-box dd {
+    margin: 0;
+}
+#help-box kbd {
+    display: inline-block;
+    min-width: 20px;
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--bg);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-align: center;
+}
+#help-box code {
+    color: var(--code-inline);
+    font-family: var(--mono);
+    font-size: 13px;
+}
+#help-box .close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--fg-muted);
+    font: inherit;
+    font-size: 20px;
+    line-height: 26px;
+    cursor: pointer;
+}
+#help-box .close:hover {
+    background: var(--accent-bg);
+    color: var(--accent);
+}
+
 /* narrow screens: sidebar slides in */
 
 @media (max-width: 800px) {
@@ -989,7 +1089,7 @@ details.callout:not([open]) > summary {
 }
 
 @media print {
-    #sidebar, #menu, .preview {
+    #sidebar, #menu, .preview, #help-box {
         display: none;
     }
     .content {

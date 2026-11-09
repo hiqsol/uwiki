@@ -1156,6 +1156,20 @@ class TemplateIdTest(unittest.TestCase):
         self.assertIn('href="#rules-home">Home</a>', html)
         self.assertEqual(html.count('id="home"'), 1)
 
+    def test_help_tells_version_and_build_time(self):
+        from uwiki import __version__
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            write(os.path.join(tmp, 'Help.md'), 'Help page.\n')
+            res = run('build', tmp, '-o', out, '--title', 'wiki')
+            html = read(os.path.join(out, 'wiki.html'))
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn('<button id="help"', html)
+        self.assertIn(f'</a> {__version__},', html)
+        built = re.search(r'<time datetime="([^"]+)">', html)[1]
+        age = datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(built)
+        self.assertLess(abs(age.total_seconds()), 60)
+        self.assertEqual(html.count('id="help"'), 1, 'page Help takes another anchor')
+
     def test_every_template_id_is_reserved(self):
         from uwiki.vault import TEMPLATE_IDS
         template = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.html'))

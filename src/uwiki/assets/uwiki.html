@@ -13,6 +13,7 @@
             <a id="home" href="#root">{title}</a>
             <button id="smaller" type="button" aria-label="Smaller text" title="Smaller text (-)">&minus;</button>
             <button id="larger" type="button" aria-label="Larger text" title="Larger text (+), double click restores">+</button>
+            <button id="help" type="button" aria-label="Help" title="Help (?)" aria-haspopup="dialog">?</button>
         </div>
         <div id="search">
             <input id="query" type="search" placeholder="Search" autocomplete="off" spellcheck="false"
@@ -28,6 +29,38 @@
     <main class="content">
         {content}
     </main>
+    <dialog id="help-box" aria-label="Help" tabindex="-1">
+        <div>
+            <button type="button" class="close" aria-label="Close" title="Close (Esc)">&times;</button>
+            <p><b>{title}</b> is a markdown wiki built into this one page by
+                <a href="https://github.com/hiqsol/uwiki" target="_blank" rel="noopener">uWiki</a> {version},
+                built <time datetime="{built}">{built}</time>.</p>
+            <h2>Keys</h2>
+            <dl>
+                <dt><kbd>/</kbd> <kbd>Ctrl K</kbd></dt><dd>search pages</dd>
+                <dt><kbd>Enter</kbd> <kbd>Shift Enter</kbd></dt><dd>next, previous match</dd>
+                <dt><kbd>Esc</kbd></dt><dd>drop words, then key terms, then leave search</dd>
+                <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>larger, smaller text</dd>
+                <dt><kbd>0</kbd></dt><dd>text of default size</dd>
+                <dt><kbd>?</kbd></dt><dd>this help</dd>
+            </dl>
+            <h2>Search</h2>
+            <dl>
+                <dt><code>word</code></dt><dd>pages with the word, in title or text</dd>
+                <dt><code>"exact text"</code></dt><dd>pages with the phrase</dd>
+                <dt><code>key:value</code></dt><dd>front matter, e.g. <code>status:draft</code></dd>
+                <dt><code>in:folder</code></dt><dd>pages under the folder</dd>
+                <dt><code>is:problem</code></dt><dd>pages with problems <code>check</code> reports</dd>
+                <dt><code>-term</code></dt><dd>pages without it</dd>
+            </dl>
+            <h2>Mouse</h2>
+            <dl>
+                <dt>hover a link</dt><dd>preview of its target</dd>
+                <dt>sidebar edge</dt><dd>drag to resize, double click restores</dd>
+                <dt>chip, problem count</dt><dd>add or drop it in search</dd>
+            </dl>
+        </div>
+    </dialog>
     <script type="application/json" id="data">{data}</script>
     <script>{script}</script>
 </body>

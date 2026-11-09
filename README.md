@@ -163,6 +163,8 @@ One self-contained file, light or dark by system preference, works from `file://
   a click on the count of problems shows only pages with problems
 - `−` and `+` by the title or the `-` and `+` keys make the text of pages and previews smaller or larger,
   `0` restores it, remembered per browser
+- `?` by the title or the `?` key opens help: what the page is, uWiki version and build time, keys,
+  search terms and mouse gestures
 - code blocks highlighted by Prism and `mermaid` blocks drawn as they near the window, the libraries
   loaded from CDNs on first need; offline, code stays plain
 

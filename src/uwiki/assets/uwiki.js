@@ -1494,6 +1494,54 @@
     document.getElementById("larger").disabled = scale >= MAX_SCALE;
   }
 
+  // help: ? or the button by the title opens it, Esc, a click outside or another ? closes it;
+  // the build time shows in local time with how long ago it was
+
+  function bindHelp() {
+    var box = document.getElementById("help-box");
+    var button = document.getElementById("help");
+    if (!box.showModal) {
+      button.hidden = true;
+      return;
+    }
+    var open = function () {
+      if (previews.length) closePreviews(0);
+      showBuilt(box.querySelector("time"));
+      box.showModal();
+      box.focus();  // the box, not its close button, so no focus ring on open
+    };
+    button.addEventListener("click", open);
+    box.addEventListener("click", function (e) {
+      if (e.target === box || e.target.closest(".close")) box.close();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key != "?" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+      e.preventDefault();
+      if (box.open) box.close();
+      else open();
+    });
+  }
+
+  function showBuilt(time) {
+    var at = new Date(time.getAttribute("datetime"));
+    if (isNaN(at)) return;
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    var text = at.getFullYear() + "-" + pad(at.getMonth() + 1) + "-" + pad(at.getDate()) + " " + pad(at.getHours()) + ":" + pad(at.getMinutes());
+    time.textContent = text + " (" + ago((Date.now() - at) / 1000) + ")";
+    time.title = at.toString();
+  }
+
+  // seconds as the largest whole unit, "3 hours ago"
+  function ago(s) {
+    if (s < 60) return "just now";
+    var units = [["year", 31557600], ["month", 2629800], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
+    for (var i = 0; i < units.length; i++) {
+      var n = Math.floor(s / units[i][1]);
+      if (n >= 1) return n + " " + units[i][0] + (n > 1 ? "s" : "") + " ago";
+    }
+  }
+
   // events
 
   function bindEvents() {
@@ -1542,6 +1590,8 @@
       var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
       if ((e.key == "/" && !typing) || (e.key == "k" && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
+        var help = document.getElementById("help-box");
+        if (help.open) help.close();
         document.body.classList.add("nav-open");
         query.focus();
         query.select();
@@ -1562,6 +1612,7 @@
   // after all declarations above, constants among them
   bindResize();
   bindZoom();
+  bindHelp();
   sizePages();
   floatAsides();
   markBoxDrawing();
