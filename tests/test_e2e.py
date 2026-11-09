@@ -124,6 +124,10 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(self.content.count('<section>'), self.content.count('</section>'))
         self.assertIn('content-visibility: auto', read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.css')))
 
+    def test_image_links_have_no_globe(self):
+        css = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.css'))
+        self.assertIn('.content a[href]:has(img)::before {\n    display: none;', css)  # beats a[href^="https:"]
+
     def test_titles(self):
         self.assertIn('>My Notes</h2>', self.content)
         self.assertIn('>2024 Plans</h2>', self.content)
