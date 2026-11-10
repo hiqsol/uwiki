@@ -973,12 +973,16 @@ details.callout:not([open]) > summary {
     font-weight: 500;
     letter-spacing: 0.02em;
 }
-.content.preview-body {
+.content.preview-head, .content.preview-body {
     max-width: none;
     margin: 0;
     padding: 0;
 }
-.content.preview-body > :first-child, .content.preview-body > details + :not(details) {
+/* holds its floats, so the text starts under metadata and front matter */
+.content.preview-head {
+    display: flow-root;
+}
+.content.preview-body > :first-child {
     margin-top: 0;
 }
 .content.preview-body h1, .content.preview-body h2, .content.preview-body h3,
@@ -1243,7 +1247,7 @@ dialog.box .close:hover {
         padding-right: 48px;
     }
     /* metadata and front matter stop floating, sit under the title */
-    .content .page:has(> details) {
+    .content .page:has(> details), .content.preview-head:has(> details) {
         display: flex;
         flex-direction: column;
     }

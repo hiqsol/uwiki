@@ -1170,14 +1170,21 @@
       span.textContent = crumb;
       title.insertBefore(span, title.firstChild);
     }
-    el.appendChild(title);
+    // a page's metadata and front matter, folded, float right of its title as in its header
+    var head = document.createElement("div");
+    head.className = "content preview-head";
+    asidesOf(target).forEach(function (node) {
+      var copy = node.cloneNode(true);
+      copy.open = false;
+      head.appendChild(copy);
+    });
+    head.appendChild(title);
+    el.appendChild(head);
     var body = document.createElement("div");
     body.className = "content preview-body";
-    var asides = asidesOf(target);
-    asides.concat(sectionOf(target)).forEach(function (node) {
+    sectionOf(target).forEach(function (node) {
       var copy = node.cloneNode(true);
       copy.removeAttribute("id");
-      if (asides.indexOf(node) >= 0) copy.open = false;
       copy.hidden = false;
       // a diagram's styles and arrows refer to ids in its svg
       copy.querySelectorAll("[id]:not(svg, svg *)").forEach(function (n) { n.removeAttribute("id"); });
@@ -1200,7 +1207,7 @@
     });
   }
 
-  // metadata and front matter of a page, folded, floating right of its text as of its header
+  // metadata and front matter of a page
   function asidesOf(target) {
     if (!target.classList.contains("page")) return [];
     return Array.prototype.slice.call(target.querySelectorAll(":scope > .metadata, :scope > .front-matter"));

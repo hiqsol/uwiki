@@ -7,7 +7,7 @@
 - pages render as GitHub and Obsidian show them: CommonMark with tables, task lists and strikethrough;
   a page is laid out and drawn as it nears the window, so a long vault opens fast
 - hover preview of a link target under the folders it is in, a page's with its metadata and front matter
-  folded top right, links in it preview too, sidebar entries beside the sidebar
+  folded top right of its header, links in it preview too, sidebar entries beside the sidebar
 - metadata and front matter top right of page header, problems marked at their lines;
   metadata folds to problems, tokens, backlinks and file name, unfolds to what `check` reports, words, tokens
   and reading time, backlinks, file name and folder; file name and folder only where title and folders
