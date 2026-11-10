@@ -1173,9 +1173,11 @@
     el.appendChild(title);
     var body = document.createElement("div");
     body.className = "content preview-body";
-    sectionOf(target).forEach(function (node) {
+    var asides = asidesOf(target);
+    asides.concat(sectionOf(target)).forEach(function (node) {
       var copy = node.cloneNode(true);
       copy.removeAttribute("id");
+      if (asides.indexOf(node) >= 0) copy.open = false;
       copy.hidden = false;
       // a diagram's styles and arrows refer to ids in its svg
       copy.querySelectorAll("[id]:not(svg, svg *)").forEach(function (n) { n.removeAttribute("id"); });
@@ -1186,12 +1188,22 @@
     document.body.appendChild(el);
     if (el.scrollHeight > el.clientHeight + 1) el.classList.add("long");
     place(el, a);
+    // unfolding metadata or front matter makes it longer
+    el.addEventListener("toggle", function () {
+      el.classList.toggle("long", el.scrollHeight > el.clientHeight + 1);
+    }, true);
     var p = { el: el, link: a, timer: null };
     previews[level] = p;
     el.addEventListener("pointerenter", function () { cancelClose(previews.indexOf(p)); });
     el.addEventListener("pointerleave", function (e) {
       if (e.pointerType === "mouse") scheduleClose(previews.indexOf(p));
     });
+  }
+
+  // metadata and front matter of a page, folded, floating right of its text as of its header
+  function asidesOf(target) {
+    if (!target.classList.contains("page")) return [];
+    return Array.prototype.slice.call(target.querySelectorAll(":scope > .metadata, :scope > .front-matter"));
   }
 
   // page: its text till next page; section: till next heading of same or higher level

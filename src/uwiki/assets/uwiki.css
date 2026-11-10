@@ -978,7 +978,7 @@ details.callout:not([open]) > summary {
     margin: 0;
     padding: 0;
 }
-.content.preview-body > :first-child {
+.content.preview-body > :first-child, .content.preview-body > details + :not(details) {
     margin-top: 0;
 }
 .content.preview-body h1, .content.preview-body h2, .content.preview-body h3,
