@@ -294,7 +294,7 @@
     pages.forEach(function (h) {
       var box = boxOf(h), info = data.pages[h.id];
       if (box === h) return;
-      var height = info ? 230 + 1900 * scale * scale * info.words / width : 70;
+      var height = info ? 230 + 1900 * scale * scale * (1 + space / 1.6) * info.words / width : 70;
       box.style.containIntrinsicSize = "auto " + Math.round(height * (info ? 1 : scale)) + "px";
     });
   }
@@ -1438,42 +1438,52 @@
     });
   }
 
-  // text size of pages and previews: buttons by the title and + and - keys step it, 0 restores it,
-  // remembered per browser; the text at the top of the window stays there
+  // text size and line spacing of pages and previews: buttons by the title and + - < > keys step them,
+  // 0 restores both, remembered per browser; the text at the top of the window stays there
 
-  var SCALE_KEY = "uwiki-text-scale";
+  var SCALE_KEY = "uwiki-text-scale", SPACE_KEY = "uwiki-line-space";
   var MIN_SCALE = 0.6, MAX_SCALE = 2;
-  var scale = 1;
+  var MIN_SPACE = -0.4, MAX_SPACE = 1;  // added to the line height of 1.6
+  var scale = 1, space = 0;
 
   function bindZoom() {
     try {
       var saved = +localStorage.getItem(SCALE_KEY);
       if (saved) setScale(saved);
+      setSpace(+localStorage.getItem(SPACE_KEY) || 0);
     } catch (e) {}
-    document.getElementById("smaller").addEventListener("click", function () { zoom(-1); });
-    document.getElementById("larger").addEventListener("click", function () { zoom(1); });
+    document.getElementById("smaller").addEventListener("click", function () { zoom(-1, 0); });
+    document.getElementById("larger").addEventListener("click", function () { zoom(1, 0); });
+    document.getElementById("_tighter").addEventListener("click", function () { zoom(0, -1); });
+    document.getElementById("_looser").addEventListener("click", function () { zoom(0, 1); });
+    var KEYS = { "+": [1, 0], "=": [1, 0], "-": [-1, 0], "<": [0, -1], ",": [0, -1], ">": [0, 1], ".": [0, 1], "0": [0, 0] };
     document.addEventListener("keydown", function (e) {
       if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
-      var dir = e.key == "+" || e.key == "=" ? 1 : e.key == "-" ? -1 : e.key == "0" ? 0 : null;
-      if (dir === null) return;
+      var step = KEYS[e.key];
+      if (!step) return;
       e.preventDefault();
-      zoom(dir);
+      zoom(step[0], step[1]);
     });
   }
 
-  // a step is a tenth of the default size
-  function zoom(dir) {
-    var next = dir ? Math.round(scale * 10 + dir) / 10 : 1;
+  // a step is a tenth of the default size or of a line; no step at all restores both
+  function zoom(size, lines) {
+    var next = size ? Math.round(scale * 10 + size) / 10 : lines ? scale : 1;
+    var gap = lines ? Math.round(space * 10 + lines) / 10 : size ? space : 0;
     next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
-    if (next === scale) return;
+    gap = Math.min(MAX_SPACE, Math.max(MIN_SPACE, gap));
+    if (next === scale && gap === space) return;
     var anchor = textAtTop();
     var top = anchor && anchor.getBoundingClientRect().top;
     setScale(next);
+    setSpace(gap);
     sizePages();
     if (anchor) window.scrollBy(0, anchor.getBoundingClientRect().top - top);
     try {
       if (scale === 1) localStorage.removeItem(SCALE_KEY);
       else localStorage.setItem(SCALE_KEY, scale);
+      if (space === 0) localStorage.removeItem(SPACE_KEY);
+      else localStorage.setItem(SPACE_KEY, space);
     } catch (e) {}
   }
 
@@ -1493,6 +1503,15 @@
     else root.style.setProperty("--text-scale", scale);
     document.getElementById("smaller").disabled = scale <= MIN_SCALE;
     document.getElementById("larger").disabled = scale >= MAX_SCALE;
+  }
+
+  function setSpace(s) {
+    space = Math.min(MAX_SPACE, Math.max(MIN_SPACE, s));
+    var root = document.documentElement;
+    if (space === 0) root.style.removeProperty("--line-space");
+    else root.style.setProperty("--line-space", space);
+    document.getElementById("_tighter").disabled = space <= MIN_SPACE;
+    document.getElementById("_looser").disabled = space >= MAX_SPACE;
   }
 
   // help: ? or the button by the title opens it, Esc, a click outside or another ? closes it;

@@ -31,6 +31,7 @@
     --h6: #c6c1b8;
     --sidebar-width: 290px;
     --text-scale: 1;  /* of the text of pages and previews, set by the size buttons */
+    --line-space: 0;  /* added to the line height of pages and previews, set by the line buttons */
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     color-scheme: dark;
@@ -126,8 +127,8 @@ a:hover {
 #home:hover {
     text-decoration: none;
 }
-/* text size of pages, see --text-scale */
-#smaller, #larger {
+/* text size and line spacing of pages, see --text-scale and --line-space */
+#smaller, #larger, #_tighter, #_looser {
     flex: none;
     width: 24px;
     height: 24px;
@@ -142,14 +143,23 @@ a:hover {
     line-height: 24px;
     cursor: pointer;
 }
-#smaller:hover:not(:disabled), #larger:hover:not(:disabled) {
+#smaller:hover:not(:disabled), #larger:hover:not(:disabled), .lines:hover:not(:disabled) {
     background: var(--accent-bg);
     color: var(--accent);
 }
-#smaller:disabled, #larger:disabled {
+#smaller:disabled, #larger:disabled, .lines:disabled {
     opacity: 0.35;
     cursor: default;
 }
+/* three lines drawn close or far apart */
+.lines i {
+    display: block;
+    width: 12px;
+    margin: auto;
+    background: repeating-linear-gradient(currentColor 0 1px, transparent 1px var(--period));
+}
+#_tighter i { --period: 3px; height: 7px; }
+#_looser i { --period: 5px; height: 11px; }
 /* opens the help, a key cap like / of the search box */
 #_help {
     flex: none;
@@ -485,6 +495,7 @@ body.resizing {
 }
 main.content {
     font-size: calc(16px * var(--text-scale));
+    line-height: calc(1.6 + var(--line-space));
 }
 /* a page is laid out and drawn only near the window, so a long vault opens fast;
    it reaches into the gutter, item numbers left of their items stay in what it draws */
@@ -916,7 +927,7 @@ details.callout:not([open]) > summary {
     border-radius: 8px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
     font-size: calc(14px * var(--text-scale));
-    line-height: 1.5;
+    line-height: calc(1.5 + var(--line-space));
 }
 .preview.long::after {
     content: "";

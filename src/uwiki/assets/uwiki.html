@@ -12,7 +12,9 @@
         <div id="top">
             <a id="home" href="#root">{title}</a>
             <button id="smaller" type="button" aria-label="Smaller text" title="Smaller text (-)">&minus;</button>
-            <button id="larger" type="button" aria-label="Larger text" title="Larger text (+), double click restores">+</button>
+            <button id="larger" type="button" aria-label="Larger text" title="Larger text (+)">+</button>
+            <button id="_tighter" type="button" class="lines" aria-label="Closer lines" title="Closer lines (&lt;)"><i></i></button>
+            <button id="_looser" type="button" class="lines" aria-label="Wider lines" title="Wider lines (&gt;)"><i></i></button>
             <button id="_help" type="button" aria-label="Help" title="Help (?)" aria-haspopup="dialog">?</button>
         </div>
         <div id="search">
@@ -56,7 +58,8 @@
                 <dt><kbd>t</kbd></dt><dd>top of the wiki</dd>
                 <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>fold, unfold the whole sidebar tree</dd>
                 <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>larger, smaller text</dd>
-                <dt><kbd>0</kbd></dt><dd>text of default size</dd>
+                <dt><kbd>&lt;</kbd> <kbd>&gt;</kbd></dt><dd>closer, wider lines</dd>
+                <dt><kbd>0</kbd></dt><dd>text of default size and line spacing</dd>
                 <dt><kbd>?</kbd></dt><dd>this help</dd>
             </dl>
             <h2>Search</h2>
