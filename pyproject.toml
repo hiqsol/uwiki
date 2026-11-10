@@ -32,3 +32,6 @@ path = "src/uwiki/__init__.py"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uwiki]
+exclude = ["tests"]
