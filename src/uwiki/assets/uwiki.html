@@ -11,7 +11,7 @@
     <button id="menu" type="button" aria-label="Toggle navigation">&#9776;</button>
     <nav id="sidebar">
         <div id="top">
-            <a id="home" href="#root">{title}</a>
+            {up}<a id="home" href="#root">{home}</a>
             <button id="smaller" type="button" aria-label="Smaller text" title="Smaller text (-)">&minus;</button>
             <button id="larger" type="button" aria-label="Larger text" title="Larger text (+)">+</button>
             <button id="_tighter" type="button" class="lines" aria-label="Closer lines" title="Closer lines (&lt;)"><i></i></button>
@@ -57,6 +57,7 @@
                 <dt><kbd>x</kbd></dt><dd>clear search</dd>
                 <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>next, previous page</dd>
                 <dt><kbd>t</kbd></dt><dd>top of the wiki</dd>
+                {up_key}
                 <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>fold, unfold the whole sidebar tree</dd>
                 <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>larger, smaller text</dd>
                 <dt><kbd>&lt;</kbd> <kbd>&gt;</kbd></dt><dd>closer, wider lines</dd>

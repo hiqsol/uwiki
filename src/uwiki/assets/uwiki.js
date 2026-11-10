@@ -1744,13 +1744,15 @@
     flush();
   }
 
-  // reading keys: j and k go to the next and previous page, t to the top, [ and ] fold and unfold the tree
+  // reading keys: j and k go to the next and previous page, t to the top, [ and ] fold and unfold the tree,
+  // u up to the page the logo links to, when built with --up
   function bindReading() {
     document.addEventListener("keydown", function (e) {
       if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
           || document.querySelector("dialog.box[open]")) return;
       if (e.key == "j" || e.key == "k") pageStep(e.key == "j" ? 1 : -1);
       else if (e.key == "t") window.scrollTo(0, 0);
+      else if (e.key == "u" && document.getElementById("up")) location.href = document.getElementById("up").href;
       else if (e.key == "[" || e.key == "]") foldAll(e.key == "[");
       else return;
       e.preventDefault();

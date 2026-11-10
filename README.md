@@ -44,7 +44,7 @@ every other page right after the first page linking it, unlinked ones last.
 ## Commands
 
 ```
-uwiki build  <paths> [-o OUTPUT] [--title TITLE] [--html | --md] [--no-backlinks] [--no-front-matter]
+uwiki build  <paths> [-o OUTPUT] [--title TITLE] [--html | --md] [--no-backlinks] [--no-front-matter] [--up URL]
 uwiki watch  <paths> [build options] [-q] [--interval 0.5]
 uwiki serve  <paths> [watch options] [-p 8000] [--host 127.0.0.1] [--open]
 uwiki check  <paths> [--orphans] [--unlisted] [--mentions] [--mentions-exclude GLOB] [--no-folder-links] [--max-lines N]
@@ -62,7 +62,8 @@ uwiki lsp
 
 - `build` writes `<name>.html` and `<name>.md`, named by `--title` or the folder, `-o out/Wiki.html` only one;
   the wiki is titled as its index page is (`README.md`, `index.md`), unless `--title` is given;
-  a page shows its folders, metadata and front matter; a link to a page left out fails the build
+  a page shows its folders, metadata and front matter; a link to a page left out fails the build;
+  `--up ./` links the logo before the title, and the `u` key, to the index of a site of several wikis
 - `watch` builds again on change of a page, attachment or the config, `serve` also serves the HTML
   on `http://127.0.0.1:8000`, reloading the page, its blocks with `data-line` of the source line they start at;
   both restart on change of uwiki's own code, as on upgrade, unless it fails to import,

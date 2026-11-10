@@ -123,9 +123,31 @@ a:hover {
     color: var(--fg);
     font-size: 18px;
     font-weight: 700;
+    overflow-wrap: break-word;  /* a long title wraps, after a slash if it has one, not under the buttons */
 }
 #home:hover {
     text-decoration: none;
+}
+/* --up: logo before the title, on its line */
+#up {
+    flex: none;
+    display: flex;
+    align-items: center;
+    height: calc(18px * 1.6);
+    margin-top: 18px;
+    padding-left: 18px;
+    color: var(--accent);
+}
+#up svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+}
+#up:hover {
+    opacity: .75;
+}
+#up + #home {
+    padding-left: 8px;
 }
 /* text size and line spacing of pages, see --text-scale and --line-space */
 #smaller, #larger, #_tighter, #_looser {

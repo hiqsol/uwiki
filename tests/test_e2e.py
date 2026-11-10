@@ -132,6 +132,19 @@ class RenderTest(unittest.TestCase):
         self.assertIn('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg ', self.html)
         self.assertEqual(self.html.count('rel="icon"'), 1)
 
+    def test_up_link_only_when_given(self):
+        self.assertNotIn('id="up"', self.html)
+        self.assertNotIn('<kbd>u</kbd>', self.html)
+        with tempfile.TemporaryDirectory() as out:
+            file = os.path.join(out, 'vault.html')
+            res = run('build', VAULT, '--up', './?a=1&b', '--title', 'My/Vault', '-o', file)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            html = read(file)
+        self.assertIn('<a id="up" href="./?a=1&amp;b" title="Up (u)" aria-label="Up"><svg ', html)
+        self.assertIn('<dt><kbd>u</kbd></dt><dd>up, where the logo leads</dd>', html)
+        self.assertIn('</svg></a><a id="home" href="#root">My/<wbr>Vault</a>', html)  # wraps after the slash
+        self.assertIn('<title>My/Vault</title>', html)
+
     def test_titles(self):
         self.assertIn('>My Notes</h2>', self.content)
         self.assertIn('>2024 Plans</h2>', self.content)

@@ -36,6 +36,7 @@ def icon():
 class BuildOptions:
     backlinks: bool = True
     front_matter: bool = True
+    up: str = ''  # URL of a page above the wiki, as a site index, the logo before the title links to
     live_reload: bool = False  # served only: page reloads after a rebuild
     attachment_base: str = ''  # served only: URL attachments are served at
     source_lines: bool = False  # served only: blocks carry the source line they start at, for editing
@@ -216,6 +217,9 @@ class Builder:
         content = ''.join(f'<section>{self.html_node(node, body)}</section>\n' for node, body in nodes)
         return self.render('uwiki.html', {
             'title':    html.escape(title),
+            'home':     html.escape(title).replace('/', '/<wbr>'),  # a long title wraps after a slash
+            'up':       self.html_up(),
+            'up_key':   '<dt><kbd>u</kbd></dt><dd>up, where the logo leads</dd>' if self.options.up else '',
             'version':  __version__,
             'built':    datetime.now().astimezone().isoformat(timespec='seconds'),
             'source':   self.html_source(),
@@ -238,6 +242,13 @@ class Builder:
             converter.problems = text
             aside = self.html_problems(node, text, rest)
         return converter.html(body, aside, self.options.source_lines)
+
+    def html_up(self):
+        """uWiki logo linking to the page --up gives, before the title; none without it."""
+        if not self.options.up:
+            return ''
+        return (f'<a id="up" href="{html.escape(self.options.up)}" title="Up (u)" aria-label="Up">'
+                f'{read_asset("mark.svg").strip()}</a>')
 
     def html_source(self):
         """Where in git the pages are built from, for the help: ` from repo at commit on branch`."""
