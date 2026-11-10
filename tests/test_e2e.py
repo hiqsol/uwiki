@@ -128,6 +128,10 @@ class RenderTest(unittest.TestCase):
         css = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.css'))
         self.assertIn('.content a[href]:has(img)::before {\n    display: none;', css)  # beats a[href^="https:"]
 
+    def test_favicon_is_inline(self):
+        self.assertIn('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg ', self.html)
+        self.assertEqual(self.html.count('rel="icon"'), 1)
+
     def test_titles(self):
         self.assertIn('>My Notes</h2>', self.content)
         self.assertIn('>2024 Plans</h2>', self.content)

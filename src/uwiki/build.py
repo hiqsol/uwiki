@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 from . import __version__
 from .check import Checker, CheckOptions
@@ -26,6 +27,10 @@ class UsageError(ValueError):
 def read_asset(name):
     with open(os.path.join(ASSETS, name), encoding='utf-8') as f:
         return f.read()
+
+def icon():
+    """Favicon of built pages as a data URI, so the HTML stays one file."""
+    return 'data:image/svg+xml,' + quote(read_asset('favicon.svg').strip(), safe=' /=:.,-()')
 
 @dataclass
 class BuildOptions:
@@ -218,6 +223,7 @@ class Builder:
             'config':   self.html_config(),
             'content':  content,
             'data':     self.data(nodes),
+            'icon':     icon(),
             'style':    read_asset('uwiki.css'),
             'script':   read_asset('uwiki.js') + self.reload_script(),
         })

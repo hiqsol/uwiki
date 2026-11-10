@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo/uwiki.svg" alt="uWiki" height="72"></p>
+
 # uWiki - micro wiki
 
 [![test](https://github.com/hiqsol/uwiki/actions/workflows/test.yml/badge.svg)](https://github.com/hiqsol/uwiki/actions/workflows/test.yml)
