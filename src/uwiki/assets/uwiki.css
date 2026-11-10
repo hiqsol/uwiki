@@ -609,19 +609,18 @@ main.content {
 .content .page .crumb a {
     color: var(--accent);
 }
-/* metadata over front matter float right of the header, folded to one line each */
+/* metadata over front matter float right of the header, folded to one line each;
+   a line is as high as its text, not the title, so the text under the header starts close */
 .content .front-matter, .content .metadata {
     float: right;
     clear: right;
     max-width: min(45%, 24rem);
-    margin: 0 0 0.6rem 1rem;
+    margin: 0 0 0 1rem;
     color: var(--fg-muted);
+    font-size: calc(14px * var(--text-scale));
     font-weight: 400;
     letter-spacing: normal;
     line-height: 1.5;
-}
-.content .metadata {
-    margin-bottom: 0;
 }
 .content .front-matter[open], .content .metadata[open] {
     max-width: min(60%, 32rem);
