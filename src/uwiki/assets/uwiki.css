@@ -1166,6 +1166,21 @@ dialog.box code {
     font-family: var(--mono);
     font-size: 13px;
 }
+dialog.box .logo {
+    display: inline-block;
+    margin: 0 0 10px;
+    color: var(--fg);  /* the iki of the wordmark, its letter in the accent */
+}
+dialog.box .logo svg {
+    display: block;
+    height: 30px;
+}
+dialog.box .logo .a {
+    fill: var(--accent);
+}
+dialog.box .logo .i {
+    fill: currentColor;
+}
 dialog.box .close {
     position: absolute;
     top: 10px;

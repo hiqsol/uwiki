@@ -11,7 +11,8 @@ The wordmark adds DejaVu's own `iki`.
     uv run docs/logo/logo.py [path/to/DejaVuSans-Bold.ttf]
 
 writes `mark.svg`, `uwiki.svg` and `favicon.svg` next to this script, and to `src/uwiki/assets/` the favicon
-of built pages and the uncolored mark of their `--up` link. Shapes only, no font needed to show them.
+of built pages, the uncolored mark of their `--up` link and the uncolored wordmark of their help.
+Shapes only, no font needed to show them.
 """
 import sys
 from pathlib import Path
@@ -206,9 +207,11 @@ def main():
 
     wx0, wy0, wx1, wy1 = union(mark, rest).bounds
     pad = f.upm * .04
-    (HERE / 'uwiki.svg').write_text(svg(
-        (wx0 - pad, -wy1 - pad, wx1 - wx0 + 2 * pad, wy1 - wy0 + 2 * pad),
-        themed(('a', ACCENT), ('i', INK)) + f'<path class="a" d="{svg_d(mark)}"/><path class="i" d="{svg_d(rest)}"/>'))
+    wview = (wx0 - pad, -wy1 - pad, wx1 - wx0 + 2 * pad, wy1 - wy0 + 2 * pad)
+    word = f'<path class="a" d="{svg_d(mark)}"/><path class="i" d="{svg_d(rest)}"/>'
+    (HERE / 'uwiki.svg').write_text(svg(wview, themed(('a', ACCENT), ('i', INK)) + word))
+    # the help of built pages: no colors of its own, the page fills .a and .i, nor label, the link has one
+    (ASSETS / 'logo.svg').write_text(svg(wview, word, label=None))
 
     # favicon: white letter on an accent tile, the same on light and dark tabs
     tile = side * 1.12

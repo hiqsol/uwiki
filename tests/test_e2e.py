@@ -128,6 +128,11 @@ class RenderTest(unittest.TestCase):
         css = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.css'))
         self.assertIn('.content a[href]:has(img)::before {\n    display: none;', css)  # beats a[href^="https:"]
 
+    def test_help_has_logo(self):
+        self.assertIn('<a class="logo" href="https://github.com/hiqsol/uwiki" target="_blank" rel="noopener" '
+                      'aria-label="uWiki"><svg xmlns="http://www.w3.org/2000/svg" viewBox=', self.html)
+        self.assertIn('aria-hidden="true"><path class="a" d="', self.html)
+
     def test_favicon_is_inline(self):
         self.assertIn('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg ', self.html)
         self.assertEqual(self.html.count('rel="icon"'), 1)
@@ -1241,8 +1246,8 @@ class TemplateIdTest(unittest.TestCase):
             dirty = read(os.path.join(out, 'wiki.html'))
         self.assertIn(' from <a href="https://github.com/me/wiki" target="_blank" rel="noopener">me/wiki</a> at '
                       f'<a href="https://github.com/me/wiki/commit/{sha}" target="_blank" rel="noopener">'
-                      f'<code>{sha}</code></a> on trunk.', clean)
-        self.assertIn(f'</a> on trunk, with uncommitted changes.', dirty)
+                      f'<code>{sha}</code></a> on trunk branch.', clean)
+        self.assertIn(f'</a> on trunk branch, with uncommitted changes.', dirty)
 
     def test_help_out_of_git_tells_no_commit(self):
         from unittest import mock

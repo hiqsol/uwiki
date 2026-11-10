@@ -223,6 +223,7 @@ class Builder:
             'version':  __version__,
             'built':    datetime.now().astimezone().isoformat(timespec='seconds'),
             'source':   self.html_source(),
+            'logo':     read_asset('logo.svg').strip(),
             'settings': html.escape(dumps(self.settings)) if self.settings else '',
             'config':   self.html_config(),
             'content':  content,
@@ -251,7 +252,7 @@ class Builder:
                 f'{read_asset("mark.svg").strip()}</a>')
 
     def html_source(self):
-        """Where in git the pages are built from, for the help: ` from repo at commit on branch`."""
+        """Where in git the pages are built from, for the help: ` from repo at commit on name branch`."""
         source = Source.of(self.scanner.path)
         if not source:
             return ''
@@ -259,7 +260,7 @@ class Builder:
         res = f' from {link(source.url, html.escape(source.repo))} at' if source.repo else ' from commit'
         res += f' {link(source.commit_url, f"<code>{html.escape(source.commit)}</code>")}'
         if source.branch:
-            res += f' on {html.escape(source.branch)}'
+            res += f' on {html.escape(source.branch)} branch'
         if source.dirty:
             res += ', with uncommitted changes'
         return res
