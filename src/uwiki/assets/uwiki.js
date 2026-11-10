@@ -523,8 +523,8 @@
     });
   }
 
-  // share of tokens of a page with the pages under it right of its sidebar entry, always on a branch,
-  // on hover on a leaf, tokens beside it on hover; bars from the right edge as dust draws them: the share
+  // share of tokens of a page with the pages under it right of its sidebar entry, always on a branch
+  // and on a leaf over 5%, on hover on other leaves, tokens beside it on hover; bars from the right edge as dust draws them: the share
   // of an entry over the lighter one of its branch
   function showSizes() {
     nodes.forEach(function (n) {
@@ -561,6 +561,7 @@
       if (!n.size) return;
       var share = all ? 100 * n.tokens / all : 0, style = n.link.style;
       n.size.hidden = !n.tokens;
+      n.size.classList.toggle("big", share > 5);
       n.size.firstChild.textContent = short(n.tokens) + " · ";
       n.size.lastChild.textContent = percent(share);
       style.setProperty("--share", share.toFixed(2));

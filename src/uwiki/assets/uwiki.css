@@ -457,18 +457,18 @@ a:hover {
     font-weight: 400;
     line-height: 16px;
 }
-/* share of tokens of a page with the pages under it, of a leaf on hover unless filtering, tokens on hover */
+/* share of tokens of a page with the pages under it, of a leaf over 5% always, of others on hover
+   unless filtering, tokens on hover */
 #toc .size {
     float: right;
     margin-left: 6px;
-    color: var(--fg-muted);
+    color: color-mix(in srgb, var(--fg-muted), var(--fg-nav));
     font-size: 11px;
     font-weight: 400;
     font-variant-numeric: tabular-nums;
     line-height: calc(14px * 1.6);  /* on the baseline of the title */
-    opacity: 0.75;
 }
-#toc:not(.filtering) a:not(:hover) > .size.leaf,
+#toc:not(.filtering) a:not(:hover) > .size.leaf:not(.big),
 #toc a:not(:hover) .tokens {
     display: none;
 }

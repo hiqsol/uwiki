@@ -22,7 +22,7 @@
   a click on a branch title folds or unfolds it too; guide lines show nesting, the one of the page
   being read stands out
 - share of tokens of a branch with all pages under it right of its title, of a page
-  on hover, tokens beside it on hover; bars from the right edge as `dust` draws them: the share of an entry
+  over 5% too, of other pages on hover, tokens beside it on hover; bars from the right edge as `dust` draws them: the share of an entry
   over the lighter one of its branch; when filtering, shares are of pages found, beside counts of hits
 - chips of `[schema]` values with page counts, a click adds or removes one
 - pages, words and tokens shown out of all under the chips, after a triangle folding or unfolding the whole tree;
