@@ -1669,7 +1669,7 @@
     var KEYS = { "+": [1, 0], "=": [1, 0], "-": [-1, 0], "<": [0, -1], ",": [0, -1], ">": [0, 1], ".": [0, 1], "0": [0, 0] };
     document.addEventListener("keydown", function (e) {
       if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
-      var step = KEYS[e.key];
+      var step = KEYS[latinKey(e)];
       if (!step) return;
       e.preventDefault();
       zoom(step[0], step[1]);
@@ -1744,7 +1744,7 @@
       });
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key != "?" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (latinKey(e) != "?" || e.ctrlKey || e.metaKey || e.altKey) return;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
       e.preventDefault();
       if (help.open) closeBoxes();
@@ -1780,8 +1780,8 @@
     gotoList = gotoBox.querySelector("ul");
     gotoInput.addEventListener("input", function () { listGoto(gotoInput.value); });
     gotoInput.addEventListener("keydown", function (e) {
-      var down = e.key == "ArrowDown" || (e.ctrlKey && e.key == "n");
-      var up = e.key == "ArrowUp" || (e.ctrlKey && e.key == "p");
+      var down = e.key == "ArrowDown" || (e.ctrlKey && latinKey(e) == "n");
+      var up = e.key == "ArrowUp" || (e.ctrlKey && latinKey(e) == "p");
       if (down || up) {
         e.preventDefault();
         selectGoto(gotoAt + (down ? 1 : -1));
@@ -1954,16 +1954,30 @@
     flush();
   }
 
+  // the key as a US layout has it where the layout types no Latin there, as a Cyrillic one does: shortcuts
+  // go by what a key types in Latin layouts, Dvorak too, else by the key; Cyrillic layouts type . on the / key
+  var CODE_KEYS = { BracketLeft: "[{", BracketRight: "]}", Slash: "/?", Comma: ",<", Period: ".>",
+                    Semicolon: ";:", Quote: "'\"", Backquote: "`~", Minus: "-_", Equal: "=+" };
+  function latinKey(e) {
+    var key = e.key || "";
+    var byCode = key.length === 1 && !/[ -~]/.test(key) || e.code === "Slash" && (key === "." || key === ",");
+    if (!byCode) return key;
+    var letter = /^Key([A-Z])$/.exec(e.code || ""), pair = CODE_KEYS[e.code];
+    if (letter) return e.shiftKey ? letter[1] : letter[1].toLowerCase();
+    return pair ? pair[e.shiftKey ? 1 : 0] : key;
+  }
+
   // reading keys: j and k go to the next and previous page, t to the top, [ and ] fold and unfold the tree,
   // u up to the page the logo links to, when built with --up
   function bindReading() {
     document.addEventListener("keydown", function (e) {
       if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
           || document.querySelector("dialog.box[open]")) return;
-      if (e.key == "j" || e.key == "k") pageStep(e.key == "j" ? 1 : -1);
-      else if (e.key == "t") window.scrollTo(0, 0);
-      else if (e.key == "u" && document.getElementById("up")) location.href = document.getElementById("up").href;
-      else if (e.key == "[" || e.key == "]") foldAll(e.key == "[");
+      var key = latinKey(e);
+      if (key == "j" || key == "k") pageStep(key == "j" ? 1 : -1);
+      else if (key == "t") window.scrollTo(0, 0);
+      else if (key == "u" && document.getElementById("up")) location.href = document.getElementById("up").href;
+      else if (key == "[" || key == "]") foldAll(key == "[");
       else return;
       e.preventDefault();
     });
@@ -2052,17 +2066,17 @@
 
     document.addEventListener("keydown", function (e) {
       var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-      // Ctrl K by the letter or by the key, as Ctrl Л in a Cyrillic layout
-      if ((e.key == "k" || e.code == "KeyK") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      var key = latinKey(e);
+      if (key == "k" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         openGoto();
-      } else if (e.key == "/" && !typing) {
+      } else if (key == "/" && !typing) {
         e.preventDefault();
         closeBoxes();
         document.body.classList.add("nav-open");
         query.focus();
         query.select();
-      } else if (e.key == "x" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && query.value
+      } else if (key == "x" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && query.value
                  && !document.querySelector("dialog.box[open]")) {
         e.preventDefault();
         query.value = "";

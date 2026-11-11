@@ -47,6 +47,9 @@
 
 ## Keys and buttons
 
+Keys go by what they type in Latin layouts, Dvorak too, and by where they are on the keyboard in others,
+as `Ctrl Л` for `Ctrl K` in a Cyrillic one.
+
 - `−` and `+` by the title or the `-` and `+` keys make the text of pages and previews smaller or larger,
   the line buttons beside them or the `<` and `>` keys put their lines closer or wider apart,
   `0` restores both, remembered per browser
