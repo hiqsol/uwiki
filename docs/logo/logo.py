@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["fonttools", "skia-pathops", "shapely"]
+# dependencies = ["fonttools", "skia-pathops", "shapely", "cairosvg"]
 # ///
 """uWiki logo: one letter that starts as μ and goes on as w, cut from DejaVu Sans Bold.
 
@@ -10,13 +10,15 @@ The wordmark adds DejaVu's own `iki`.
 
     uv run docs/logo/logo.py [path/to/DejaVuSans-Bold.ttf]
 
-writes `mark.svg`, `uwiki.svg` and `favicon.svg` next to this script, and to `src/uwiki/assets/` the favicon
+writes `mark.svg`, `uwiki.svg`, `favicon.svg` and `social.png` next to this script, and to `src/uwiki/assets/` the favicon
 of built pages, the uncolored mark of their `--up` link and the uncolored wordmark of their help.
-Shapes only, no font needed to show them.
+Shapes only, no font needed to show them. `social.png` is the card GitHub shows for links to the repo,
+uploaded by hand in its Settings, Social preview.
 """
 import sys
 from pathlib import Path
 
+import cairosvg
 import pathops
 from fontTools.pens.basePen import BasePen
 from fontTools.pens.svgPathPen import SVGPathPen
@@ -223,6 +225,17 @@ def main():
                f'd="{svg_d(mark)}" fill="#fff"/>')
     (HERE / 'favicon.svg').write_text(icon)
     (ASSETS / 'favicon.svg').write_text(icon)
+
+    # social preview: the wordmark in light colors on white, 2:1 as GitHub wants, raster as it takes no SVG
+    ww, wh = wx1 - wx0, wy1 - wy0
+    cw = ww / .6
+    ch = cw / 2
+    card = svg((wx0 + ww / 2 - cw / 2, -(wy0 + wy1) / 2 - ch / 2, cw, ch),
+               f'<rect x="{wx0 + ww / 2 - cw / 2:.0f}" y="{-(wy0 + wy1) / 2 - ch / 2:.0f}" '
+               f'width="{cw:.0f}" height="{ch:.0f}" fill="#fff"/>'
+               f'<path d="{svg_d(mark)}" fill="{ACCENT[0]}"/><path d="{svg_d(rest)}" fill="{INK[0]}"/>')
+    cairosvg.svg2png(bytestring=card.encode(), write_to=str(HERE / 'social.png'),
+                     output_width=1280, output_height=640)
 
 
 if __name__ == '__main__':
