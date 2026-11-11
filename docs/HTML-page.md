@@ -29,8 +29,10 @@
   the share of tokens of the pages it finds with the other terms of the search; a click on its box, or name if no group, adds it to the search,
   a Shift or right click takes it out, a second one drops it; values under a group added or taken out show it dimmed,
   a click on one added so takes it out; a folded key tells its terms; facets and contents scroll as one
-- pages, words and tokens shown out of all over the contents, sticking at the top, after a triangle folding
-  or unfolding the whole tree;
+- bands across the sidebar head both trees, their triangles standing out left of the toggles:
+  Filters folds the facets into it, remembered per browser, folded it tells their terms;
+  the one of the contents sticks at the top, its triangle folds or unfolds the whole tree,
+  then pages, words and tokens shown out of all;
   a click on the count of problems shows only pages with problems
 
 ## Filter and go to
