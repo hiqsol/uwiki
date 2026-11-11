@@ -1,6 +1,7 @@
 :root {
     --bg: #000000;
     --bg-alt: #0b0c10;
+    --bg-side: #16181e;  /* sidebar, brighter than its bands of --bg-alt */
     --bg-code: #1e222b;
     --fg: #e3e5ea;
     --fg-muted: #8b919e;
@@ -40,6 +41,7 @@
     :root {
         --bg: #ffffff;
         --bg-alt: #f6f7f9;
+        --bg-side: #fcfcfd;
         --bg-code: #eff1f4;
         --fg: #1f2329;
         --fg-muted: #68707d;
@@ -106,7 +108,7 @@ a:hover {
     width: var(--sidebar-width);
     display: flex;
     flex-direction: column;
-    background: var(--bg-alt);
+    background: var(--bg-side);
     border-right: 1px solid var(--border);
     font-size: 14px;
     z-index: 10;
@@ -273,7 +275,7 @@ a:hover {
 .band {
     padding: 3px 14px 3px 28px;
     text-indent: -26px;
-    background: var(--bg);
+    background: var(--bg-alt);
     color: var(--fg-muted);
     font-size: 12px;
 }
