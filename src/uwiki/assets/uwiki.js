@@ -26,7 +26,8 @@
   var termCache = new Map();
   var nodes = [];  // page headers in order with their tree, elements and state
   var nodeOf = new Map();  // page header: node
-  var refs = new Map();  // page header: links to it and backlink titles naming it
+  var refs = null;  // page header: links to it and backlink titles naming it, read on first filtering
+  var pageOfId = null;  // id: page header it is under
   var shownPages = pages;  // page headers in the page, for spy
   var marks = [];  // current search marks in content
   var markAt = -1;
@@ -44,50 +45,76 @@
   var READ_WPM = 230;  // words read a minute, for reading time
 
   // metadata and front matter blocks built from the data go before crumb and title, floating right one over
-  // the other; metadata takes in what check reports, built into the header
+  // the other; metadata takes in what check reports, built into the header; their tables are built
+  // when first unfolded, here or in a preview copying them, so opening the page builds folded lines only
+  var issuesOf = new Map();  // page id: what check reports, taken out of its header
+
   function floatAsides() {
     pages.forEach(function (h) {
       var info = data.pages[h.id], problems = h.querySelector(":scope > details.problems");
-      var blocks = [metadataBlock(info, data.backlinks[h.id] || [], problems)];
+      var issues = problems ? problems.querySelector(":scope > div") : null;
+      if (issues && issues.children.length) issuesOf.set(h.id, issues);
+      var blocks = [metadataBlock(h.id, info, data.backlinks[h.id] || [], issues)];
       if (problems) problems.remove();
-      if (info && data.frontMatter !== false) blocks.push(frontMatterBlock(info));
+      if (info && data.frontMatter !== false) blocks.push(frontMatterBlock(h.id, info));
       blocks.filter(Boolean).reverse().forEach(function (block) { h.insertBefore(block, h.firstChild); });
     });
+    document.addEventListener("toggle", function (e) {
+      var block = e.target;
+      if (!block.open || !block.dataset || !("page" in block.dataset) || block.querySelector(":scope > table")) return;
+      var id = block.dataset.page, table = block.classList.contains("metadata")
+        ? metadataTable(id, data.pages[id], data.backlinks[id] || [], issuesOf.get(id))
+        : frontTable(frontItems(data.pages[id]));
+      block.appendChild(table);
+      if (content.contains(block)) addRefs(table);
+    }, true);
   }
 
   // metadata as folded line of problems, tokens, backlinks and file name unfolding into a table of problems
   // with links to where they are, stats, links to linking pages, file name and folder; file name and folder
   // only where title and crumb don't tell them, problems and backlinks only if any
-  function metadataBlock(info, links, problems) {
-    var rows = [], line = [], b = null;
-    var issues = problems ? problems.querySelector(":scope > div") : null;
-    if (issues && issues.children.length) {
-      var kind = issues.querySelector("a.problem") ? "problem" : "warning";
+  function metadataBlock(id, info, links, issues) {
+    var line = [], b = null;
+    if (issues) {
       b = document.createElement("b");
-      b.className = kind;
-      b.textContent = plural(issues.children.length, kind);
-      rows.push([b.textContent, issues, "issues"]);
+      b.className = issuesKind(issues);
+      b.textContent = plural(issues.children.length, b.className);
+    }
+    if (info) line.push(short(info.tokens || 0) + " tokens");
+    if (links.length) line.push(plural(links.length, "backlink"));
+    if (info && info.file) line.push(info.file);
+    if (!b && !info && !links.length) return null;
+    var block = details("metadata"), span = document.createElement("span");
+    block.dataset.page = id;
+    if (b) span.appendChild(b);
+    span.appendChild(document.createTextNode((b && line.length ? " · " : "") + line.join(" · ")));
+    block.firstChild.appendChild(span);
+    return block;
+  }
+
+  function issuesKind(issues) {
+    return issues.querySelector("a.problem") ? "problem" : "warning";
+  }
+
+  // the unfolded metadata: problems linking to their lines, else to the page, stats, backlinks, file and folder
+  function metadataTable(id, info, links, issues) {
+    var rows = [];
+    if (issues) {
+      issues = issues.cloneNode(true);
+      issues.querySelectorAll("a").forEach(function (a) {
+        var to = decodeURIComponent(a.getAttribute("href").slice(1));
+        if (!document.getElementById(to)) a.setAttribute("href", "#" + id);
+      });
+      rows.push([plural(issues.children.length, issuesKind(issues)), issues, "issues"]);
     }
     if (info) {
       var minutes = Math.max(1, Math.round((info.words || 0) / READ_WPM));
       rows.push(["Stats", [short(info.words || 0) + " words", short(info.tokens || 0) + " tokens",
                            plural(minutes, "minute")].join(" · ")]);
-      line.push(short(info.tokens || 0) + " tokens");
     }
-    if (links.length) {
-      rows.push([plural(links.length, "backlink"), backlinks(links)]);
-      line.push(plural(links.length, "backlink"));
-    }
-    if (info && info.file) {
-      rows.push(["Filename", info.file]);
-      line.push(info.file);
-    }
+    if (links.length) rows.push([plural(links.length, "backlink"), backlinks(links)]);
+    if (info && info.file) rows.push(["Filename", info.file]);
     if (info && info.dir) rows.push(["Dir", info.dir]);
-    if (!rows.length) return null;
-    var block = details("metadata"), span = document.createElement("span");
-    if (b) span.appendChild(b);
-    span.appendChild(document.createTextNode((b && line.length ? " · " : "") + line.join(" · ")));
-    block.firstChild.appendChild(span);
     var table = document.createElement("table");
     rows.forEach(function (row) {
       var tr = table.insertRow(), th = document.createElement("th"), td = tr.insertCell();
@@ -97,8 +124,7 @@
       if (typeof row[1] === "string") td.textContent = row[1];
       else td.appendChild(row[1]);
     });
-    block.appendChild(table);
-    return block;
+    return table;
   }
 
   // links to the linking pages, to the heading a link leads to
@@ -123,19 +149,25 @@
   // front matter as folded line of values unfolding into one table of keys and values:
   // a nested key beside the key above it spanning its rows, a list of maps an item after another;
   // none for title only
-  function frontMatterBlock(info) {
-    var items = {}, nested = info.nested || {};
-    Object.keys(info.meta).forEach(function (key) { items[key] = key in nested ? nested[key] : info.meta[key]; });
+  function frontMatterBlock(id, info) {
+    var items = frontItems(info);
     var line = Object.keys(items).filter(function (key) { return key !== "title"; }).map(function (key) {
       return frontText(items[key]);
     }).filter(Boolean).join(" · ");
     if (!line) return null;
     var block = details("front-matter" + (info.frontProblem ? " problem" : ""));
     var span = document.createElement("span");
+    block.dataset.page = id;
     span.textContent = line;
     block.firstChild.appendChild(span);
-    block.appendChild(frontTable(items));
     return block;
+  }
+
+  // top level front matter keys with nested maps and lists of maps as such
+  function frontItems(info) {
+    var items = {}, nested = info.nested || {};
+    Object.keys(info.meta).forEach(function (key) { items[key] = key in nested ? nested[key] : info.meta[key]; });
+    return items;
   }
 
   function details(className) {
@@ -600,25 +632,30 @@
     return (p >= 10 ? Math.round(p) : p >= 0.1 ? p.toFixed(1).replace(/\.0$/, "") : "<0.1") + "%";
   }
 
-  // links to pages, greyed when their page is filtered out
-  function readRefs() {
-    var pageOfId = new Map(), cur = null;
-    content.querySelectorAll("[id]").forEach(function (el) {
-      if (el.classList.contains("page")) cur = el;
-      pageOfId.set(el.id, cur);
-    });
-    var target = function (a) { return pageOfId.get(decodeURIComponent(a.getAttribute("href").slice(1))); };
-    var add = function (el, page) {
+  // links to pages, greyed when their page is filtered out: read when filtering first hides a page,
+  // links of a metadata table unfolded later are added then
+  function refsOf(h) {
+    if (!refs) {
+      refs = new Map();
+      pageOfId = new Map();
+      var cur = null;
+      content.querySelectorAll("[id]").forEach(function (el) {
+        if (el.classList.contains("page")) cur = el;
+        pageOfId.set(el.id, cur);
+      });
+      addRefs(content);
+    }
+    return refs.get(h) || [];
+  }
+
+  function addRefs(root) {
+    if (!refs) return;
+    root.querySelectorAll("a[href^='#']").forEach(function (a) {
+      var page = !a.classList.contains("item-anchor") && pageOfId.get(decodeURIComponent(a.getAttribute("href").slice(1)));
+      if (!page) return;
       if (!refs.has(page)) refs.set(page, []);
-      refs.get(page).push(el);
-    };
-    content.querySelectorAll("a[href^='#']").forEach(function (a) {
-      var page = !a.classList.contains("item-anchor") && target(a);
-      if (page) add(a, page);
-    });
-    content.querySelectorAll(".metadata .issues a").forEach(function (a) {
-      var id = decodeURIComponent(a.getAttribute("href").slice(1));
-      if (!document.getElementById(id)) a.setAttribute("href", "#" + id.replace(/^problem-(.*)-\d+$/, "$1"));
+      refs.get(page).push(a);
+      a.classList.toggle("off", nodeOf.get(page).state === "hidden");
     });
   }
 
@@ -803,11 +840,14 @@
     nodes.forEach(function (n) {
       if (n.next === n.state) return;
       if ((n.next === "hidden") !== (n.state === "hidden")) {
-        (refs.get(n.h) || []).forEach(function (el) { el.classList.toggle("off", n.next === "hidden"); });
+        refsOf(n.h).forEach(function (el) { el.classList.toggle("off", n.next === "hidden"); });
       }
       n.state = n.next;
       n.h.hidden = n.state === "hidden";
-      if (boxOf(n.h) !== n.h) boxOf(n.h).hidden = n.state === "hidden";
+      if (boxOf(n.h) !== n.h) {
+        boxOf(n.h).hidden = n.state === "hidden";
+        boxOf(n.h).classList.toggle("context", n.state === "context");
+      }
       n.h.classList.toggle("context", n.state === "context");
       n.els.forEach(function (el) { el.hidden = n.state !== "shown"; });
       if (n.li) {
@@ -2107,7 +2147,6 @@
   buildTree(toc, headerTree(document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page")), tocEntry, updateFold);
   readNodes();
   showSizes();
-  readRefs();
   buildFacets();
   bindEvents();
   if (location.hash) clearHead(hashId(location.hash));
@@ -2116,4 +2155,9 @@
   bindCode();
   restoreQuery();
   spy();
+  // search index and links to pages, built when the page is idle so the first search and filter are quick
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(function () { if (!sections) buildIndex(); }, { timeout: 3000 });
+    requestIdleCallback(function () { refsOf(null); }, { timeout: 3000 });
+  }
 })();

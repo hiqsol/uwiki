@@ -560,8 +560,9 @@ main.content {
     margin: 0 calc(-1 * var(--gutter));
     padding: 0 var(--gutter);
 }
-/* a filtered page keeps its title only, the size remembered of the whole page would leave a gap */
-.content.filtering > section {
+/* a folder of a found page keeps its title only, the size remembered of the whole page would leave a gap;
+   found pages stay drawn only near the window */
+.content.filtering > section.context {
     content-visibility: visible;
 }
 .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
