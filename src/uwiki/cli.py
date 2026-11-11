@@ -109,7 +109,8 @@ def lsp(args):
     return 0
 
 def build_options(args):
-    return BuildOptions(backlinks=not args.no_backlinks, front_matter=not args.no_front_matter, up=args.up or '')
+    return BuildOptions(backlinks=not args.no_backlinks, front_matter=not args.no_front_matter, up=args.up or '',
+                        live=args.live)
 
 def check(args):
     options = CheckOptions(folder_links=not args.no_folder_links, orphans=args.orphans,
@@ -198,6 +199,8 @@ def add_build_options(p, output='current'):
     p.add_argument('--no-front-matter', action='store_true', help='no front matter block next to page titles')
     p.add_argument('--up', metavar='URL', help='link the uWiki logo before the title to this page, '
                                                'e.g. ./ to the index of a site of wikis')
+    p.add_argument('--live', action='store_true', help='the page reloads when its file is rebuilt, '
+                                                       'as watch does on a web server; serve reloads anyway')
     add_filter(p)
 
 def add_watch_options(p):
@@ -205,7 +208,7 @@ def add_watch_options(p):
     p.add_argument('--interval', type=float, default=0.5, metavar='SECONDS',
                    help='how often to look for changes, default: 0.5')
 
-BUILD_USAGE = f'[--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--no-front-matter] [--up URL] {FILTER_USAGE}'
+BUILD_USAGE = f'[--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--no-front-matter] [--up URL] [--live] {FILTER_USAGE}'
 
 def command(commands, name, help, usage):
     return commands.add_parser(name, help=help, prog=f'uwiki {name}', usage=f'%(prog)s <folder|file>... {usage}'.rstrip())

@@ -49,5 +49,5 @@
 - `j` and `k` go to the next and previous page, `t` to the top, `[` and `]` fold and unfold the whole tree
 - `u` and the logo before the title go to the page `build --up URL` gives, as a site index
 - `?` by the title or the `?` key opens help: what the page is, uWiki version, build time and the git
-  commit built from, keys, search terms and mouse gestures; under `serve` whether the server answers;
+  commit built from, keys, search terms and mouse gestures; under `serve` and `--live` whether the server answers;
   its config link shows build options and the vault config file as they were

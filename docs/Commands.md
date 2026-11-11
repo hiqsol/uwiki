@@ -1,7 +1,7 @@
 # Commands
 
 ```
-uwiki build  <paths> [-o OUTPUT] [--title TITLE] [--html | --md] [--no-backlinks] [--no-front-matter] [--up URL]
+uwiki build  <paths> [-o OUTPUT] [--title TITLE] [--html | --md] [--no-backlinks] [--no-front-matter] [--up URL] [--live]
 uwiki watch  <paths> [build options] [-q] [--interval 0.5]
 uwiki serve  <paths> [watch options] [-p 8000] [--host 127.0.0.1] [--open]
 uwiki check  <paths> [--orphans] [--unlisted] [--mentions] [--mentions-exclude GLOB] [--no-folder-links] [--max-lines N]
@@ -32,6 +32,9 @@ a page shows its folders, metadata and front matter; a link to a page left out f
 on `http://127.0.0.1:8000`, reloading the page, its blocks with `data-line` of the source line they start at;
 both restart on change of uwiki's own code, as on upgrade, unless it fails to import,
 and of options the config gives them.
+`watch --live` for a web server serving the output: the page asks the server for its `Last-Modified`
+every 5 seconds while shown and reloads, keeping the scroll position and search, when the wiki was built again;
+output files are replaced at once, never served half written.
 
 ## check
 

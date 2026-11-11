@@ -28,6 +28,28 @@ def read_asset(name):
     with open(os.path.join(ASSETS, name), encoding='utf-8') as f:
         return f.read()
 
+def write_atomic(file, text):
+    """Writes a temporary file beside, then renames it over file, so a reader never gets half of it;
+    through a symlink as writing would, keeping the mode the file had."""
+    file = os.path.realpath(file)
+    folder, name = os.path.split(file)
+    os.makedirs(folder, exist_ok=True)
+    tmp = os.path.join(folder, f'.{name}.{os.getpid()}.tmp')
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(text)
+        try:
+            os.chmod(tmp, os.stat(file).st_mode & 0o7777)
+        except FileNotFoundError:
+            pass
+        os.replace(tmp, file)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
 def icon():
     """Favicon of built pages as a data URI, so the HTML stays one file."""
     return 'data:image/svg+xml,' + quote(read_asset('favicon.svg').strip(), safe=' /=:.,-()')
@@ -37,7 +59,8 @@ class BuildOptions:
     backlinks: bool = True
     front_matter: bool = True
     up: str = ''  # URL of a page above the wiki, as a site index, the logo before the title links to
-    live_reload: bool = False  # served only: page reloads after a rebuild
+    live: bool = False  # page reloads when its file is rebuilt, as Last-Modified of the page tells
+    live_reload: bool = False  # served only: page reloads after a rebuild, as the server tells
     attachment_base: str = ''  # served only: URL attachments are served at
     source_lines: bool = False  # served only: blocks carry the source line they start at, for editing
 
@@ -274,9 +297,10 @@ class Builder:
         return f'<h2>{html.escape(shown)}</h2><pre><code class="language-toml">{html.escape(config.text())}</code></pre>'
 
     def reload_script(self):
-        if not self.options.live_reload:
+        if not (self.options.live_reload or self.options.live):
             return ''
-        return read_asset('reload.js').replace('{build}', self.build_id)
+        mode = 'serve' if self.options.live_reload else 'page'
+        return read_asset('reload.js').replace('{build}', self.build_id).replace('{mode}', mode)
 
     def md(self):
         return ''.join(self.converter(node).md(body) + self.md_backlinks(node) for node, body in self.nodes())
@@ -376,8 +400,6 @@ class Build:
         if builder.problems:
             return list(builder.problems)
         for kind, file in self.outputs.items():
-            os.makedirs(os.path.dirname(os.path.abspath(file)), exist_ok=True)
-            with open(file, 'w', encoding='utf-8') as f:
-                f.write(texts[kind])
+            write_atomic(file, texts[kind])
         self.build_id = build_id
         return []

@@ -1620,6 +1620,43 @@ class ServeTest(unittest.TestCase):
         self.assertNotIn('uwiki-reload', html)
         self.assertNotIn('data-line', html)
 
+    def test_live_build_reloads_on_last_modified(self):
+        with tempfile.TemporaryDirectory() as out:
+            run('build', self.vault, '-o', out, '--live')
+            html = read(os.path.join(out, 'wiki.html'))
+        self.assertIn('uwiki-reload', html)
+        self.assertIn('var SERVE = "page" === "serve";', html)
+        self.assertNotIn('{mode}', html)
+
+    def test_serve_reloads_by_build_id_with_live_too(self):
+        serve = Background('serve', self.vault, '-p', '0', '--interval', '0.1', '--live')
+        try:
+            url = serve.line().split()[1]
+            serve.line()
+            self.assertIn('var SERVE = "serve" === "serve";', self.get(url)[2])
+        finally:
+            serve.stop()
+
+
+class WriteTest(unittest.TestCase):
+    """Output replaces the file at once: no half written file to serve, no temporary one left."""
+
+    def test_replaces_keeping_mode_and_symlink(self):
+        from uwiki.build import write_atomic
+        with tempfile.TemporaryDirectory() as tmp:
+            real = os.path.join(tmp, 'real', 'Wiki.html')
+            write(real, 'old')
+            os.chmod(real, 0o640)
+            link = os.path.join(tmp, 'Wiki.html')
+            os.symlink(real, link)
+            write_atomic(link, 'new')
+            self.assertTrue(os.path.islink(link))
+            self.assertEqual(read(real), 'new')
+            self.assertEqual(os.stat(real).st_mode & 0o777, 0o640)
+            write_atomic(os.path.join(tmp, 'new', 'x.md'), 'x')
+            self.assertEqual(read(os.path.join(tmp, 'new', 'x.md')), 'x')
+            self.assertEqual(sorted(os.listdir(os.path.join(tmp, 'real'))), ['Wiki.html'])
+
 
 class CommonMarkTest(unittest.TestCase):
     """Pages render as GitHub and Obsidian show them, served ones with source lines of blocks."""
