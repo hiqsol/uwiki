@@ -27,10 +27,12 @@
 - `[schema]` keys over the contents in a tree like it, folded at first, unfolded ones remembered per browser:
   values under their key, ones nested with slashes, as `tech/action`, under their group; a value has the number and
   the share of tokens of the pages it finds with the other terms of the search; a click on its box, or name if no group, adds it to the search,
-  a Shift or right click takes it out, a second one drops it; values under a group added or taken out show it dimmed,
+  the box of a key pages having it, `key:*`,
+  a Shift or right click takes it out, a second one drops it; values under a key or group added or taken out show it dimmed,
   a click on one added so takes it out; a folded key tells its terms; facets and contents scroll as one
 - bands across the sidebar head both trees, their triangles standing out left of the toggles:
-  Filters folds the facets into it, remembered per browser, folded it tells their terms;
+  the one of facets counts pages with front matter and with each key, e.g. `73 frontmatters: 73 scope · 14 rollout`,
+  found of all when filtering, folds the facets into it, remembered per browser, folded it tells their terms;
   the one of the contents sticks at the top, its triangle folds or unfolds the whole tree,
   then pages, words and tokens shown out of all;
   a click on the count of problems shows only pages with problems
@@ -38,7 +40,7 @@
 ## Filter and go to
 
 - `/` focuses the box filtering pages: words, `"exact text"`, `key:value` front matter, `in:folder`,
-  `is:problem`, `-term`, e.g. `scope:core -status:stub deck`; `tags:tech` finds `tech/action` too; `Enter` goes to the next match,
+  `is:problem`, `-term`, e.g. `scope:core -status:stub deck`; `tags:tech` finds `tech/action` too, `key:*` any value; `Enter` goes to the next match,
   the box goes to the URL as `?q=`, `×` or the `x` key clears it
 - `Ctrl K` goes to a page or folder by letters of its name in order, e.g. `dkbld` for Deck Building:
   title matches first, then aliases, then paths; whole words and starts of words before scattered letters

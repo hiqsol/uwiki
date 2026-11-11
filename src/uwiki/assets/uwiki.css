@@ -273,7 +273,6 @@ a:hover {
 .band {
     padding: 3px 14px 3px 28px;
     text-indent: -26px;
-    border-block: 1px solid var(--border);
     background: var(--bg);
     color: var(--fg-muted);
     font-size: 12px;
@@ -289,7 +288,6 @@ a:hover {
 }
 /* folds facets into the band, which then tells their terms */
 #_filters {
-    color: var(--fg-nav);
     cursor: pointer;
 }
 #_filters .terms {
@@ -298,9 +296,6 @@ a:hover {
 }
 #_filters:not(.folded) .terms, #facets.folded {
     display: none;
-}
-#facets.folded + #stats {
-    border-top: 0;
 }
 .fold {
     width: 20px;

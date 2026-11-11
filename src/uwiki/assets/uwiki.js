@@ -675,10 +675,11 @@
   }
 
   // value matches exactly when the vault has it or values nested under it, as tech for tech/action,
-  // these too then; else by prefix, so a value being typed already filters
+  // these too then; else by prefix, so a value being typed already filters; * matches any value
   function matcher(t) {
     if (t.key === "in") return folderMatcher(t.value.replace(/\/+$/, ""));
     if (t.key === "is") return problemMatcher(t.value);
+    if (t.value === "*") return function (node) { return valuesOf(node, t.key).length > 0; };
     var set = valueSet(t.key), exact = set.has(t.value);
     if (!exact) set.forEach(function (v) { if (v.startsWith(t.value + "/")) exact = true; });
     return function (node) {
@@ -785,7 +786,7 @@
     sizeBy(matched);
     showHits(prep, matched);
     showStats(matched, filtering);
-    showFacets(prep);
+    showFacets(prep, matched, filtering);
     clearTimeout(marking);
     marking = setTimeout(function () { marking = null; markHits(prep); }, 120);
     clearTimeout(saving);
@@ -906,12 +907,14 @@
   // facets: a tree as the sidebar one, a branch for every schema key listing values, an entry per value,
   // values nested with slashes, as tech/action, under their group; an entry has the number and the share
   // of tokens of the pages it finds with the other terms of the box, a box adds it to them or with Shift
-  // or right click takes it out, the box of a value under a group added or taken out shows it so dimmed;
-  // a folded key tells its terms
+  // or right click takes it out, the box of a key the pages having it, key:*; the box of a value under
+  // a key or group added or taken out shows it so dimmed; a folded key tells its terms of values;
+  // their band counts pages with front matter and with each key, folded it tells their terms
 
   var OPEN_KEY = "uwiki-open-facets";
   var FOLDED_FILTERS_KEY = "uwiki-folded-filters";
-  var facetEntries = [];  // {key, path: lowercase value or "" for the key, li, box, size, terms, parent}
+  // {key, path: lowercase value or "" for the key, value: path or * for the key, li, box, size, terms, parent}
+  var facetEntries = [];
 
   function buildFacets() {
     var open = [];
@@ -925,16 +928,15 @@
     items.forEach(function (item) { withKey(item.kids, item.key); });
     var entryOf = function (item, li) {
       var parent = facetEntries.find(function (f) { return f.li === li.parentNode.parentNode; }) || null;
-      var e = { key: item.key, path: item.path.toLowerCase(), li: li, parent: parent, size: sizeOf("pages") };
+      var path = item.path.toLowerCase();
+      var e = { key: item.key, path: path, value: path || "*", li: li, parent: parent, size: sizeOf("pages") };
       var div = document.createElement("div");
       div.className = "entry";
       div.appendChild(e.size);
-      if (item.path) {
-        e.box = document.createElement("button");
-        e.box.type = "button";
-        e.box.className = "check";
-        div.appendChild(e.box);
-      }
+      e.box = document.createElement("button");
+      e.box.type = "button";
+      e.box.className = "check";
+      div.appendChild(e.box);
       div.appendChild(document.createTextNode(item.name));
       if (!item.path) {
         e.terms = document.createElement("span");
@@ -963,12 +965,12 @@
     });
     facets.addEventListener("click", function (ev) {
       var e = facetOf(ev.target);
-      if (!e || !e.box || !ev.target.closest(".check") && e.li.querySelector(":scope > ul")) return;
+      if (!e || !ev.target.closest(".check") && e.li.querySelector(":scope > ul")) return;
       pick(e, ev.shiftKey);
     });
     facets.addEventListener("contextmenu", function (ev) {
       var e = facetOf(ev.target);
-      if (!e || !e.box) return;
+      if (!e) return;
       ev.preventDefault();
       pick(e, true);
     });
@@ -980,7 +982,7 @@
     facets.classList.toggle("folded", folded);
     filters.classList.toggle("folded", folded);
     button.classList.toggle("collapsed", folded);
-    button.title = folded ? "Unfold filters" : "Fold filters";
+    filters.title = button.title = folded ? "Unfold filters" : "Fold filters";
     button.setAttribute("aria-label", button.title);
   }
 
@@ -1011,7 +1013,7 @@
     return root.kids;
   }
 
-  // terms of the key in the box: value: "+" or "-"
+  // terms of the key in the box: value or *: "+" or "-"
   function termsOf(prep, key) {
     var res = new Map();
     prep.terms.forEach(function (t) {
@@ -1020,35 +1022,40 @@
     return res;
   }
 
-  // state of a value entry: its own term, else one of a group over it, implied
+  // whether value v of a term is under the entry: a value under its group, any value under its key
+  function isBelow(e, v) {
+    return e.path ? v.startsWith(e.path + "/") : v !== "*";
+  }
+
+  // state of an entry: its own term, else one of a group or key over it, implied
   function stateOf(e, terms) {
-    if (terms.has(e.path)) return { sign: terms.get(e.path), implied: false };
-    for (var p = e.parent; p && p.path; p = p.parent) {
-      if (terms.has(p.path)) return { sign: terms.get(p.path), implied: true };
+    if (terms.has(e.value)) return { sign: terms.get(e.value), implied: false };
+    for (var p = e.parent; p; p = p.parent) {
+      if (terms.has(p.value)) return { sign: terms.get(p.value), implied: true };
     }
     return { sign: "", implied: false };
   }
 
-  // a click adds the value, or drops it when added, under an added group takes it out instead;
+  // a click adds the entry, or drops it when added, under an added group or key takes it out instead;
   // out takes it out, or drops it when out; adding drops values under it added, taking out all under it;
-  // under a group taken out nothing changes
+  // under a group or key taken out nothing changes
   function pick(e, out) {
     var prep = prepare(parse(query.value)), state = stateOf(e, termsOf(prep, e.key));
     if (state.sign === "-" && state.implied) return;
     var mine = function (t) { return t.kind === "key" && t.key === e.key; };
     var sign = out ? "-" : "+";
     if (state.sign === sign && !state.implied) {
-      editTerms(function (t) { return mine(t) && t.value === e.path; });
+      editTerms(function (t) { return mine(t) && t.value === e.value; });
     } else if (state.sign === "+" && state.implied) {
-      editTerms(function () { return false; }, termOf(e.key, e.path, true));
+      editTerms(function () { return false; }, termOf(e.key, e.value, true));
     } else {
       editTerms(function (t) {
-        return mine(t) && (t.value === e.path || t.value.startsWith(e.path + "/") && (out || !t.neg));
-      }, termOf(e.key, e.path, out));
+        return mine(t) && (t.value === e.value || isBelow(e, t.value) && (out || !t.neg));
+      }, termOf(e.key, e.value, out));
     }
   }
 
-  function showFacets(prep) {
+  function showFacets(prep, matched, filtering) {
     var keys = new Map(), told = [];
     facetEntries.forEach(function (e) {
       var k = keys.get(e.key);
@@ -1073,25 +1080,42 @@
       setSize(entry, e.size, e.share, e.parent && e.parent.path ? e.parent.share : null, n + (tokens ? " · " : ""));
       if (!e.path) entry.style.removeProperty("--share");
       if (!tokens) e.size.lastChild.textContent = "";
-      entry.title = (e.path ? e.key + ":" + e.path : e.key) + "\n" + plural(n, "page") + ", "
+      entry.title = e.key + ":" + e.value + "\n" + plural(n, "page") + ", "
         + tokens.toLocaleString("en") + " tokens, " + percent(e.share) + " of tokens";
       entry.classList.toggle("zero", !n);
-      if (e.box) {
-        var state = stateOf(e, k.terms), sign = state.sign;
-        var partial = !sign && Array.from(k.terms.keys()).some(function (v) { return v.startsWith(e.path + "/"); });
-        e.box.textContent = sign === "+" ? "+" : sign === "-" ? "−" : "";
-        e.box.className = "check" + (sign === "+" ? " on" : sign === "-" ? " out" : partial ? " partial" : "")
-          + (state.implied ? " implied" : "");
-        e.box.title = state.implied ? (sign === "+" ? "In with its group, click to take it out" : "Out with its group")
-          : sign === "+" ? "Drop it, Shift click to take it out" : sign === "-" ? "Drop it, click to add it"
-          : "Add it, Shift click to take it out";
-        e.box.setAttribute("aria-label", e.key + ":" + e.path + " " + (sign === "+" ? "in" : sign === "-" ? "out" : "any"));
-      } else {
-        e.terms.textContent = Array.from(k.terms).map(function (t) { return (t[1] === "-" ? "−" : "+") + t[0]; }).join(" ");
-        if (e.terms.textContent) told.push(e.key + " " + e.terms.textContent);
+      var state = stateOf(e, k.terms), sign = state.sign;
+      var partial = !sign && Array.from(k.terms.keys()).some(function (v) { return isBelow(e, v); });
+      e.box.textContent = sign === "+" ? "+" : sign === "-" ? "−" : "";
+      e.box.className = "check" + (sign === "+" ? " on" : sign === "-" ? " out" : partial ? " partial" : "")
+        + (state.implied ? " implied" : "");
+      e.box.title = state.implied ? (sign === "+" ? "In with its group, click to take it out" : "Out with its group")
+        : sign === "+" ? "Drop it, Shift click to take it out" : sign === "-" ? "Drop it, click to add it"
+        : "Add it, Shift click to take it out";
+      e.box.setAttribute("aria-label", e.key + ":" + e.value + " " + (sign === "+" ? "in" : sign === "-" ? "out" : "any"));
+      if (!e.path) {
+        var signOf = function (t) { return t[1] === "-" ? "−" : "+"; };
+        var values = Array.from(k.terms).filter(function (t) { return t[0] !== "*"; });
+        e.terms.textContent = values.map(function (t) { return signOf(t) + t[0]; }).join(" ");
+        if (k.terms.has("*")) told.push(signOf(["*", k.terms.get("*")]) + e.key);
+        if (values.length) told.push(e.key + " " + e.terms.textContent);
       }
     });
+    filters.querySelector(".stats").textContent = facetStats(matched, filtering);
     filters.lastChild.textContent = told.join(" · ");
+  }
+
+  // pages with front matter and with each key, found of all when filtering
+  function facetStats(matched, filtering) {
+    var all = nodes.filter(function (n) { return !!n.info; });
+    var count = function (pages, key) {
+      return pages.filter(function (n) {
+        return key ? valuesOf(n, key).length > 0 : Object.keys(n.info.meta).length > 0;
+      }).length;
+    };
+    var of = function (key) {
+      return (filtering ? short(count(matched, key)) + "/" : "") + short(count(all, key));
+    };
+    return of(null) + " frontmatters: " + data.facets.map(function (f) { return of(f[0]) + " " + f[0]; }).join(" · ");
   }
 
   function termOf(key, value, neg) {
