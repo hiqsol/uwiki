@@ -263,16 +263,24 @@ a:hover {
     display: none;
 }
 
+/* facets, stats and the TOC scroll as one, stats sticking at the top */
+#_lists {
+    flex: 1;
+    overflow-y: auto;
+}
 /* the fold triangle lines up with the toggles of the tree under it, the counts with its titles, wrapped ones too */
 #stats {
-    margin: 0 14px 4px 8px;
-    padding-left: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 2px 14px 4px 28px;
     text-indent: -20px;
+    background: var(--bg-alt);
     color: var(--fg-muted);
     font-size: 12px;
 }
 #stats:has(#fold[hidden]) {
-    padding-left: 6px;
+    padding-left: 14px;
     text-indent: 0;
 }
 #fold {
@@ -314,81 +322,72 @@ a:hover {
     background: var(--accent-bg);
     color: var(--accent);
 }
+/* facets: a box adds a value or takes it out, dimmed when its group does; a folded key tells its terms */
 #facets {
-    margin: 0 14px 4px;
-    font-size: 12px;
+    padding-bottom: 6px;
 }
-.facet {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3px;
-    margin-bottom: 4px;
-}
-.facet-key, .chip {
-    padding: 1px 7px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: none;
-    color: var(--fg-nav);
-    font: inherit;
+#facets .entry {
     cursor: pointer;
 }
-.facet-key {
-    border-color: transparent;
-    padding-left: 0;
-    font-weight: 600;
-}
-.facet-key::before {
-    content: "▾ ";
-}
-.facet.folded .facet-key::before {
-    content: "▸ ";
-}
-.facet-group {
-    display: flex;
-    align-items: flex-start;
-    gap: 3px;
-    flex-basis: 100%;
-    padding-left: 10px;
-}
-.facet-kids {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3px;
-    flex: 1;
-    min-width: 0;
-}
-.chip.group {
-    font-weight: 600;
-}
-.facet.folded .chip, .facet.folded .facet-group {
-    display: none;
-}
-.chip span {
-    margin-left: 4px;
-    opacity: 0.7;
-}
-.chip:hover {
-    border-color: var(--accent);
-    color: var(--fg);
-}
-.chip.on {
-    border-color: var(--accent);
-    background: var(--accent-bg);
-    color: var(--accent);
-}
-.chip.zero {
+#facets .entry.zero {
     opacity: 0.45;
 }
+#facets .terms {
+    margin-left: 6px;
+    color: var(--accent);
+    font-size: 12px;
+}
+#facets li:not(.collapsed) > .entry > .terms {
+    display: none;
+}
+.box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    margin: 0 6px 0 0;
+    padding: 0;
+    vertical-align: -2px;
+    border: 1px solid var(--fg-muted);
+    border-radius: 3px;
+    background: none;
+    color: var(--accent);
+    font: 600 11px/1 ui-monospace, monospace;
+    cursor: pointer;
+}
+.box:hover {
+    border-color: var(--accent);
+}
+.box.on {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+}
+.box.out {
+    border-color: var(--problem);
+    color: var(--problem);
+}
+.box.implied {
+    opacity: 0.5;
+}
+.box.partial::after {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 1px;
+    background: var(--fg-muted);
+}
 
-#toc {
-    flex: 1;
-    overflow-y: auto;
+/* trees of the sidebar, the TOC and facets */
+.tree {
     margin: 0;
-    padding: 4px 8px 24px;
+    padding: 4px 8px;
     container-type: inline-size;  /* bars of all entries measured on one width, cqw */
 }
-#toc > li ul {
+#toc {
+    padding-bottom: 24px;
+}
+.tree > li ul {
     margin: 0 0 0 9px;
     padding-left: 5px;
     border-left: 1px solid var(--border);
@@ -397,11 +396,11 @@ a:hover {
 #toc > li ul:has(> li > a.active) {
     border-left-color: var(--fg-muted);
 }
-#toc li {
+.tree li {
     list-style: none;
     position: relative;
 }
-#toc a {
+.tree .entry {
     display: block;
     padding: 3px 8px 3px 20px;
     border-radius: 5px;
@@ -411,12 +410,12 @@ a:hover {
     white-space: nowrap;
 }
 /* share of tokens from the right edge, of all or of found pages: of the entry over the lighter one of its branch */
-#toc a[style] {
+.tree .entry[style] {
     background-image:
         linear-gradient(to left, var(--bar) calc(var(--share, 0) * 1cqw), transparent 0),
         linear-gradient(to left, var(--bar-branch) calc(var(--branch, 0) * 1cqw), transparent 0);
 }
-#toc a:hover {
+.tree .entry:hover {
     background-color: var(--accent-bg);
     color: var(--fg);
     text-decoration: none;
@@ -426,7 +425,7 @@ a:hover {
     color: var(--accent);
     font-weight: 600;
 }
-#toc .toggle {
+.tree .toggle {
     position: absolute;
     top: 3px;
     left: 0;
@@ -440,10 +439,10 @@ a:hover {
     cursor: pointer;
     transition: transform 0.15s;
 }
-#toc li.collapsed > ul {
+.tree li.collapsed > ul {
     display: none;
 }
-#toc li.collapsed > .toggle {
+.tree li.collapsed > .toggle {
     transform: rotate(-90deg);
 }
 /* filtering: branches of shown pages stay open, their folders greyed */
@@ -476,7 +475,7 @@ a:hover {
 }
 /* share of tokens of a page with the pages under it, of a leaf over 5% always, of others on hover
    unless filtering, tokens on hover */
-#toc .size {
+.tree .size {
     float: right;
     margin-left: 6px;
     color: color-mix(in srgb, var(--fg-muted), var(--fg-nav));

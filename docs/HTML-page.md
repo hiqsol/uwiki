@@ -24,9 +24,13 @@
 - share of tokens of a branch with all pages under it right of its title, of a page
   over 5% too, of other pages on hover, tokens beside it on hover; bars from the right edge as `dust` draws them: the share of an entry
   over the lighter one of its branch; when filtering, shares are of pages found, beside counts of hits
-- chips of `[schema]` values with page counts, a click adds or removes one; values nested with slashes,
-  as `tech/action`, show as a tree, a line per group whose chip finds pages with any value under it
-- pages, words and tokens shown out of all under the chips, after a triangle folding or unfolding the whole tree;
+- `[schema]` keys over the contents in a tree like it, folded at first, unfolded ones remembered per browser:
+  values under their key, ones nested with slashes, as `tech/action`, under their group; a value has the number and
+  the share of tokens of the pages it finds with the other terms of the search; a click on its box, or name if no group, adds it to the search,
+  a Shift or right click takes it out, a second one drops it; values under a group added or taken out show it dimmed,
+  a click on one added so takes it out; a folded key tells its terms; facets and contents scroll as one
+- pages, words and tokens shown out of all over the contents, sticking at the top, after a triangle folding
+  or unfolding the whole tree;
   a click on the count of problems shows only pages with problems
 
 ## Filter and go to

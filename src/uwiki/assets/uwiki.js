@@ -8,6 +8,7 @@
 
   var content = document.querySelector(".content");
   var sidebar = document.getElementById("sidebar");
+  var lists = document.getElementById("_lists");
   var toc = document.getElementById("toc");
   var query = document.getElementById("query");
   var stats = document.getElementById("stats");
@@ -217,49 +218,60 @@
 
   // TOC
 
-  function processHeaders(parent, headers, i) {
-    var first = headers[i];
-    var li = null;
-    while (i < headers.length) {
-      var h = headers[i];
-      if (!h.id) {
-        i++;
-      } else if (h.tagName[1] == first.tagName[1]) {
-        li = document.createElement("li");
-        var a = document.createElement("a");
-        a.href = "#" + h.id;
-        a.textContent = a.title = titleOf(h);
-        tocLinks[h.id] = a;
-        li.appendChild(a);
-        parent.appendChild(li);
-        i++;
-      } else if (h.tagName[1] > first.tagName[1]) {
-        var ul = document.createElement("ul");
-        li.appendChild(ul);
-        li.classList.add("collapsed");
-        li.insertBefore(toggle(li), li.firstChild);
-        i = processHeaders(ul, headers, i);
-      } else {
-        return i;
-      }
-    }
-    return i;
+  // page headers as a tree of {h, kids} by their level
+  function headerTree(headers) {
+    var root = { kids: [] }, stack = [];
+    Array.prototype.forEach.call(headers, function (h) {
+      if (!h.id) return;
+      var item = { h: h, level: +h.tagName[1], kids: [] };
+      while (stack.length && stack[stack.length - 1].level >= item.level) stack.pop();
+      (stack.length ? stack[stack.length - 1] : root).kids.push(item);
+      stack.push(item);
+    });
+    return root.kids;
   }
 
-  // the button and the title link of a branch both fold and unfold it, the link also goes to its page
-  function toggle(li) {
+  function tocEntry(item) {
+    var a = document.createElement("a");
+    a.className = "entry";
+    a.href = "#" + item.h.id;
+    a.textContent = a.title = titleOf(item.h);
+    tocLinks[item.h.id] = a;
+    return a;
+  }
+
+  // a tree of items of the sidebar, the TOC or facets: an li per item with the entry entryOf gives it,
+  // a branch folded with a toggle and an ul of its kids, onFlip called when one is folded or unfolded
+  function buildTree(ul, items, entryOf, onFlip) {
+    items.forEach(function (item) {
+      var li = document.createElement("li");
+      ul.appendChild(li);
+      li.appendChild(entryOf(item, li));
+      if (!item.kids.length) return;
+      var sub = document.createElement("ul");
+      li.appendChild(sub);
+      li.classList.add("collapsed");
+      li.insertBefore(toggle(li, onFlip), li.firstChild);
+      buildTree(sub, item.kids, entryOf, onFlip);
+    });
+  }
+
+  // the button and the entry of a branch both fold and unfold it, a link entry also goes to its page,
+  // a box in the entry does not fold it
+  function toggle(li, onFlip) {
     var button = document.createElement("button");
     button.className = "toggle";
     button.type = "button";
     button.setAttribute("aria-label", "Toggle section");
     button.textContent = "▼";
-    var flip = function () {
+    var flip = function (e) {
+      if (e.target.closest(".box")) return;
       li.classList.toggle("collapsed");
       delete li.dataset.auto;
-      updateFold();
+      onFlip(li);
     };
     button.addEventListener("click", flip);
-    li.querySelector(":scope > a").addEventListener("click", flip);
+    li.querySelector(":scope > .entry").addEventListener("click", flip);
     return button;
   }
 
@@ -373,9 +385,9 @@
     updateFold();
     if (!a) return;
     a.classList.add("active");
-    var r = a.getBoundingClientRect(), t = toc.getBoundingClientRect();
-    if (r.top < t.top || r.bottom > t.bottom) {
-      toc.scrollTop += r.top - t.top - t.height / 3;
+    var r = a.getBoundingClientRect(), t = lists.getBoundingClientRect(), top = t.top + stats.offsetHeight;
+    if (r.top < top || r.bottom > t.bottom) {
+      lists.scrollTop += r.top - top - (t.bottom - top) / 3;
     }
   }
 
@@ -529,13 +541,8 @@
   function showSizes() {
     nodes.forEach(function (n) {
       if (!n.link) return;
-      n.size = document.createElement("span");
-      n.size.className = n.isFolder ? "size" : "size leaf";
-      ["tokens", "share"].forEach(function (cls) {
-        var el = document.createElement("span");
-        el.className = cls;
-        n.size.appendChild(el);
-      });
+      n.size = sizeOf("tokens");
+      if (!n.isFolder) n.size.classList.add("leaf");
       n.link.insertBefore(n.size, n.link.firstChild);
     });
     var all = sizeBy(nodes.filter(function (n) { return !!n.info; }));
@@ -559,16 +566,33 @@
     });
     nodes.forEach(function (n) {
       if (!n.size) return;
-      var share = all ? 100 * n.tokens / all : 0, style = n.link.style;
       n.size.hidden = !n.tokens;
-      n.size.classList.toggle("big", share > 5);
-      n.size.firstChild.textContent = short(n.tokens) + " · ";
-      n.size.lastChild.textContent = percent(share);
-      style.setProperty("--share", share.toFixed(2));
-      if (n.parent && n.parent.link && all) style.setProperty("--branch", (100 * n.parent.tokens / all).toFixed(2));
-      else style.removeProperty("--branch");
+      setSize(n.link, n.size, all ? 100 * n.tokens / all : 0,
+              n.parent && n.parent.link && all ? 100 * n.parent.tokens / all : null, short(n.tokens) + " · ");
     });
     return all;
+  }
+
+  // size of a tree entry: a span of the text named cls, then the share
+  function sizeOf(cls) {
+    var size = document.createElement("span");
+    size.className = "size";
+    [cls, "share"].forEach(function (name) {
+      var el = document.createElement("span");
+      el.className = name;
+      size.appendChild(el);
+    });
+    return size;
+  }
+
+  // share of a tree entry, as a bar too over the lighter one of its branch share when given
+  function setSize(entry, size, share, branch, text) {
+    size.classList.toggle("big", share > 5);
+    size.firstChild.textContent = text;
+    size.lastChild.textContent = percent(share);
+    entry.style.setProperty("--share", share.toFixed(2));
+    if (branch === null) entry.style.removeProperty("--branch");
+    else entry.style.setProperty("--branch", branch.toFixed(2));
   }
 
   function percent(p) {
@@ -824,6 +848,7 @@
         budget--;
         var li = document.createElement("li");
         var a = document.createElement("a");
+        a.className = "entry";
         a.href = "#" + s.head.id;
         a.textContent = a.title = s.title;
         a.appendChild(countOf(counts.get(si)));
@@ -877,46 +902,76 @@
     return Math.round(n / 1000) + "k";
   }
 
-  // facet chips: a row for every schema key listing values, a chip per value with the count of pages
-  // it shows with the other terms of the box; values nested with slashes, as tech/action, make a tree:
-  // plain values on the line of the key, a line per group under it, its chip then chips of its values
-  // wrapping right of it
+  // facets: a tree as the sidebar one, a branch for every schema key listing values, an entry per value,
+  // values nested with slashes, as tech/action, under their group; an entry has the number and the share
+  // of tokens of the pages it finds with the other terms of the box, a box adds it to them or with Shift
+  // or right click takes it out, the box of a value under a group added or taken out shows it so dimmed;
+  // a folded key tells its terms
 
-  var FOLDED_KEY = "uwiki-folded-facets";
+  var OPEN_KEY = "uwiki-open-facets";
+  var facetEntries = [];  // {key, path: lowercase value or "" for the key, li, box, size, terms, parent}
 
   function buildFacets() {
-    var folded = [];
+    var open = [];
     try {
-      folded = JSON.parse(localStorage.getItem(FOLDED_KEY) || "[]");
+      open = JSON.parse(localStorage.getItem(OPEN_KEY) || "[]");
     } catch (e) {}
-    data.facets.forEach(function (facet) {
-      var row = document.createElement("div");
-      row.className = "facet" + (folded.indexOf(facet[0]) >= 0 ? " folded" : "");
-      row.dataset.key = facet[0];
-      var name = document.createElement("button");
-      name.type = "button";
-      name.className = "facet-key";
-      name.textContent = facet[0];
-      name.title = "Fold or unfold " + facet[0];
-      row.appendChild(name);
-      addChips(row, valueTree(facet[1]));
-      facets.appendChild(row);
+    var items = data.facets.map(function (f) { return { key: f[0], path: "", name: f[0], kids: valueTree(f[1]) }; });
+    var withKey = function (items, key) {
+      items.forEach(function (item) { item.key = key; withKey(item.kids, key); });
+    };
+    items.forEach(function (item) { withKey(item.kids, item.key); });
+    var entryOf = function (item, li) {
+      var parent = facetEntries.find(function (f) { return f.li === li.parentNode.parentNode; }) || null;
+      var e = { key: item.key, path: item.path.toLowerCase(), li: li, parent: parent, size: sizeOf("pages") };
+      var div = document.createElement("div");
+      div.className = "entry";
+      div.appendChild(e.size);
+      if (item.path) {
+        e.box = document.createElement("button");
+        e.box.type = "button";
+        e.box.className = "box";
+        div.appendChild(e.box);
+      }
+      div.appendChild(document.createTextNode(item.name));
+      if (!item.path) {
+        e.terms = document.createElement("span");
+        e.terms.className = "terms";
+        div.appendChild(e.terms);
+      }
+      li.dataset.id = item.key + ":" + item.path;
+      facetEntries.push(e);
+      return div;
+    };
+    buildTree(facets, items, entryOf, saveOpen);
+    facets.querySelectorAll("li.collapsed").forEach(function (li) {
+      if (open.indexOf(li.dataset.id) >= 0) li.classList.remove("collapsed");
     });
     facets.hidden = !data.facets.length;
-    facets.addEventListener("click", function (e) {
-      var row = e.target.closest(".facet");
-      if (!row) return;
-      if (e.target.closest(".facet-key")) {
-        row.classList.toggle("folded");
-        var keys = Array.prototype.map.call(facets.querySelectorAll(".facet.folded"), function (r) { return r.dataset.key; });
-        try {
-          localStorage.setItem(FOLDED_KEY, JSON.stringify(keys));
-        } catch (err) {}
-        return;
-      }
-      var chip = e.target.closest(".chip");
-      if (chip) toggleTerm(row.dataset.key, chip.dataset.value);
+    facets.addEventListener("click", function (ev) {
+      var e = facetOf(ev.target);
+      if (!e || !e.box || !ev.target.closest(".box") && e.li.querySelector(":scope > ul")) return;
+      pick(e, ev.shiftKey);
     });
+    facets.addEventListener("contextmenu", function (ev) {
+      var e = facetOf(ev.target);
+      if (!e || !e.box) return;
+      ev.preventDefault();
+      pick(e, true);
+    });
+  }
+
+  function facetOf(el) {
+    var entry = el.closest("#facets .entry");
+    return entry && facetEntries.find(function (f) { return f.li === entry.parentNode; });
+  }
+
+  function saveOpen() {
+    var ids = Array.prototype.map.call(facets.querySelectorAll("li:not(.collapsed) > .toggle"),
+      function (button) { return button.parentNode.dataset.id; });
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify(ids));
+    } catch (e) {}
   }
 
   // values as a tree of {path, name, kids} split at slashes, in order of first value under each
@@ -933,65 +988,108 @@
     return root.kids;
   }
 
-  function addChips(parent, kids) {
-    kids.forEach(function (k) { if (!k.kids.length) parent.appendChild(chipOf(k, "chip")); });
-    kids.forEach(function (k) {
-      if (!k.kids.length) return;
-      var group = document.createElement("div");
-      group.className = "facet-group";
-      var kids = document.createElement("div");
-      kids.className = "facet-kids";
-      group.appendChild(chipOf(k, "chip group"));
-      group.appendChild(kids);
-      addChips(kids, k.kids);
-      parent.appendChild(group);
+  // terms of the key in the box: value: "+" or "-"
+  function termsOf(prep, key) {
+    var res = new Map();
+    prep.terms.forEach(function (t) {
+      if (t.kind === "key" && t.key === key) res.set(t.value, t.neg ? "-" : "+");
     });
+    return res;
   }
 
-  function chipOf(k, className) {
-    var chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = className;
-    chip.dataset.value = k.path;
-    chip.textContent = k.name;
-    if (k.path !== k.name) chip.title = k.path;
-    chip.appendChild(document.createElement("span"));
-    return chip;
+  // state of a value entry: its own term, else one of a group over it, implied
+  function stateOf(e, terms) {
+    if (terms.has(e.path)) return { sign: terms.get(e.path), implied: false };
+    for (var p = e.parent; p && p.path; p = p.parent) {
+      if (terms.has(p.path)) return { sign: terms.get(p.path), implied: true };
+    }
+    return { sign: "", implied: false };
+  }
+
+  // a click adds the value, or drops it when added, under an added group takes it out instead;
+  // out takes it out, or drops it when out; adding drops values under it added, taking out all under it;
+  // under a group taken out nothing changes
+  function pick(e, out) {
+    var prep = prepare(parse(query.value)), state = stateOf(e, termsOf(prep, e.key));
+    if (state.sign === "-" && state.implied) return;
+    var mine = function (t) { return t.kind === "key" && t.key === e.key; };
+    var sign = out ? "-" : "+";
+    if (state.sign === sign && !state.implied) {
+      editTerms(function (t) { return mine(t) && t.value === e.path; });
+    } else if (state.sign === "+" && state.implied) {
+      editTerms(function () { return false; }, termOf(e.key, e.path, true));
+    } else {
+      editTerms(function (t) {
+        return mine(t) && (t.value === e.path || t.value.startsWith(e.path + "/") && (out || !t.neg));
+      }, termOf(e.key, e.path, out));
+    }
   }
 
   function showFacets(prep) {
-    facets.querySelectorAll(".facet").forEach(function (row) {
-      var key = row.dataset.key;
-      var others = match(prep, key);
-      var on = new Set(prep.terms.filter(function (t) {
-        return t.kind === "key" && t.key === key && !t.neg;
-      }).map(function (t) { return t.value; }));
-      row.querySelectorAll(".chip").forEach(function (chip) {
-        var value = chip.dataset.value.toLowerCase();
-        var n = others.filter(function (node) {
-          return valuesOf(node, key).some(function (v) { return isUnder(v, value); });
-        }).length;
-        chip.lastChild.textContent = n;
-        chip.classList.toggle("zero", !n);
-        chip.classList.toggle("on", on.has(value));
+    var keys = new Map();
+    facetEntries.forEach(function (e) {
+      var k = keys.get(e.key);
+      if (!k) {
+        var others = match(prep, e.key);
+        keys.set(e.key, k = {
+          others: others, terms: termsOf(prep, e.key),
+          tokens: others.reduce(function (a, n) { return a + (n.info.tokens || 0); }, 0)
+        });
+      }
+      var n = 0, tokens = 0;
+      k.others.forEach(function (node) {
+        var values = valuesOf(node, e.key);
+        if (e.path ? values.some(function (v) { return isUnder(v, e.path); }) : values.length) {
+          n++;
+          tokens += node.info.tokens || 0;
+        }
       });
+      e.share = k.tokens ? 100 * tokens / k.tokens : 0;
+      var entry = e.size.parentNode;
+      // a key is no entry of a tree of pages: no bar of its own nor as branch of its values
+      setSize(entry, e.size, e.share, e.parent && e.parent.path ? e.parent.share : null, n + (tokens ? " · " : ""));
+      if (!e.path) entry.style.removeProperty("--share");
+      if (!tokens) e.size.lastChild.textContent = "";
+      entry.title = (e.path ? e.key + ":" + e.path : e.key) + "\n" + plural(n, "page") + ", "
+        + tokens.toLocaleString("en") + " tokens, " + percent(e.share) + " of tokens";
+      entry.classList.toggle("zero", !n);
+      if (e.box) {
+        var state = stateOf(e, k.terms), sign = state.sign;
+        var partial = !sign && Array.from(k.terms.keys()).some(function (v) { return v.startsWith(e.path + "/"); });
+        e.box.textContent = sign === "+" ? "+" : sign === "-" ? "−" : "";
+        e.box.className = "box" + (sign === "+" ? " on" : sign === "-" ? " out" : partial ? " partial" : "")
+          + (state.implied ? " implied" : "");
+        e.box.title = state.implied ? (sign === "+" ? "In with its group, click to take it out" : "Out with its group")
+          : sign === "+" ? "Drop it, Shift click to take it out" : sign === "-" ? "Drop it, click to add it"
+          : "Add it, Shift click to take it out";
+        e.box.setAttribute("aria-label", e.key + ":" + e.path + " " + (sign === "+" ? "in" : sign === "-" ? "out" : "any"));
+      } else {
+        e.terms.textContent = Array.from(k.terms).map(function (t) { return (t[1] === "-" ? "−" : "+") + t[0]; }).join(" ");
+      }
     });
+  }
+
+  function termOf(key, value, neg) {
+    return (neg ? "-" : "") + key + ":" + (/[\s"]/.test(value) ? '"' + value + '"' : value);
+  }
+
+  // drops terms of the box that drop takes, then adds term when given
+  function editTerms(drop, term) {
+    var q = query.value;
+    parse(q).filter(drop).reverse().forEach(function (t) { q = q.slice(0, t.at) + q.slice(t.at + t.raw.length); });
+    q = q.replace(/\s+/g, " ").trim();
+    if (term) q = (q + " " + term).trim();
+    query.value = q;
+    update();
   }
 
   // adds key:value to the box, or removes it when there, or terms same as it when given
   function toggleTerm(key, value, same) {
-    var q = query.value;
-    var found = parse(q).filter(same || function (t) {
+    var found = same || function (t) {
       return t.kind === "key" && t.key === key && !t.neg && t.value === value.toLowerCase();
-    });
-    if (found.length) {
-      found.reverse().forEach(function (t) { q = q.slice(0, t.at) + q.slice(t.at + t.raw.length); });
-      q = q.replace(/\s+/g, " ").trim();
-    } else {
-      q = (q.trim() + " " + key + ":" + (/[\s"]/.test(value) ? '"' + value + '"' : value)).trim();
-    }
-    query.value = q;
-    update();
+    };
+    if (parse(query.value).some(found)) editTerms(found);
+    else editTerms(function () { return false; }, termOf(key, value, false));
   }
 
   // marks of words and phrases in text of shown pages, Enter and Shift+Enter go through them
@@ -1942,7 +2040,7 @@
   sizePages();
   floatAsides();
   markBoxDrawing();
-  processHeaders(toc, document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page"), 0);
+  buildTree(toc, headerTree(document.querySelectorAll("h2.page, h3.page, h4.page, h5.page, h6.page")), tocEntry, updateFold);
   readNodes();
   showSizes();
   readRefs();

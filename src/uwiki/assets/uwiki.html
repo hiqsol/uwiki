@@ -24,9 +24,11 @@
             <kbd>/</kbd>
             <button id="clear" type="button" aria-label="Clear search" title="Clear (x)">&times;</button>
         </div>
-        <div id="facets" hidden></div>
-        <div id="stats"><button id="fold" type="button" hidden>&#9660;</button><span id="counts"></span><button id="problems" type="button" hidden></button></div>
-        <ul id="toc"></ul>
+        <div id="_lists">
+            <ul id="facets" class="tree" hidden></ul>
+            <div id="stats"><button id="fold" type="button" hidden>&#9660;</button><span id="counts"></span><button id="problems" type="button" hidden></button></div>
+            <ul id="toc" class="tree"></ul>
+        </div>
         <div id="resize" title="Drag to resize, double click to restore"></div>
     </nav>
     <main class="content">
@@ -78,7 +80,8 @@
             <dl>
                 <dt>hover a link</dt><dd>preview of its target</dd>
                 <dt>sidebar edge</dt><dd>drag to resize, double click restores</dd>
-                <dt>chip, problem count</dt><dd>add or drop it in search</dd>
+                <dt>value box, problem count</dt><dd>add or drop it in search</dd>
+                <dt><kbd>Shift</kbd> or right click a value box</dt><dd>take it out of search</dd>
             </dl>
         </div>
     </dialog>
