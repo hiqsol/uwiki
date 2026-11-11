@@ -2052,7 +2052,8 @@
 
     document.addEventListener("keydown", function (e) {
       var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-      if (e.key == "k" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      // Ctrl K by the letter or by the key, as Ctrl Л in a Cyrillic layout
+      if ((e.key == "k" || e.code == "KeyK") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         openGoto();
       } else if (e.key == "/" && !typing) {
