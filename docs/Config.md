@@ -9,7 +9,7 @@ top level ones for every command, a table for a command, `[build]` also for `wat
 `[schema]` gives front matter keys `check` takes, dotted ones nested in a map or in every map of a list,
 `_required` the ones a page has, a map key every key nested in it,
 `[schema."glob"]` adds rules for pages the glob matches from the config folder, `_inherit = false` drops the ones before.
-The HTML page shows keys in schema order and chips of their values.
+The HTML page shows keys in schema order and chips of their values, values nested with slashes as a tree.
 
 ## Layers
 

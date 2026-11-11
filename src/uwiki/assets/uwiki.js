@@ -649,14 +649,21 @@
     return valueSets[key];
   }
 
-  // value matches exactly when the vault has it, else by prefix, so a value being typed already filters
+  // value matches exactly when the vault has it or values nested under it, as tech for tech/action,
+  // these too then; else by prefix, so a value being typed already filters
   function matcher(t) {
     if (t.key === "in") return folderMatcher(t.value.replace(/\/+$/, ""));
     if (t.key === "is") return problemMatcher(t.value);
-    var exact = valueSet(t.key).has(t.value);
+    var set = valueSet(t.key), exact = set.has(t.value);
+    if (!exact) set.forEach(function (v) { if (v.startsWith(t.value + "/")) exact = true; });
     return function (node) {
-      return valuesOf(node, t.key).some(function (v) { return exact ? v === t.value : v.startsWith(t.value); });
+      return valuesOf(node, t.key).some(function (v) { return exact ? isUnder(v, t.value) : v.startsWith(t.value); });
     };
+  }
+
+  // whether value v is value or nested under it
+  function isUnder(v, value) {
+    return v === value || v.startsWith(value + "/");
   }
 
   function folderMatcher(f) {
@@ -871,7 +878,9 @@
   }
 
   // facet chips: a row for every schema key listing values, a chip per value with the count of pages
-  // it shows with the other terms of the box
+  // it shows with the other terms of the box; values nested with slashes, as tech/action, make a tree:
+  // plain values on the line of the key, a line per group under it, its chip then chips of its values
+  // wrapping right of it
 
   var FOLDED_KEY = "uwiki-folded-facets";
 
@@ -890,15 +899,7 @@
       name.textContent = facet[0];
       name.title = "Fold or unfold " + facet[0];
       row.appendChild(name);
-      facet[1].forEach(function (value) {
-        var chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "chip";
-        chip.dataset.value = value;
-        chip.textContent = value;
-        chip.appendChild(document.createElement("span"));
-        row.appendChild(chip);
-      });
+      addChips(row, valueTree(facet[1]));
       facets.appendChild(row);
     });
     facets.hidden = !data.facets.length;
@@ -918,6 +919,46 @@
     });
   }
 
+  // values as a tree of {path, name, kids} split at slashes, in order of first value under each
+  function valueTree(values) {
+    var root = { kids: [], at: {} };
+    values.forEach(function (value) {
+      var node = root, path = "";
+      value.split("/").forEach(function (name) {
+        path = path ? path + "/" + name : name;
+        if (!node.at[name]) node.kids.push(node.at[name] = { path: path, name: name, kids: [], at: {} });
+        node = node.at[name];
+      });
+    });
+    return root.kids;
+  }
+
+  function addChips(parent, kids) {
+    kids.forEach(function (k) { if (!k.kids.length) parent.appendChild(chipOf(k, "chip")); });
+    kids.forEach(function (k) {
+      if (!k.kids.length) return;
+      var group = document.createElement("div");
+      group.className = "facet-group";
+      var kids = document.createElement("div");
+      kids.className = "facet-kids";
+      group.appendChild(chipOf(k, "chip group"));
+      group.appendChild(kids);
+      addChips(kids, k.kids);
+      parent.appendChild(group);
+    });
+  }
+
+  function chipOf(k, className) {
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = className;
+    chip.dataset.value = k.path;
+    chip.textContent = k.name;
+    if (k.path !== k.name) chip.title = k.path;
+    chip.appendChild(document.createElement("span"));
+    return chip;
+  }
+
   function showFacets(prep) {
     facets.querySelectorAll(".facet").forEach(function (row) {
       var key = row.dataset.key;
@@ -927,7 +968,9 @@
       }).map(function (t) { return t.value; }));
       row.querySelectorAll(".chip").forEach(function (chip) {
         var value = chip.dataset.value.toLowerCase();
-        var n = others.filter(function (node) { return valuesOf(node, key).indexOf(value) >= 0; }).length;
+        var n = others.filter(function (node) {
+          return valuesOf(node, key).some(function (v) { return isUnder(v, value); });
+        }).length;
         chip.lastChild.textContent = n;
         chip.classList.toggle("zero", !n);
         chip.classList.toggle("on", on.has(value));

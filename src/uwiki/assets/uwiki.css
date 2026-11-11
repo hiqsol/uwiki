@@ -344,7 +344,24 @@ a:hover {
 .facet.folded .facet-key::before {
     content: "▸ ";
 }
-.facet.folded .chip {
+.facet-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 3px;
+    flex-basis: 100%;
+    padding-left: 10px;
+}
+.facet-kids {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+.chip.group {
+    font-weight: 600;
+}
+.facet.folded .chip, .facet.folded .facet-group {
     display: none;
 }
 .chip span {

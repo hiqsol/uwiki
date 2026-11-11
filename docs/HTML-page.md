@@ -24,14 +24,15 @@
 - share of tokens of a branch with all pages under it right of its title, of a page
   over 5% too, of other pages on hover, tokens beside it on hover; bars from the right edge as `dust` draws them: the share of an entry
   over the lighter one of its branch; when filtering, shares are of pages found, beside counts of hits
-- chips of `[schema]` values with page counts, a click adds or removes one
+- chips of `[schema]` values with page counts, a click adds or removes one; values nested with slashes,
+  as `tech/action`, show as a tree, a line per group whose chip finds pages with any value under it
 - pages, words and tokens shown out of all under the chips, after a triangle folding or unfolding the whole tree;
   a click on the count of problems shows only pages with problems
 
 ## Filter and go to
 
 - `/` focuses the box filtering pages: words, `"exact text"`, `key:value` front matter, `in:folder`,
-  `is:problem`, `-term`, e.g. `scope:core -status:stub deck`; `Enter` goes to the next match,
+  `is:problem`, `-term`, e.g. `scope:core -status:stub deck`; `tags:tech` finds `tech/action` too; `Enter` goes to the next match,
   the box goes to the URL as `?q=`, `×` or the `x` key clears it
 - `Ctrl K` goes to a page or folder by letters of its name in order, e.g. `dkbld` for Deck Building:
   title matches first, then aliases, then paths; whole words and starts of words before scattered letters
