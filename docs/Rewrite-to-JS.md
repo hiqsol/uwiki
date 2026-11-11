@@ -1,70 +1,50 @@
 # Rewrite to JS or TS
 
-Should uwiki be rewritten from Python into JS or TS? Analysis of 2026-11-04.
+Should uwiki be rewritten from Python into JS? Analyses of 2026-11-04 and 2026-11-11, measured on 8bitgalaxy:
+229 built pages, 385 KB of markdown, 7.5k links, Chromium at 4x CPU throttle unless told otherwise.
 
-**Verdict: not now, and maybe never.** There is one strong argument, and it holds only if the HTML page
-is going to resolve links and render markdown itself. Otherwise the rewrite costs weeks and gives nothing
-that Python cannot give more cheaply.
+**Verdict: not now, maybe never.** The one strong argument holds only if the page is going to render markdown
+or resolve links itself, and that makes the page bigger over the network and slower to open.
+What is slow is the work the page does at load and an uncached build, neither is about the language.
 
 ## Measured
 
-- Code: 4.2k lines of Python in 17 modules, 1.4k lines of JS and 850 of CSS already running in the page,
-  a 1.6k-line end-to-end suite of 125 tests. The only dependency is `markdown-it-py`.
-- Pace: 131 commits, about 100 of them in the last 6 days.
-- 8bitgalaxy, 537 pages and 363k words, with uwiki 0.13.0: `build` 3.0s, `check` 1.2s, `stats` 0.6s,
-  startup 0.14s.
-- Profile of `build`: the biggest cost is link lookup, `vault.named` and `lookup` called 54k times,
-  building `Path` objects and sorting on each call, about 2.2s of 7.6s under the profiler.
-  It is CPython overhead that caching fixes, not a limit of the language.
+- Code: 4.2k lines of Python, 2.1k of JS and 1.3k of CSS in the page, one dependency `markdown-it-py`.
+- Build 3.3s: each page is converted about 5 times (1129 reads for 229 pages), link lookup is not cached
+  (56k calls, 2.5s of 8.2s under the profiler). Algorithmic, fixed by "Page parsed once" and a cache.
+- HTML 936 KB, 200 KB gzipped: text 324K, `href`s 145K, item anchors 93K, heading ids 62K, data JSON 84K
+  (backlinks 45K), JS 82K, CSS 33K. Size is not what makes it slow: parsing all of it takes 460 ms.
+- Load: 1.19s till the page is ready, 600 ms of it the page JS, with a saved `?q=` filter 2.4s laying out
+  every page, typing a filter 1.5s. Not drawing pages found, building aside tables on unfold and the search
+  index when idle made it 0.98s, 1.2s and 0.26s; parsing the HTML is about half of what is left.
+- Rendering in the page, precomputing on build: the numbers are computed already, what costs is building
+  elements and layout. A prebuilt search index is a second copy of all text, 300 KB, to save 70 ms once.
 
 ## Pros
 
-1. **One language for the CLI and the page.** The real argument. [Backlog](Backlog.md) makes the page
-   a reading IDE where everything runs in the page. Today Python works everything out ahead of time and packs it
-   into the JSON data of the page, so the page and the CLI hold two models of the same thing.
-   In JS the link resolver, front matter and renderer could run in the browser too: live re-rendering in `serve`,
-   hover previews that resolve links, later editing and comments.
-2. **`markdown-it` is the original, `markdown-it-py` its faithful port.** The plugin API is nearly the same
-   (`core.ruler.before`, tokens, `attrSet`), `render.py` ports almost line for line and renders the same output.
-3. **Speed.** V8 is likely 3–10x faster on this regex and string heavy work. A bonus, not a reason (see cons).
-4. **Distribution for 8bitgalaxy.** That vault is already a Vite and TS project with a `package.json`,
-   an npm package lets it pin its uwiki version as a devDependency instead of needing a released uwiki from mise.
-5. **Types and editor tooling.** TS or JSDoc checked by `tsc` helps the Page, Folder and Link model.
-   LSP positions are UTF-16 code units by default, as JS strings are.
+1. **One language for the CLI and the page**, the real argument: the page could resolve links and render
+   markdown for live editing, comments and `serve` without rebuilding, the CLI and the page would share one model.
+   Also server rendering what the page re-renders, as the sidebar: one function, not Python matching JS markup.
+2. **`markdown-it` is the original**, `render.py` ports almost line for line.
+3. **Speed**: V8 likely 3-10x on regex and string work, but the build is slow by algorithm, not language.
+4. **8bitgalaxy** is a Node project, could pin uwiki as a devDependency.
 
 ## Cons
 
-1. **Timing.** The next backlog item, "Page parsed once", restructures the core into a cached record per page
-   with one `resolve_link`. Porting first ports code about to be restructured, and features stop until it is done.
-2. **The standard library rule breaks.** Python's standard library gives `tomllib`, `argparse` with subcommand help,
-   `difflib` for `index --check`, `webbrowser` and `http.server`. Node has no TOML parser and no unified diff,
-   `util.parseArgs` has no subcommands or help. Either dependencies or hand-written code.
-   Bun has TOML built in and Deno has `@std/toml`, either ties uwiki to that runtime.
-3. **Regex traps that fail silently.** Python `\w`, `\b` and `\s` match Unicode by default,
-   JS `\w` and `\b` match only ASCII even with the `u` flag. About 28 uses across `convert`, `vault`, `stats`,
-   `wrap` and `mention`: `cebabize`, mentions and anchors would quietly break on Cyrillic page names,
-   and the suite has no non-ASCII text to catch it. Also `re.match` against `^` or the sticky flag,
-   named groups, and `len()` against `.length` in UTF-16, which changes `wrap -w` widths.
-4. **Tests.** The suite calls the CLI inside the Python process: port it or call the binary as a separate process.
-5. **Sharing code with a single-file page needs a build step.** The page is plain JS with no bundler,
-   sharing modules means inlining them into the HTML at build. TS makes it worse, browsers do not run `.ts`.
-6. **Install changes.** Users move from `mise pipx:hiqsol/uwiki` to an npm package, name `uwiki` not checked,
-   or per-platform binaries from `bun build --compile`, size not measured. The release workflow is rewritten.
-7. **Performance does not justify it.** Caching `named` and `lookup` by name and source folder likely brings
-   `build` near 1s in Python, not tried. The 0.14s startup does not matter for a CLI, nor at all for `lsp` and `serve`.
+1. **Shipping markdown and rendering it in the page is no gain.** Prepared markdown is 420K against 725K
+   of HTML, but gzipped 126K against 152K, and markdown-it alone adds 45K: bigger over the network,
+   about 20% smaller as a local file. Rendering takes 340 ms plus 100 ms inserting, nothing shows before it
+   is done, while HTML paints as it streams. Rendering pages lazily breaks Ctrl+F and deep links.
+2. **Two models again**: the page renderer needs anchors, item numbers and problem lines ported to JS.
+3. **The standard library rule breaks**: no TOML, unified diff or subcommand help in Node.
+4. **Regex traps**: JS `\w` and `\b` are ASCII only, about 28 uses would quietly break Cyrillic names.
+5. **No build step is not quite true**: the page is one file with inline script, ES modules need
+   joining with `import` and `export` stripped.
+6. **Tests, install and release** all rewritten.
 
 ## How to decide
 
-The question: will the page ever resolve links or render markdown itself, for live editing, comments
-or `serve` without rebuilding?
-
-- **No:** stay in Python, cache the lookup, add type hints checked by pyright for types.
-- **Yes:** a partial port is the worst option, resolving links both in Python and JS breaks the rule
-  that new features reuse the vault resolver, not a copy of it. Port everything:
-  1. Finish "Page parsed once" first, its page record is the model to share with the browser.
-  2. Write plain ES modules with JSDoc types and `// @ts-check`, checked by `tsc` in CI,
-     the same files run in Node 24 and the browser without a build step.
-  3. Use Node, which 8bitgalaxy already uses, with `smol-toml` as the one extra dependency.
-  4. Keep the Python suite as the reference: run it against the JS binary,
-     and diff the output of both on 8bitgalaxy until they match.
-  5. Add Cyrillic fixtures before porting anything.
+Will the page ever render markdown itself, for editing? Until then stay in Python: parse each page once,
+cache lookups, make the page do less at load. If yes, port everything, never half: finish "Page parsed once"
+first, write plain ES modules with JSDoc and `// @ts-check`, Node with `smol-toml`, add Cyrillic fixtures first,
+keep the Python suite as the reference and diff both outputs on 8bitgalaxy till they match.
