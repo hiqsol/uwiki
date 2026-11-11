@@ -268,13 +268,14 @@ a:hover {
     flex: 1;
     overflow-y: auto;
 }
-/* the fold triangle lines up with the toggles of the tree under it, the counts with its titles, wrapped ones too */
+/* the fold triangle stands out left of the toggles of the trees, parting facets from the contents,
+   the counts line up with the titles of the contents, wrapped ones too */
 #stats {
     position: sticky;
     top: 0;
     z-index: 1;
     padding: 2px 14px 4px 28px;
-    text-indent: -20px;
+    text-indent: -26px;
     background: var(--bg-alt);
     color: var(--fg-muted);
     font-size: 12px;
@@ -285,12 +286,13 @@ a:hover {
 }
 #fold {
     width: 20px;
+    margin-right: 6px;
     text-indent: 0;
     padding: 0;
     border: 0;
     background: none;
-    color: var(--fg-muted);
-    font-size: 10px;
+    color: var(--fg-nav);
+    font-size: 13px;
     line-height: inherit;
     cursor: pointer;
     transition: transform 0.15s;
