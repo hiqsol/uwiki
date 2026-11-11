@@ -1,7 +1,7 @@
 :root {
     --bg: #000000;
     --bg-alt: #0b0c10;
-    --bg-side: #16181e;  /* sidebar, brighter than its bands of --bg-alt */
+    --bg-side: #16181e;  /* sidebar, its bands of --bg as the content */
     --bg-code: #1e222b;
     --fg: #e3e5ea;
     --fg-muted: #8b919e;
@@ -275,7 +275,7 @@ a:hover {
 .band {
     padding: 3px 14px 3px 28px;
     text-indent: -26px;
-    background: var(--bg-alt);
+    background: var(--bg);
     color: var(--fg-muted);
     font-size: 12px;
 }
