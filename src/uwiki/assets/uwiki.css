@@ -268,23 +268,41 @@ a:hover {
     flex: 1;
     overflow-y: auto;
 }
-/* the fold triangle stands out left of the toggles of the trees, parting facets from the contents,
-   the counts line up with the titles of the contents, wrapped ones too */
+/* bands heading filters and contents across the sidebar: their fold triangles stand out left of the toggles
+   of the trees, their text lines up with the titles, wrapped lines too; the one of contents, stats, sticks */
+.band {
+    padding: 3px 14px 3px 28px;
+    text-indent: -26px;
+    border-block: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg-muted);
+    font-size: 12px;
+}
 #stats {
     position: sticky;
     top: 0;
     z-index: 1;
-    padding: 2px 14px 4px 28px;
-    text-indent: -26px;
-    background: var(--bg-alt);
-    color: var(--fg-muted);
-    font-size: 12px;
 }
 #stats:has(#fold[hidden]) {
     padding-left: 14px;
     text-indent: 0;
 }
-#fold {
+/* folds facets into the band, which then tells their terms */
+#_filters {
+    color: var(--fg-nav);
+    cursor: pointer;
+}
+#_filters .terms {
+    margin-left: 6px;
+    color: var(--accent);
+}
+#_filters:not(.folded) .terms, #facets.folded {
+    display: none;
+}
+#facets.folded + #stats {
+    border-top: 0;
+}
+.fold {
     width: 20px;
     margin-right: 6px;
     text-indent: 0;
@@ -297,10 +315,10 @@ a:hover {
     cursor: pointer;
     transition: transform 0.15s;
 }
-#fold.collapsed {
+.fold.collapsed {
     transform: rotate(-90deg);
 }
-#fold:hover {
+.fold:hover, #_filters:hover .fold {
     color: var(--accent);
 }
 #sidebar:has(#toc.filtering) #fold {

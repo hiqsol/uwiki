@@ -13,6 +13,7 @@
   var query = document.getElementById("query");
   var stats = document.getElementById("stats");
   var facets = document.getElementById("facets");
+  var filters = document.getElementById("_filters");
   var fold = document.getElementById("fold");
   var counts = document.getElementById("counts");
   var problems = document.getElementById("problems");
@@ -909,6 +910,7 @@
   // a folded key tells its terms
 
   var OPEN_KEY = "uwiki-open-facets";
+  var FOLDED_FILTERS_KEY = "uwiki-folded-filters";
   var facetEntries = [];  // {key, path: lowercase value or "" for the key, li, box, size, terms, parent}
 
   function buildFacets() {
@@ -947,7 +949,18 @@
     facets.querySelectorAll("li.collapsed").forEach(function (li) {
       if (open.indexOf(li.dataset.id) >= 0) li.classList.remove("collapsed");
     });
-    facets.hidden = !data.facets.length;
+    facets.hidden = filters.hidden = !data.facets.length;
+    var folded = false;
+    try {
+      folded = localStorage.getItem(FOLDED_FILTERS_KEY) === "1";
+    } catch (e) {}
+    foldFilters(folded);
+    filters.addEventListener("click", function () {
+      foldFilters(!facets.classList.contains("folded"));
+      try {
+        localStorage.setItem(FOLDED_FILTERS_KEY, facets.classList.contains("folded") ? "1" : "0");
+      } catch (e) {}
+    });
     facets.addEventListener("click", function (ev) {
       var e = facetOf(ev.target);
       if (!e || !e.box || !ev.target.closest(".check") && e.li.querySelector(":scope > ul")) return;
@@ -959,6 +972,16 @@
       ev.preventDefault();
       pick(e, true);
     });
+  }
+
+  // facets folded into their band or unfolded
+  function foldFilters(folded) {
+    var button = filters.querySelector(".fold");
+    facets.classList.toggle("folded", folded);
+    filters.classList.toggle("folded", folded);
+    button.classList.toggle("collapsed", folded);
+    button.title = folded ? "Unfold filters" : "Fold filters";
+    button.setAttribute("aria-label", button.title);
   }
 
   function facetOf(el) {
@@ -1026,7 +1049,7 @@
   }
 
   function showFacets(prep) {
-    var keys = new Map();
+    var keys = new Map(), told = [];
     facetEntries.forEach(function (e) {
       var k = keys.get(e.key);
       if (!k) {
@@ -1065,8 +1088,10 @@
         e.box.setAttribute("aria-label", e.key + ":" + e.path + " " + (sign === "+" ? "in" : sign === "-" ? "out" : "any"));
       } else {
         e.terms.textContent = Array.from(k.terms).map(function (t) { return (t[1] === "-" ? "−" : "+") + t[0]; }).join(" ");
+        if (e.terms.textContent) told.push(e.key + " " + e.terms.textContent);
       }
     });
+    filters.lastChild.textContent = told.join(" · ");
   }
 
   function termOf(key, value, neg) {
