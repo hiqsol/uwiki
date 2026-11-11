@@ -340,7 +340,7 @@ a:hover {
 #facets li:not(.collapsed) > .entry > .terms {
     display: none;
 }
-.box {
+.check {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -356,21 +356,21 @@ a:hover {
     font: 600 11px/1 ui-monospace, monospace;
     cursor: pointer;
 }
-.box:hover {
+.check:hover {
     border-color: var(--accent);
 }
-.box.on {
+.check.on {
     border-color: var(--accent);
     background: var(--accent-bg);
 }
-.box.out {
+.check.out {
     border-color: var(--problem);
     color: var(--problem);
 }
-.box.implied {
+.check.implied {
     opacity: 0.5;
 }
-.box.partial::after {
+.check.partial::after {
     content: "";
     width: 5px;
     height: 5px;

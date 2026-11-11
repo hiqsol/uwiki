@@ -265,7 +265,7 @@
     button.setAttribute("aria-label", "Toggle section");
     button.textContent = "▼";
     var flip = function (e) {
-      if (e.target.closest(".box")) return;
+      if (e.target.closest(".check")) return;
       li.classList.toggle("collapsed");
       delete li.dataset.auto;
       onFlip(li);
@@ -930,7 +930,7 @@
       if (item.path) {
         e.box = document.createElement("button");
         e.box.type = "button";
-        e.box.className = "box";
+        e.box.className = "check";
         div.appendChild(e.box);
       }
       div.appendChild(document.createTextNode(item.name));
@@ -950,7 +950,7 @@
     facets.hidden = !data.facets.length;
     facets.addEventListener("click", function (ev) {
       var e = facetOf(ev.target);
-      if (!e || !e.box || !ev.target.closest(".box") && e.li.querySelector(":scope > ul")) return;
+      if (!e || !e.box || !ev.target.closest(".check") && e.li.querySelector(":scope > ul")) return;
       pick(e, ev.shiftKey);
     });
     facets.addEventListener("contextmenu", function (ev) {
@@ -1057,7 +1057,7 @@
         var state = stateOf(e, k.terms), sign = state.sign;
         var partial = !sign && Array.from(k.terms.keys()).some(function (v) { return v.startsWith(e.path + "/"); });
         e.box.textContent = sign === "+" ? "+" : sign === "-" ? "−" : "";
-        e.box.className = "box" + (sign === "+" ? " on" : sign === "-" ? " out" : partial ? " partial" : "")
+        e.box.className = "check" + (sign === "+" ? " on" : sign === "-" ? " out" : partial ? " partial" : "")
           + (state.implied ? " implied" : "");
         e.box.title = state.implied ? (sign === "+" ? "In with its group, click to take it out" : "Out with its group")
           : sign === "+" ? "Drop it, Shift click to take it out" : sign === "-" ? "Drop it, click to add it"
