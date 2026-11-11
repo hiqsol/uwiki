@@ -435,6 +435,7 @@ class Scanner:
         self.symlinks = []
         self.warnings = []
         self._aliases = None
+        self._lookups = {}  # (name, source): lookup result, a build looks the same links up 50k times
 
     def scan(self, links=True):
         """Finds pages and attachments, then link targets and anchors unless only files are wanted."""
@@ -643,6 +644,13 @@ class Scanner:
         Prefers pages to aliases of pages, then to folders without folder page, as Obsidian links no folders,
         then targets near the source page, then shortest path.
         """
+        key = (name, source)
+        found = self._lookups.get(key)
+        if found is None:
+            found = self._lookups[key] = self._lookup(name, source)
+        return found
+
+    def _lookup(self, name, source):
         named = self.named(name, source)
         if not named or named[0][0]:
             aliased = self.alias(name, source)
