@@ -62,6 +62,7 @@ class Refs:
         self.definition = re.compile(f'{self.DEFINITION}({alternatives})({self.ID}){self.POINT}(?![\\w:-])') \
             if self.urls else None
         self.full = re.compile(f'({alternatives})({self.ID})(?: ([a-z]))?') if self.urls else None
+        self.quick = re.compile(alternatives) if self.urls else None  # most lines have no prefix at all
         self._definitions = None
         self._points = {}  # ref: its first point's definition
         self.scanner = None
@@ -87,7 +88,7 @@ class Refs:
     def finditer(self, text):
         """Refs in text outside code, links, tags and URLs, as matches: [1] prefix, [2] id, [3] point or None,
         [0] the ref."""
-        if self.pattern is None:
+        if self.pattern is None or not self.quick.search(text):
             return
         pos = 0
         for m in self.SKIP.finditer(text):
@@ -181,7 +182,7 @@ class Refs:
 
     def front_refs(self, front):
         """(top level key, ref) for refs in front matter text values, nested ones too, `id` ones define."""
-        if not self or not front:
+        if not self or not front or not self.quick.search(front):
             return []
         res = []
         def walk(key, value):
