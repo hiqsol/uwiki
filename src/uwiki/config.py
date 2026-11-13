@@ -11,7 +11,7 @@ import os
 import re
 import tomllib
 
-from .vault import Filter
+from .vault import Filter, Glob
 
 class ConfigError(ValueError):
     """Config that cannot be read or does not fit the commands."""
@@ -72,6 +72,10 @@ class Config:
                 return tomllib.load(f)
         except (OSError, tomllib.TOMLDecodeError) as e:
             raise ConfigError(f'{file}: {e}') from e
+
+    def globs(self, value):
+        """Globs of an exclude or include value, one or a list, matching from the config folder."""
+        return [Glob(glob, self.prefix) for glob in ([value] if isinstance(value, str) else value)]
 
     def matches(self, path, globs):
         """Whether a glob from the config folder matches path, relative to the vault root."""

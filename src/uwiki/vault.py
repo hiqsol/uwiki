@@ -352,22 +352,45 @@ class Folder(Page):
             return name[:-1]
         return name
 
+class Glob(str):
+    """Glob matching from a folder above the vault root, as config ones do from the config folder:
+    prefix is the vault root relative to that folder."""
+
+    def __new__(cls, glob, prefix=''):
+        res = super().__new__(cls, glob)
+        res.prefix = prefix
+        return res
+
+class Prefixed:
+    """Compiled glob matching vault paths as prefix/path."""
+
+    def __init__(self, regex, prefix):
+        self.regex = regex
+        self.prefix = prefix
+
+    def fullmatch(self, path):
+        return self.regex.fullmatch(f'{self.prefix}/{path}' if path else self.prefix)
+
 class Filter:
     """Takes vault paths: skip list and excludes drop them, includes take them back.
 
     Glob with `/` matches path from vault root, without it any path segment, like gitignore;
     matching folder matches everything in it. `{a,b}` matches either, as in shells and editorconfig.
+    A Glob matches from its folder: config `exclude = ["data"]` drops all of a vault rooted at data/.
     """
     SKIP = ('.*', 'node_modules', 'vendor')
 
     def __init__(self, include=(), exclude=()):
         self.include = [self.compile(p) for p in include]
-        self.include_prefixes = [self.prefix(p) for p in include]
-        self.drop = [self.compile(p) for p in (*self.SKIP, *exclude)]
+        self.include_prefixes = [p for p in map(self.prefix, include) if p is not None]
+        self.exclude = [self.compile(p) for p in exclude]
+        self.drop = [self.compile(p) for p in self.SKIP] + self.exclude
 
     @classmethod
     def compile(cls, glob):
-        return re.compile('|'.join(f'(?:{cls.pattern(one)})' for one in cls.expand(glob)))
+        regex = re.compile('|'.join(f'(?:{cls.pattern(one)})' for one in cls.expand(glob)))
+        prefix = getattr(glob, 'prefix', '')
+        return Prefixed(regex, prefix) if prefix else regex
 
     @classmethod
     def expand(cls, glob):
@@ -409,14 +432,25 @@ class Filter:
 
     @staticmethod
     def prefix(glob):
-        """Literal start of anchored glob, empty for one matching anywhere."""
-        glob = glob.strip('/')
-        return re.split(r'[*?{]', glob)[0] if '/' in glob else ''
+        """Literal start of anchored glob from the vault root, empty for one matching anywhere,
+        None for a Glob from a folder above it matching nothing in the vault."""
+        start = re.split(r'[*?{]', glob.strip('/'))[0] if '/' in glob.strip('/') else ''
+        folder = getattr(glob, 'prefix', '') + '/'
+        if folder == '/' or not start:
+            return start
+        if start.startswith(folder):
+            return start[len(folder):]
+        return '' if folder.startswith(start) else None
 
     def takes(self, path):
         if any(p.fullmatch(path) for p in self.include):
             return True
         return not any(p.fullmatch(path) for p in self.drop)
+
+    def excludes(self, path):
+        """Whether an exclude drops path and no include takes it back: a file named outright is skipped then,
+        a hidden one is taken."""
+        return any(p.fullmatch(path) for p in self.exclude) and not any(p.fullmatch(path) for p in self.include)
 
     def enters(self, path):
         """Folder is scanned when taken or an include can take something in it."""
@@ -701,6 +735,8 @@ class Vaults:
             scanner, pages = self.vault(self.vault_root(path, common))
             if os.path.isdir(path):
                 files = sorted((p for p in pages if p.startswith(os.path.join(path, ''))), key=Path)
+            elif self.filter and self.filter.excludes(os.path.relpath(path, scanner.path).replace(os.sep, '/')):
+                files = []
             else:
                 files = [path]
             for file in files:
@@ -711,11 +747,14 @@ class Vaults:
 
     @staticmethod
     def vault_root(path, common):
-        """Nearest folder with `.obsidian`, else common folder of all given paths."""
+        """Nearest folder with `.obsidian`, or with `uwiki.toml` up to the git work tree root,
+        else common folder of all given paths."""
         start = Path(path if os.path.isdir(path) else os.path.dirname(path))
+        config = True
         for folder in [start, *start.parents]:
-            if (folder / '.obsidian').is_dir():
+            if (folder / '.obsidian').is_dir() or config and (folder / 'uwiki.toml').is_file():
                 return str(folder)
+            config = config and not (folder / '.git').exists()
         return common
 
     def vault(self, root):

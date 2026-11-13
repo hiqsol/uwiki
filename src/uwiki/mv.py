@@ -41,8 +41,9 @@ class Move:
         self.src = self.rel(source)
         self.dst = self.rel(target)
         # files the config of the vault or the options leave out keep their text, e.g. a built wiki
-        options = Config.load(self.root).options('mv', ())
-        listed = lambda key: [options[key]] if isinstance(options.get(key), str) else list(options.get(key, []))
+        config = Config.load(self.root)
+        options = config.options('mv', ())
+        listed = lambda key: config.globs(options.get(key, []))
         self.old = Scanner(self.root, Filter([*listed('include'), *include], [*listed('exclude'), *exclude]))
         self.old.scan()
         files = self.old.files()

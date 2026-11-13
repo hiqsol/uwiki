@@ -180,6 +180,11 @@ def wrap(args):
 
 def add_paths(p, help):
     p.add_argument('paths', nargs='+', metavar='path', help=help)
+    add_require_config(p)
+
+def add_require_config(p):
+    p.add_argument('--require-config', action='store_true',
+                   help=f'refuse to run without a config for the vault, as {REQUIRE_CONFIG}=1 does')
 
 def add_filter(p):
     p.add_argument('--exclude', action='append', default=[], metavar='GLOB',
@@ -355,19 +360,42 @@ def parser():
     p.add_argument('target', metavar='to', help='new path, or existing folder to move into')
     p.add_argument('--dry-run', action='store_true', help='print the move and every changed line instead')
     add_filter(p)
+    add_require_config(p)
     p.set_defaults(func=mv)
     parser.commands = commands.choices
     return parser
 
 TAKES = {'watch': ('build',), 'serve': ('build',), 'link': ('check', 'wrap')}
-NOT_OPTIONS = {'paths', 'func', 'command', 'help', 'version'}
+NOT_OPTIONS = {'paths', 'func', 'command', 'help', 'version', 'require_config'}
+REQUIRE_CONFIG = 'UWIKI_REQUIRE_CONFIG'  # set to anything but 0 refuses to run without a config
 CONFIG_ONLY = {'layers', 'code-paths', 'inverse'}  # config keys no command line option takes
 
+def vault_config(args):
+    """Config of the vault the command works in, None for a command working in none."""
+    if getattr(args, 'paths', None):
+        return Config.load(Vaults.vault_root(os.path.abspath(args.paths[0]), Vaults.common(args.paths)))
+    if getattr(args, 'source', None):
+        return Config.load(Move.vault_root(os.path.abspath(args.source), os.path.abspath(args.target)))
+    return None
+
+def require_config(args):
+    """ConfigError when a config is required and the vault has none: run from a wrong folder, link and wrap would
+    rewrite every page below it with no excludes."""
+    if not (getattr(args, 'require_config', False) or os.environ.get(REQUIRE_CONFIG, '0') not in ('', '0')):
+        return
+    config = vault_config(args)
+    if config is not None and not config.path:
+        root = Vaults.vault_root(os.path.abspath(args.paths[0]), Vaults.common(args.paths)) \
+            if getattr(args, 'paths', None) else os.path.dirname(os.path.abspath(args.source))
+        raise ConfigError(f'config required, none for the vault {os.path.relpath(root)}: no uwiki.toml or '
+                          '[tool.uwiki] in pyproject.toml there or above it up to the git work tree root')
+
 def config_defaults(top, args):
-    """Defaults of command options from the config of the vault given paths are in."""
+    """Defaults of command options from the config of the vault given paths are in,
+    exclude and include globs matching from the config folder."""
     if not getattr(args, 'paths', None):
         return {}
-    config = Config.load(Vaults.vault_root(os.path.abspath(args.paths[0]), Vaults.common(args.paths)))
+    config = vault_config(args)
     p = top.commands[args.command]
     dests = {a.dest: a for a in p._actions if a.dest not in NOT_OPTIONS}
     known = {a.dest for sub in top.commands.values() for a in sub._actions}
@@ -380,6 +408,8 @@ def config_defaults(top, args):
             action = dests[name]
             if isinstance(action, argparse._AppendAction):
                 value = list(value) if isinstance(value, list) else [value]
+            if name in ('exclude', 'include'):
+                value = config.globs(value)
             res[name] = value
         elif f'no_{name}' in dests and isinstance(value, bool):
             res[f'no_{name}'] = not value
@@ -396,6 +426,7 @@ def main():
         if not os.path.exists(path):
             p.error(f'no such file or folder: {path}')
     try:
+        require_config(args)
         defaults = config_defaults(top, args)
         if defaults:
             p.set_defaults(**defaults)

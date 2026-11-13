@@ -660,6 +660,65 @@ class CheckTest(unittest.TestCase):
 
 
 class ConfigTest(unittest.TestCase):
+    def test_uwiki_toml_marks_vault_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '')
+            write(os.path.join(tmp, 'Labs.md'), 'Labs.\n')
+            write(os.path.join(tmp, 'wiki', 'guide.md'), 'Read the Labs page.\n')
+            run('link', 'wiki/guide.md', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'wiki', 'guide.md')), 'Read the [[Labs]] page.\n')
+            os.makedirs(os.path.join(tmp, 'sub', '.git'))  # a work tree of its own takes no config above it
+            write(os.path.join(tmp, 'sub', 'guide.md'), 'Read the Labs page.\n')
+            run('link', 'sub/guide.md', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'sub', 'guide.md')), 'Read the Labs page.\n')
+
+    def test_excludes_match_from_config_folder_and_drop_files_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), 'exclude = ["data"]\n')
+            write(os.path.join(tmp, 'Labs.md'), 'Labs.\n')
+            raw = 'Labs raw, a long line of words to rewrap at forty columns.\n'
+            write(os.path.join(tmp, 'data', 'raw.md'), raw)
+            write(os.path.join(tmp, 'data', 'inbox', 'new.md'), raw)
+            for cwd, args in [(tmp, ['data']), (tmp, ['data/raw.md']), (os.path.join(tmp, 'data'), ['.']),
+                              (os.path.join(tmp, 'data', 'inbox'), ['new.md'])]:
+                res = run('link', *args, cwd=cwd)
+                self.assertEqual((res.returncode, res.stdout), (0, ''), (cwd, args, res.stderr))
+                run('wrap', '-w', '40', *args, cwd=cwd)
+                self.assertEqual(run('ls', *args, cwd=cwd).stdout, '', (cwd, args))
+            self.assertEqual(read(os.path.join(tmp, 'data', 'raw.md')), raw)
+            self.assertEqual(read(os.path.join(tmp, 'data', 'inbox', 'new.md')), raw)
+            self.assertEqual(run('ls', 'data/raw.md', '--include', 'data/raw.md', cwd=tmp).stdout, 'data/raw.md\n')
+        with tempfile.TemporaryDirectory() as tmp:  # vault in a project: globs from the project folder
+            write(os.path.join(tmp, 'pyproject.toml'), '[tool.uwiki]\nexclude = ["docs/drafts"]\ninclude = ["docs/drafts/keep.md"]\n')
+            for name in ('index.md', 'drafts/wip.md', 'drafts/keep.md'):
+                write(os.path.join(tmp, 'docs', name), 'Page.\n')
+            res = run('ls', 'docs', cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), ['docs/drafts/keep.md', 'docs/index.md'], res.stderr)
+            res = run('ls', '.', '--exclude', 'index.md', cwd=os.path.join(tmp, 'docs'))
+            self.assertEqual(res.stdout.splitlines(), ['./drafts/keep.md'], res.stderr)
+
+    def test_config_required(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, '.git'))
+            write(os.path.join(tmp, 'a.md'), 'A.\n')
+            res = run('link', '.', '--require-config', cwd=tmp)
+            self.assertEqual(res.returncode, 2)
+            self.assertIn('config required, none for the vault .', res.stderr)
+            old = os.environ.get('UWIKI_REQUIRE_CONFIG')
+            os.environ['UWIKI_REQUIRE_CONFIG'] = '1'
+            try:
+                self.assertEqual(run('wrap', 'a.md', cwd=tmp).returncode, 2)
+                res = run('mv', 'a.md', 'b.md', cwd=tmp)
+                self.assertEqual(res.returncode, 2)
+                self.assertIn('config required', res.stderr)
+                write(os.path.join(tmp, 'uwiki.toml'), '')
+                self.assertEqual(run('wrap', 'a.md', cwd=tmp).returncode, 0)
+            finally:
+                if old is None:
+                    del os.environ['UWIKI_REQUIRE_CONFIG']
+                else:
+                    os.environ['UWIKI_REQUIRE_CONFIG'] = old
+
     def check(self, *args, cwd=FIXTURES):
         res = run('check', *args, cwd=cwd)
         return res.returncode, res.stdout.splitlines(), res.stderr

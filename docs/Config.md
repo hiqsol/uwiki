@@ -3,6 +3,10 @@
 `uwiki.toml`, or `[tool.uwiki]` in `pyproject.toml`, in the vault root or the nearest folder above it
 up to the git work tree root, holds option defaults:
 top level ones for every command, a table for a command, `[build]` also for `watch` and `serve`.
+Its globs match from its folder: `exclude = ["data"]` leaves out all of `data/`, run on it or below too.
+
+`--require-config`, or `UWIKI_REQUIRE_CONFIG=1` in the environment, makes a command refuse to run without a config:
+run from a wrong folder, `link` and `wrap` would rewrite every page below it with no excludes.
 
 ## Schema
 
@@ -57,4 +61,5 @@ owner = "string"
 _inherit = false                          # folder pages: no keys required, none allowed
 ```
 
-This repo itself has `[tool.uwiki]` in its `pyproject.toml`, leaving the test fixtures out of its build.
+This repo itself has `[tool.uwiki]` in its `pyproject.toml`, leaving the test fixtures out of its build,
+and `tests/fixtures/pyproject.toml` an empty one, so each fixture vault is a vault of its own.

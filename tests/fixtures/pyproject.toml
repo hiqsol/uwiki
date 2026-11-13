@@ -1,0 +1,2 @@
+# Fixture vaults are vaults of their own: this config keeps the exclude of tests in the repo config off them
+[tool.uwiki]

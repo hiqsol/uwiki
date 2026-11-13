@@ -2,10 +2,12 @@
 
 ## Vault
 
-Folder of markdown pages, rooted at the nearest folder with `.obsidian`, else the one given paths share.
+Folder of markdown pages, rooted at the nearest folder with `.obsidian` or `uwiki.toml`,
+else the one given paths share, so a file given alone links in the whole vault.
 Commands take its folders and files, skipping hidden ones, `node_modules` and `vendor`,
 `--exclude GLOB` skips more, `--include GLOB` takes back, globs as in `.gitignore`,
-`{a,b}` matching either. `uwiki ls` lists the files commands take.
+`{a,b}` matching either, from the vault root, ones of the [config](Config.md) from its folder.
+A file named outright is taken even if hidden, not if excluded. `uwiki ls` lists the files commands take.
 
 ## Folder page
 

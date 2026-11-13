@@ -45,11 +45,6 @@ def section_key(heading):
     """Key of a section items are in, '' for the first list of the page."""
     return cebabize(heading) if heading else ''
 
-def listed(options, key):
-    """Option value as a list, config may give one glob as a string."""
-    value = options.get(key, [])
-    return [value] if isinstance(value, str) else list(value)
-
 class Server:
     """Answers one client: requests in order, the vault scanned again on save."""
 
@@ -173,8 +168,10 @@ class Server:
         return Config.load(self.root).options('check', ())
 
     def scan(self):
-        options = self.options()
-        self.scanner = Scanner(self.root, Filter(listed(options, 'include'), listed(options, 'exclude')))
+        config = Config.load(self.root)
+        options = config.options('check', ())
+        self.scanner = Scanner(self.root, Filter(config.globs(options.get('include', [])),
+                                                 config.globs(options.get('exclude', []))))
         self.scanner.scan()
         self.pages = self.scanner.pages()
         self.links = Links(self.scanner)
@@ -508,8 +505,10 @@ class Server:
 
     def diagnose(self):
         """Publishes check problems of every page, clears them where none are left."""
-        options = self.options()
-        checker = Checker([self.root], listed(options, 'include'), listed(options, 'exclude'), self.check_options())
+        config = Config.load(self.root)
+        options = config.options('check', ())
+        checker = Checker([self.root], config.globs(options.get('include', [])),
+                          config.globs(options.get('exclude', [])), CheckOptions.from_values(options))
         found = {}
         for problem in checker.check() + checker.warnings:
             m = PROBLEM.fullmatch(problem)
