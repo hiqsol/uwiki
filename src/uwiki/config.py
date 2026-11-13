@@ -175,6 +175,7 @@ class Schema:
     aliases = "list"
     description = "string(250)"                # at most 250 characters
     supersedes = "page"                      # page name, `[[Page]]` or relative path, one or a list
+    sources = "ref"                          # refs the vault defines or has a url for, one or a list
     generated.at = "datetime"                # nested key, of a map or of every map of a list
     [schema."docs/**"]
     _required = ["owner"]
@@ -186,7 +187,7 @@ class Schema:
     later ones win. Keys go in schema order, build shows front matter so.
     """
 
-    TYPES = ('string', 'number', 'bool', 'date', 'datetime', 'page', 'list', 'any')
+    TYPES = ('string', 'number', 'bool', 'date', 'datetime', 'page', 'ref', 'list', 'any')
     LENGTH = re.compile(r'string\((\d+)\)')  # string of at most N characters
     NUMBER = re.compile(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?')
     DATE = re.compile(r'\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)?)?')
@@ -276,14 +277,16 @@ class Schema:
         order = {key: n for n, key in enumerate(self.keys(path))}
         return sorted(items, key=lambda item: order.get(item[0], len(order)))
 
-    def problems(self, tree, path, resolve=None):
+    def problems(self, tree, path, resolve=None, ref=None):
         """(key, message) for front matter of page at path, as front_matter_tree gives it,
         key is the top level key the problem is at, None for missing ones;
-        resolve tells whether a value names a page, without it any value does."""
+        resolve tells whether a value names a page, ref whether it is a ref leading somewhere,
+        without them any value does."""
         if self.empty:
             return []
         res = []
-        self.check_map(tree, '', self.keys(path), res, None, resolve or (lambda value: True))
+        resolve = {'page': resolve or (lambda value: True), 'ref': ref or (lambda value: True)}
+        self.check_map(tree, '', self.keys(path), res, None, resolve)
         return res
 
     def check_map(self, values, prefix, rules, res, at, resolve):
@@ -315,8 +318,9 @@ class Schema:
                 res.append((at, f'missing front matter key: {key}'))
 
     @classmethod
-    def mismatch(cls, spec, value, resolve=lambda value: True):
-        """What is wrong with the value, None if it fits."""
+    def mismatch(cls, spec, value, resolve=None):
+        """What is wrong with the value, None if it fits; resolve by type tells page and ref values that lead
+        somewhere."""
         if isinstance(value, dict):
             return None if spec == 'any' else f'map, expected {spec if isinstance(spec, str) else "one of values"}'
         if isinstance(spec, list):
@@ -327,9 +331,10 @@ class Schema:
             return None
         if spec == 'list':
             return None if isinstance(value, list) else f'{value}, expected list'
-        if spec == 'page':
-            bad = [v for v in (value if isinstance(value, list) else [value]) if not resolve(v)]
-            return f'{", ".join(bad)}, expected page' if bad else None
+        if spec in ('page', 'ref'):
+            fits = (resolve or {}).get(spec, lambda value: True)
+            bad = [v for v in (value if isinstance(value, list) else [value]) if not fits(v)]
+            return f'{", ".join(bad)}, expected {spec}' if bad else None
         if isinstance(value, list):
             return f'list, expected {spec}'
         length = cls.LENGTH.fullmatch(spec)

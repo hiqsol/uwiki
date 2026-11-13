@@ -8,6 +8,7 @@ from .config import Config
 from .convert import Converter
 from .index import Index
 from .order import Links
+from .refs import Refs
 from .vault import read_aliases
 from .wrap import WIDTH, rewrap
 
@@ -34,6 +35,7 @@ class Mentions:
 
     def __init__(self, scanner, ignore=(), min_length=3, ignore_case=False):
         self.scanner = scanner
+        self.refs = Refs.of(scanner)
         self.ignore_case = ignore_case
         ignored = {term.lower() for term in ignore}  # in any case, as terms match: CLAUDE.md is no Claude
         exact, plural = {}, {}  # term in lower case: (node, term as written, name a link takes)
@@ -140,6 +142,7 @@ class Mentions:
                     continue
                 line, bold = ' ' * (end + 2) + line[end + 2:], False
             line = self.SKIP.sub(lambda m: ' ' * len(m[0]), line)
+            line = self.refs.sub(lambda m: ' ' * len(m[0]), line)  # a page aliased `doc` gets no link from doc:245
             if '**' in line:
                 line, bold = line[:line.index('**')], True
             res.append((n, line))

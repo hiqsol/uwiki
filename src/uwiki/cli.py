@@ -167,7 +167,7 @@ def index(args):
 
 def ls(args):
     listing = Listing(args.paths, args.include, args.exclude)
-    for line in listing.urls() if args.external else listing.files():
+    for line in listing.urls() if args.external else listing.refs() if args.refs else listing.files():
         print(line, end='\0' if args.null else '\n')
 
 def stats(args):
@@ -326,11 +326,13 @@ def parser():
     add_filter(p)
     p.set_defaults(func=index)
 
-    p = command(commands, 'ls', 'list markdown files, or external links in them, one per line',
-                f'[--external] [-z] {FILTER_USAGE}')
+    p = command(commands, 'ls', 'list markdown files, external links or refs defined in them, one per line',
+                f'[--external | --refs] [-z] {FILTER_USAGE}')
     add_paths(p, 'folders or files to list')
     p.add_argument('--external', action='store_true',
                    help='list unique http and https links outside front matter and code instead')
+    p.add_argument('--refs', action='store_true',
+                   help='list refs defined in them instead: ref, path:line and what it defines, tab separated')
     p.add_argument('-z', '--null', action='store_true', help='end lines with NUL, for xargs -0')
     add_filter(p)
     p.set_defaults(func=ls)

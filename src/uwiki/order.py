@@ -1,6 +1,7 @@
 """Links between pages and reading order of pages in a folder, one for build, llms and the sidebar."""
 
 from .convert import Converter
+from .vault import read_front
 
 class LinkCollector(Converter):
     """Reads page like renderer does, notes its links and embeds in order: target and heading."""
@@ -30,6 +31,25 @@ class LinkCollector(Converter):
         self.link(text)
         return ''
 
+    def front_refs(self):
+        """Refs in front matter values link the pages defining them, at the key's line."""
+        node = self.page.source
+        if node is None or not self.refs:
+            return
+        front = read_front(node.fullpath)
+        for key, ref in self.refs.front_refs(front):
+            found = self.refs.resolve(ref)
+            if found is not None:
+                line = next((n for n, text in enumerate(front.splitlines(), 1) if text.startswith(key + ':')), 1)
+                self.note(found.node, '' if found.anchor == found.node.anchor else ref, line)
+
+    def ref(self, ref, line):
+        """A ref links the page defining it, at the ref, unless it is that definition."""
+        found = self.refs.resolve(ref)
+        if found is not None and not self.defines(found, line):
+            self.note(found.node, '' if found.anchor == found.node.anchor else ref, line)
+        return super().ref(ref, line)
+
     def note(self, target, heading='', line=None):
         if target is not None:
             self.found.append((target, heading, self.line if line is None else line))
@@ -48,6 +68,7 @@ class Links:
             collector = LinkCollector(node, self.scanner)
             try:
                 collector.read()
+                collector.front_refs()  # after the text's links: reading order follows the text
             except ValueError:
                 pass
             self.cache[node] = collector.found

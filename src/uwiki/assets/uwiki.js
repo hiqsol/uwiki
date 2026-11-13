@@ -188,6 +188,31 @@
     return value === null || value === undefined ? "" : String(value);
   }
 
+  // text into el with the refs the build resolved linked, as refs in the text are
+  var refPattern;
+  function refText(el, text) {
+    var refs = data.refs || {};
+    if (refPattern === undefined) {
+      var keys = Object.keys(refs).sort(function (a, b) { return b.length - a.length; });
+      refPattern = keys.length ? new RegExp("(?<![\\w.:/-])(" + keys.map(function (k) {
+        return k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }).join("|") + ")(?![\\w:-]*\\w)", "g") : null;
+    }
+    if (!refPattern || !text) { el.textContent = text; return; }
+    var pos = 0;
+    text.replace(refPattern, function (ref, _, at) {
+      el.appendChild(document.createTextNode(text.slice(pos, at)));
+      var a = document.createElement("a"), to = refs[ref];
+      a.href = to[0];
+      a.className = to[2] ? "ref done" : "ref";
+      if (to[1]) a.title = to[1];
+      a.textContent = ref;
+      el.appendChild(a);
+      pos = at + ref.length;
+    });
+    el.appendChild(document.createTextNode(text.slice(pos)));
+  }
+
   function frontTable(items) {
     var rows = frontRows(items, []);
     var depth = Math.max.apply(null, rows.map(function (row) { return row.keys.length; }));
@@ -209,7 +234,7 @@
         tr.appendChild(th);
       });
       var td = document.createElement("td");
-      td.textContent = row.text;
+      refText(td, row.text);
       tr.appendChild(td);
     });
     return table;
@@ -1372,8 +1397,9 @@
     var a = el.closest && el.closest("a[href^='#']");
     if (!a || !a.closest("main.content, .preview, #sidebar") || a.closest(".preview-title")) return null;
     var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
-    if (target && !/^H[1-6]$/.test(target.tagName)) target = target.closest("li");
-    return target && content.contains(target) && !a.classList.contains("item-anchor") ? a : null;
+    if (target && !/^H[1-6]$/.test(target.tagName)) target = target.closest("h1, h2, h3, h4, h5, h6, li, tr");
+    return target && content.contains(target) && !a.classList.contains("item-anchor")
+      && !a.classList.contains("ref-def") ? a : null;
   }
 
   // popover the link is in, 0 for links in the page
@@ -1388,6 +1414,8 @@
   function openPreview(a, level) {
     closePreviews(level);
     var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
+    // a ref defined by a heading previews its section
+    if (target.classList.contains("ref-def")) target = target.closest("h1, h2, h3, h4, h5, h6") || target;
     var el = document.createElement("div");
     el.className = "preview";
     var title = document.createElement("a");
@@ -1446,7 +1474,15 @@
 
   // page: its text till next page; section: till next heading of same or higher level
   function sectionOf(target) {
-    if (target.tagName === "A") return [target.closest("li")];
+    if (target.tagName === "A") {
+      var row = target.closest("li, tr");
+      if (row.tagName === "LI") return [row];
+      // a table row under its table's head
+      var table = row.closest("table").cloneNode(false), head = row.closest("table").tHead;
+      if (head) table.appendChild(head.cloneNode(true));
+      table.appendChild(document.createElement("tbody")).appendChild(row.cloneNode(true));
+      return [table];
+    }
     var nodes = [];
     var page = target.classList.contains("page");
     var level = +target.tagName[1];
@@ -1460,6 +1496,10 @@
 
   function previewTitle(target) {
     if (target.classList.contains("page")) return titleOf(target);
+    if (target.classList.contains("ref-def")) {
+      var at = pageOf(target);
+      return (at ? titleOf(at) + " › " : "") + target.textContent;
+    }
     if (target.tagName === "A") {
       var li = target.closest("li"), item = li.querySelector(".item-anchor"), page = pageOf(li);
       return (page ? titleOf(page) + " › " : "") + (item ? item.dataset.item : "");
@@ -1633,7 +1673,7 @@
       if (m) a.dataset.item = m[1];
     });
     content.addEventListener("click", function (e) {
-      var a = e.target.closest(".item-anchor");
+      var a = e.target.closest(".item-anchor, .ref-def");
       if (!a) return;
       e.preventDefault();
       history.replaceState(null, "", a.getAttribute("href"));

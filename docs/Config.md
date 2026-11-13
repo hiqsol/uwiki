@@ -15,6 +15,19 @@ run from a wrong folder, `link` and `wrap` would rewrite every page below it wit
 `[schema."glob"]` adds rules for pages the glob matches from the config folder, `_inherit = false` drops the ones before.
 The HTML page shows keys in schema order as a tree of their values, values nested with slashes under their group.
 
+## Refs
+
+`[refs."P:"]` makes `P:24` a [ref](Concepts.md#refs), linking where the vault defines it,
+`url` with `{id}` where it leads when the vault does not; a prefix ends in its separator, `:` or `-`:
+
+```toml
+[refs."P:"]                               # P:24 links to **P:24.** starting an item
+[refs."HQD-"]
+url = "https://jira.example.com/browse/HQD-{id}"
+```
+
+Schema type `ref` takes refs that lead somewhere: `sources = "ref"`.
+
 ## Layers
 
 `[check] layers` makes values of a key layers:
@@ -40,6 +53,10 @@ stale-until = "stale_after"               # warn once this date has come
 code-paths."skills/**/map.md" = "docs"    # `a/b.md` in such pages names docs/a/b.md
 layers.scope = ["core", "duel", "advanced"]
 
+[refs."adr:"]                             # adr:12 links to the page with front matter id: adr:12
+[refs."SD-"]
+url = "https://jira.example.com/browse/SD-{id}"
+
 [index.adrs]                              # <!-- generated: adrs --> blocks
 line = "* [{title}]({path}), {date}: {description}"   # {front matter key}, {title}, {stem}, {path}
 sort = "-date"                            # by key, descending; else lines keep their order
@@ -49,7 +66,7 @@ exclude = ["log.md"]
 [schema]                                  # keys in the order HTML shows them
 _required = ["status"]
 status = ["stub", "draft", "stable"]      # allowed values
-date = "date"                             # or a type: string, number, bool, date, datetime, page, list, any
+date = "date"                             # or a type: string, number, bool, date, datetime, page, ref, list, any
 description = "string(250)"               # string of at most 250 characters
 supersedes = "page"                       # names a page as links do: Page, [[Page]], ../Page.md
 generated.at = "datetime"                 # generated: { by: me, at: 2026-01-02T03:04:05Z }

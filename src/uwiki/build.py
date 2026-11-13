@@ -15,6 +15,7 @@ from .check import Checker, CheckOptions
 from .config import Config, dumps
 from .convert import Converter
 from .order import Links, Order
+from .refs import Refs
 from .source import Source
 from .stats import Stats
 from .vault import Filter, Selection, cebabize, front_matter_items, front_matter_tree, read_parts, titleize
@@ -190,7 +191,7 @@ class Builder:
         nested maps and lists of maps as such, words as stats counts them, tokens and what check reports,
         file name and folder path where its title and folders don't tell them, backlinks by anchor as anchors
         of linking pages, with headings links lead to."""
-        pages, backlinks = {}, {}
+        pages, backlinks, refs = {}, {}, {}
         for node, body in nodes:
             links = [[source.anchor, heading] if heading else source.anchor for source, heading in self.backlinks(node)]
             if links:
@@ -214,10 +215,24 @@ class Builder:
             })
             page.update(self.named(node, path))
             pages[node.anchor] = page
+            self.front_refs(front, refs)
         data = {'facets': list(self.schema.facets().items()), 'pages': pages, 'backlinks': backlinks}
+        if refs:
+            data['refs'] = refs
         if not self.options.front_matter:
             data['frontMatter'] = False
         return json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
+
+    def front_refs(self, front, res):
+        """Refs in front matter values with where they lead, the page links them as the text does:
+        ref: [href, title, done], title and done of a definition the build shows."""
+        refs = Refs.of(self.scanner)
+        for _, ref in refs.front_refs(front):
+            found = refs.resolve(ref)
+            if found is not None and self.inside(found.node):
+                res[ref] = [f'#{found.anchor}', found.text, found.done]
+            elif refs.url(ref):
+                res[ref] = [refs.url(ref), '', False]
 
     @staticmethod
     def named(node, path):

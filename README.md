@@ -5,8 +5,8 @@
 [![test](https://github.com/hiqsol/uwiki/actions/workflows/test.yml/badge.svg)](https://github.com/hiqsol/uwiki/actions/workflows/test.yml)
 
 Markdown utility for Obsidian vaults and plain markdown docs: builds a vault into one HTML or markdown file,
-serves it rebuilding on change, checks it, counts it, links mentions, rewraps lines, moves pages rewriting links,
-and is a language server for editors.
+serves it rebuilding on change, checks it, counts it, links mentions and record ids as `P:24` or `HQD-640`,
+rewraps lines, moves pages rewriting links, and is a language server for editors.
 
 ## Installation
 

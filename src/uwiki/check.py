@@ -11,6 +11,7 @@ from .config import Config
 from .convert import Converter
 from .mention import Mentions
 from .order import Links
+from .refs import Refs
 from .vault import Filter, Scanner, Vaults, front_matter_items, front_matter_tree, read_aliases, read_parts
 
 @dataclass
@@ -108,6 +109,12 @@ class CheckConverter(Converter):
     def link(self, text, checked=False):
         self.check_link(text)
         return super().link(text, checked)
+
+    def ref(self, ref, line):
+        """Ref the vault defines, else one with a url."""
+        if self.refs.resolve(ref) is None and self.refs.url(ref) is None:
+            self.report(line, f'unresolved ref: {ref}')
+        return super().ref(ref, line)
 
     def embed_note(self, text):
         self.check_link(text)
@@ -424,7 +431,9 @@ class Checker:
             return
         path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
         resolve = lambda value: self.names_page(scanner, source, value)
-        for key, message in schema.problems(front_matter_tree(front) if front else {}, path, resolve):
+        refs = Refs.of(scanner)
+        ref = lambda value: refs.is_ref(value) and bool(refs.resolve(value.strip()) or refs.url(value.strip()))
+        for key, message in schema.problems(front_matter_tree(front) if front else {}, path, resolve, ref):
             report(self.key_line(front, key), message)
 
     @classmethod
@@ -478,6 +487,18 @@ class Checker:
                 if other is not page:
                     report(self.key_line(front, key), f'alias {alias}: also alias of {show(other)}')
 
+    def check_refs(self, scanner, page, front, report):
+        """Refs page defines that another definition comes before, refs in its front matter values that
+        resolve nowhere, as the text's ones do."""
+        refs = Refs.of(scanner)
+        if not refs:
+            return
+        for line, message in refs.duplicates(page):
+            report(line, message)
+        for key, ref in refs.front_refs(front):
+            if refs.resolve(ref) is None and refs.url(ref) is None:
+                report(self.key_line(front, key), f'unresolved ref: {ref}')
+
     def check_file(self, scanner, page, shown):
         report = lambda line, msg: self.add(page, shown, line, msg)
         source = page.source
@@ -497,6 +518,7 @@ class Checker:
         self.check_code_paths(scanner, source, text, front, report)
         if page.folder and page.folder.shadowed_index() is page:
             report(1, Scanner.shadowed_message(page.folder))
+        self.check_refs(scanner, page, front, report)
         converter = CheckConverter(page, scanner, report, self.options)
         converter.read()
 

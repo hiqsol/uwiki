@@ -2,7 +2,8 @@
 
 Go to definition of wiki and markdown links, headings and items, hover shows what a link leads to,
 completion of page names, aliases, headings and items, references of a page, heading or item,
-outline of headings and items, diagnostics of `check` on open and save.
+outline of headings and items, diagnostics of `check` on open and save;
+refs go to their definition, hover shows it, complete from the vault's definitions and find their occurrences.
 """
 
 import json
@@ -16,6 +17,7 @@ from .check import Checker, CheckOptions
 from .config import Config
 from .convert import Converter
 from .order import Links
+from .refs import Refs
 from .vault import FRONT_MATTER, Filter, Scanner, Vaults, cebabize, read_aliases
 
 HOVER_LINES = 12
@@ -117,6 +119,7 @@ class Server:
         encodings = params.get('capabilities', {}).get('general', {}).get('positionEncodings', [])
         self.wide = 'utf-32' in encodings
         self.scan()
+        triggers = ['[', '#', *sorted({prefix[-1] for prefix in Refs.of(self.scanner).urls})]
         return {
             'capabilities': {
                 'positionEncoding': 'utf-32' if self.wide else 'utf-16',
@@ -125,7 +128,7 @@ class Server:
                 'hoverProvider': True,
                 'referencesProvider': True,
                 'documentSymbolProvider': True,
-                'completionProvider': {'triggerCharacters': ['[', '#']},
+                'completionProvider': {'triggerCharacters': triggers},
             },
             'serverInfo': {'name': 'uwiki'},
         }
@@ -310,7 +313,34 @@ class Server:
 
     # requests
 
+    # refs
+
+    def ref_at(self, line, i):
+        """Ref around string index with its span, else None."""
+        return next(((m[0], m.span()) for m in Refs.of(self.scanner).finditer(line) if m.start() <= i < m.end()), None)
+
+    def ref_definition(self, params):
+        """Ref at the request position, its span and definition, None if no ref is there."""
+        path, lines, n, i = self.position(params)
+        ref = self.ref_at(lines[n] if n < len(lines) else '', i)
+        return ref and (*ref, Refs.of(self.scanner).resolve(ref[0]))
+
+    def ref_lines(self, ref):
+        """Locations of a ref in pages, outside code and front matter, its definition too."""
+        refs, res = Refs.of(self.scanner), []
+        for file in sorted(self.pages):
+            text, start = self.body_of(file)
+            for i, line in Converter.prose(text):
+                for m in refs.finditer(line):
+                    if m[0] == ref:
+                        res.append(self.location(file, start - 1 + i, *m.span()))
+        return res
+
     def on_textDocument_definition(self, params):
+        ref = self.ref_definition(params)
+        if ref:
+            found = ref[2]
+            return found and self.location(found.node.source.fullpath, found.line - 1, 0, 0)
         path, lines, n, i = self.position(params)
         link = self.link_at(lines[n] if n < len(lines) else '', i)
         target = link and self.target(path, link[0], link[1])
@@ -321,6 +351,21 @@ class Server:
         return self.location(file, line, 0, 0)
 
     def on_textDocument_hover(self, params):
+        ref = self.ref_definition(params)
+        if ref:
+            text, span, found = ref
+            if found is None:
+                url = Refs.of(self.scanner).url(text)
+                value = f'**{text}**: {url}' if url else ''
+            else:
+                lines = self.lines(found.node.source.fullpath)
+                at = found.line - 1
+                block = self.item_block(lines, at) if at < len(lines) and lines[at].lstrip()[:1] in '-*+0123456789' \
+                    else lines[at:at + HOVER_LINES]
+                value = f'**{found.text}**\n\n' + '\n'.join(block).strip()
+            path, lines, n, _ = self.position(params)
+            return {'contents': {'kind': 'markdown', 'value': value}, 'range': self.range(lines, n, *span)} \
+                if value else None
         path, lines, n, i = self.position(params)
         link = self.link_at(lines[n] if n < len(lines) else '', i)
         target = link and self.target(path, link[0], link[1])
@@ -358,7 +403,7 @@ class Server:
         before = (lines[n] if n < len(lines) else '')[:i]
         m = OPEN_WIKILINK.search(before)
         if not m:
-            return None
+            return self.ref_items(lines, n, i, before)
         typed = m[1]
         start = i - len(typed)
         name, sep, rest = typed.partition('#')
@@ -371,6 +416,19 @@ class Server:
         heading, sep2, _ = rest.rpartition('#')
         start = i - len(rest) + (len(heading) + 1 if sep2 else 0)
         return self.anchor_items(node, heading if sep2 else None, lines, n, start, i)
+
+    def ref_items(self, lines, n, i, before):
+        """Refs the vault defines under the prefix typed before the position, None if none is typed."""
+        refs = Refs.of(self.scanner)
+        if not refs:
+            return None
+        m = re.search(f'{refs.BEFORE}({"|".join(map(re.escape, refs.urls))})[\\w.:-]*$', before)
+        if not m:
+            return None
+        start = i - len(m[0])
+        return [{'label': ref, 'kind': 18, 'detail': found[0].text, 'filterText': f'{ref} {found[0].text}',
+                 'textEdit': self.edit(lines, n, start, i, ref)}
+                for ref, found in refs.definitions.items() if ref.startswith(m[1])]
 
     def edit(self, lines, n, start, end, text):
         return {'range': self.range(lines, n, start, end), 'newText': text}
@@ -424,6 +482,9 @@ class Server:
         return sorted(res, key=lambda item: item['sortText'])
 
     def on_textDocument_references(self, params):
+        ref = self.ref_definition(params)
+        if ref:
+            return self.ref_lines(ref[0])
         path, lines, n, i = self.position(params)
         line = lines[n] if n < len(lines) else ''
         link = self.link_at(line, i)

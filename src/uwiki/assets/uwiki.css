@@ -792,6 +792,22 @@ main.content {
     color: var(--accent);
     text-decoration: none;
 }
+/* a ref of a checked item is done; where a ref is defined it reads as text, a click copies its link */
+.content a.ref.done {
+    text-decoration: line-through;
+}
+.content a.ref-def {
+    color: inherit;
+}
+.content a.ref-def.copied::after {
+    content: " copied";
+    color: var(--fg-muted);
+    font-size: calc(12px * var(--text-scale));
+    font-weight: normal;
+}
+.content :is(li, tr):has(.ref-def:target):not(:has(li .ref-def:target)) {
+    animation: target 1.5s ease-out;
+}
 .content code {
     padding: 0.1em 0.35em;
     border-radius: 4px;

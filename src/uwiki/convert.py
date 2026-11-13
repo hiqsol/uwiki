@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 from . import render
+from .refs import Refs
 from .vault import FRONT_MATTER, TITLE, cebabize, read_aliases, read_text, titleize
 
 class Converter:
@@ -283,7 +284,7 @@ class Converter:
         """Callout as HTML block around its body, `lines` its title line for the block, the lines of the body."""
         line = self.line
         kind = kind.lower()
-        title = render.inline(self.links(title)) if title else html.escape(kind.title())
+        title = render.inline(self.with_refs(self.links(title))) if title else html.escape(kind.title())
         text = self.process(body, start)
         body = text.strip()
         skipped = text[:len(text) - len(text.lstrip())].count('\n')  # blank lines strip drops
@@ -308,14 +309,15 @@ class Converter:
             return self.LINK_DEF.sub(self.link_definition, line, count=1)
         if self.line in self.item_lines and self.NUMBERED.match(line):
             line = self.item_anchors(line)
-        return self.links(line)
+        return self.with_refs(self.links(line))
 
     def heading(self, level, text):
         level = min(level - self.shift + self.page.depth + 1, 6)
         text = self.links(text)
         if self.embedded:
-            return f"{'#' * level} {text}\n"
+            return f"{'#' * level} {self.with_refs(text)}\n"
         id = self.heading_id(text)
+        text = self.with_refs(text)
         if self.mode == 'md':
             return f"<a id=\"{id}\"></a>\n\n{'#' * level} {text}\n"
         return f"{'#' * level} {text} {{#{id}}}\n"
@@ -336,6 +338,46 @@ class Converter:
 
     def links(self, text):
         return self.outside_code(self.MD_LINK.sub(self.markdown_link, text), self.process_links)
+
+    @property
+    def refs(self):
+        return Refs.of(self.scanner)
+
+    def with_refs(self, text):
+        """Text with its refs linked, see ref."""
+        refs = self.refs
+        if not refs:
+            return text
+        return refs.sub(lambda m: self.ref(m[0], self.line + m.string.count('\n', 0, m.start())), text)
+
+    def ref_target(self, ref):
+        """Definition of ref the build shows, else None."""
+        found = self.refs.resolve(ref)
+        if found is not None and self.scope and not self.scope.inside(found.node):
+            return None
+        return found
+
+    def defines(self, found, line):
+        """Whether the ref at line of the page is the definition found, not an embedded copy of it."""
+        return (not self.embedded and found is not None and found.anchor != found.node.anchor
+                and found.line == line and found.node.source is not None
+                and found.node.source.fullpath == self.source.fullpath)
+
+    def ref(self, ref, line):
+        """Ref as HTML: anchor where it is defined, link to the definition, else to its URL;
+        as written in markdown and when unresolved."""
+        found = self.ref_target(ref)
+        if self.mode != 'html':
+            return ref
+        if self.defines(found, line):
+            return f'<a class="ref-def" id="{found.anchor}" href="#{found.anchor}">{ref}</a>'
+        if found is not None:
+            kind = 'ref done' if found.done else 'ref'
+            return f'<a class="{kind}" href="#{found.anchor}" title="{html.escape(found.text)}">{ref}</a>'
+        url = self.refs.url(ref)
+        if url:
+            return f'<a class="ref" href="{html.escape(url)}">{ref}</a>'
+        return ref
 
     def markdown_link(self, match):
         if match[1]:

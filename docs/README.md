@@ -2,7 +2,7 @@
 
 What uWiki does and how to use it, the [README](../README.md) has installation.
 
-- [Concepts](Concepts.md): vault, folder page, title, reading order, links and orphans
+- [Concepts](Concepts.md): vault, folder page, title, reading order, links, mentions, refs and orphans
 - [Commands](Commands.md): what each command does
 - [Config](Config.md): `uwiki.toml` option defaults and the front matter schema
 - [HTML page](HTML-page.md): the one file page `build` writes, its sidebar, filter and keys

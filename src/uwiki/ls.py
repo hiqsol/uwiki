@@ -1,8 +1,9 @@
-"""Lists markdown files as uwiki takes them, or external links in them, for other tools to take."""
+"""Lists markdown files as uwiki takes them, external links in them or refs they define, for other tools."""
 
 import re
 
 from .convert import Converter
+from .refs import Refs
 from .vault import Filter, Vaults, read_text
 
 class Listing:
@@ -29,6 +30,16 @@ class Listing:
             for _, line in Converter.prose(text):
                 res.update(map(self.trim, self.URL.findall(Converter.CODE.sub(' ', line))))
         return sorted(res)
+
+    def refs(self):
+        """Refs defined in the files, as `ref<TAB>path:line<TAB>what it defines`, by path and line:
+        what agents grep to find where `doc:245` leads."""
+        res = []
+        for scanner, page, shown in self.vaults.files():
+            refs = Refs.of(scanner)
+            if refs and page.source is not None:
+                res += [f'{d.ref}\t{shown}:{d.line}\t{d.text}' for d in refs.defined(page, page.source.fullpath)]
+        return res
 
     @classmethod
     def trim(cls, url):

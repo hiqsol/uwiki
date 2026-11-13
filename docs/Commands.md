@@ -8,7 +8,7 @@ uwiki check  <paths> [--orphans] [--unlisted] [--mentions] [--mentions-exclude G
 uwiki link   <paths> [--dry-run] [-w 70]
 uwiki llms   <paths> [-o FILE] [--title TITLE] [--check]
 uwiki index  <paths> [--check]
-uwiki ls     <paths> [--external] [-z]
+uwiki ls     <paths> [--external | --refs] [-z]
 uwiki stats  <paths> [--by folder|KEY] [--top N] [--json]
 uwiki wrap   <paths> [-w 70] [--check]
 uwiki mv     <from> <to> [--dry-run]
@@ -38,8 +38,8 @@ output files are replaced at once, never served half written.
 
 ## check
 
-Reports unresolved links, headings and items, missing images, front matter out of `[schema]`
-and list numbering as `path:line: message`, exits 1 if any:
+Reports unresolved links, headings, items and [refs](Concepts.md#refs), refs defined twice, missing images,
+front matter out of `[schema]` and list numbering as `path:line: message`, exits 1 if any:
 
 - `--orphans` reports [orphans](Concepts.md#orphan)
 - `--unlisted` and `--mentions` warn about pages their folder page does not link
@@ -71,8 +71,9 @@ keeping their order and the lines linking subfolders, `--check` reports blocks o
 
 ## ls
 
-Lists the files commands take, `--external` external links, for other tools:
-`uwiki ls -z docs | xargs -0 typos`, `uwiki ls --external docs | lychee -`.
+Lists the files commands take, `--external` external links, `--refs` the [refs](Concepts.md#refs) they define
+as `ref<TAB>path:line<TAB>what it defines`, for other tools and agents:
+`uwiki ls -z docs | xargs -0 typos`, `uwiki ls --external docs | lychee -`, `uwiki ls --refs . | grep ^doc:245`.
 
 ## stats
 

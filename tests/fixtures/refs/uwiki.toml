@@ -1,0 +1,9 @@
+[refs."P:"]                               # defined in the vault: where **P:1.** starts an item
+[refs."doc:"]
+[refs."visit:"]
+[refs."HQD-"]
+url = "https://jira.example.com/browse/HQD-{id}"
+
+[check]
+orphans = true
+mentions = true

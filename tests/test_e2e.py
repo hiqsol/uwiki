@@ -33,6 +33,7 @@ LINKCHECK = os.path.join(FIXTURES, 'linkcheck')
 EXTERNAL = os.path.join(FIXTURES, 'external')
 ORDER = os.path.join(FIXTURES, 'order')
 ITEMS = os.path.join(FIXTURES, 'items')
+REFS = os.path.join(FIXTURES, 'refs')
 
 
 sys.path.insert(0, SRC)
@@ -2214,6 +2215,130 @@ class WrapTest(unittest.TestCase):
         self.assertEqual(res.returncode, 0, res.stdout)
         run('wrap', '-w', '40', self.file)
         self.assertEqual(read(self.file), text)
+
+
+class RefsTest(unittest.TestCase):
+    """Refs: ids under configured prefixes link to where the vault defines them, else to their url."""
+
+    @classmethod
+    def setUpClass(cls):
+        with tempfile.TemporaryDirectory() as out:
+            res = run('build', REFS, '-o', out)
+            assert res.returncode == 0, res.stdout + res.stderr
+            cls.html, cls.md = read(os.path.join(out, 'refs.html')), read(os.path.join(out, 'refs.md'))
+
+    def copy(self, files):
+        """Copy of the refs vault with files added or replaced, removed after the test."""
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        vault = os.path.join(tmp, 'refs')
+        shutil.copytree(REFS, vault)
+        for name, text in files.items():
+            with open(os.path.join(vault, name), 'w', encoding='utf-8') as f:
+                f.write(text)
+        return vault
+
+    def test_refs_link_to_definitions_and_urls(self):
+        self.assertIn('Proposals <a class="ref" href="#ref-p-1" title="P:1. Space types.">P:1</a> and '
+                      '<a class="ref done" href="#ref-p-2" title="P:2. Done thing.">P:2</a>, ticket '
+                      '<a class="ref" href="https://jira.example.com/browse/HQD-7">HQD-7</a>, record '
+                      '<a class="ref" href="#ref-doc-245" title="doc:245 · Blood test">doc:245</a> at '
+                      '<a class="ref" href="#visit" title="Visit four">visit:4</a>.', self.html)
+
+    def test_code_links_urls_and_words_keep_refs_as_text(self):
+        self.assertIn('Code <code>P:1</code> stays, as COVID-19 and a-P:1 and <a href="#backlog">P:1</a> do.',
+                      self.html)
+        self.assertIn('<a href="https://x.example/P:1">https://x.example/P:1</a> or www.x.example/P:2.', self.html)
+
+    def test_definitions_are_anchors(self):
+        self.assertIn('<strong><a class="ref-def" id="ref-p-1" href="#ref-p-1">P:1</a>. Space types.</strong>',
+                      self.html)
+        self.assertIn('<td><strong><a class="ref-def" id="ref-doc-245" href="#ref-doc-245">doc:245</a></strong></td>',
+                      self.html)
+
+    def test_points_link_to_their_definition_else_the_first_point(self):
+        self.assertIn('Points (<a class="ref" href="#ref-p-4-c" title="P:4 c. Third point.">P:4 c</a>) and '
+                      '<a class="ref" href="#ref-p-4-a" title="P:4 a. First point.">P:4</a>, not '
+                      '<a class="ref" href="#ref-p-4-a" title="P:4 a. First point.">P:4</a> a deck.', self.html)
+        self.assertIn('<a class="ref-def" id="ref-p-4-c" href="#ref-p-4-c">P:4 c</a>', self.html)
+
+    def test_callout_titles_link_refs(self):
+        self.assertIn('About <a class="ref" href="#ref-p-3"', self.html)
+
+    def test_markdown_keeps_refs_as_written(self):
+        self.assertIn('Proposals P:1 and P:2, ticket HQD-7, record doc:245 at visit:4.', self.md)
+        self.assertIn('- [ ] **P:1. Space types.**', self.md)
+
+    def test_refs_are_backlinks_and_front_matter_links(self):
+        data = page_data(self.html)
+        self.assertIn(['root', 'P:1'], data['backlinks']['backlog'])
+        self.assertIn(['notes', 'doc:246'], data['backlinks']['records'])
+        self.assertEqual(data['refs'], {'doc:246': ['#ref-doc-246', 'doc:246 · X-ray', False],
+                                        'HQD-9': ['https://jira.example.com/browse/HQD-9', '', False]})
+
+    def test_check_passes_refs_reached_only_by_refs(self):
+        res = run('check', REFS)
+        self.assertEqual((res.returncode, res.stdout), (0, ''), res.stderr)
+
+    def test_check_reports_unresolved_and_twice_defined_refs(self):
+        vault = self.copy({
+            'Extra.md': '---\nsources: [doc:999]\n---\n\n# Extra\n\nSee P:99 and [[index]].\n\n## P:2 again\n',
+        })
+        res = run('check', vault)
+        self.assertEqual(res.stdout.splitlines(), [
+            f'{vault}/Extra.md:9: ref P:2 defined again, first at Backlog.md:4',
+            f'{vault}/Extra.md:2: unresolved ref: doc:999',
+            f'{vault}/Extra.md:7: unresolved ref: P:99',
+            f'{vault}/Extra.md:1: orphan page: no page links here',
+        ], res.stderr)
+
+    def test_schema_ref_type(self):
+        vault = self.copy({'uwiki.toml': read(os.path.join(REFS, 'uwiki.toml')) + '\n[schema]\nsources = "ref"\n'
+                                                                                   'aliases = "list"\nid = "ref"\n',
+                           'Notes.md': '---\nsources: [doc:246, P:7, words]\n---\n\n# Notes\n\nNotes.\n'})
+        res = run('check', vault)
+        self.assertIn(f'{vault}/Notes.md:2: front matter sources: P:7, words, expected ref', res.stdout.splitlines())
+
+    def test_mentions_skip_refs(self):
+        res = run('check', '--mentions', REFS)
+        self.assertNotIn('unlinked mention: doc', res.stdout + res.stderr)
+
+    def test_prefix_ends_in_separator(self):
+        vault = self.copy({'uwiki.toml': '[refs."P"]\n'})
+        res = run('check', vault)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn('refs."P": a prefix ends in its separator', res.stderr)
+
+    def test_ls_lists_definitions(self):
+        res = run('ls', '--refs', '.', cwd=REFS)
+        self.assertEqual(res.stdout.splitlines(), [
+            'P:1\t./Backlog.md:3\tP:1. Space types.',
+            'P:2\t./Backlog.md:4\tP:2. Done thing.',
+            'P:3\t./Backlog.md:5\tP:3. Comes after P:1, see HQD-8.',
+            'P:4 a\t./Backlog.md:6\tP:4 a. First point.',
+            'P:4 c\t./Backlog.md:7\tP:4 c. Third point.',
+            'doc:245\t./Records.md:5\tdoc:245 · Blood test',
+            'doc:246\t./Records.md:6\tdoc:246 · X-ray',
+            'visit:4\t./Visit.md:2\tVisit four',
+        ])
+
+    def test_lsp_goes_to_hovers_completes_and_finds_refs(self):
+        lsp = Lsp(REFS)
+        self.addCleanup(lsp.close)
+        lsp.open('index.md')
+        res = lsp.at('textDocument/definition', 'index.md', 2, 11)
+        self.assertEqual((res['uri'].rsplit('/', 1)[-1], res['range']['start']['line']), ('Backlog.md', 2))
+        res = lsp.at('textDocument/hover', 'index.md', 2, 11)
+        self.assertEqual(res['contents']['value'], '**P:1. Space types.**\n\n'
+                                                   '- [ ] **P:1. Space types.** No dice: every effect is fixed.')
+        res = lsp.at('textDocument/hover', 'index.md', 2, 30)
+        self.assertEqual(res['contents']['value'], '**HQD-7**: https://jira.example.com/browse/HQD-7')
+        lsp.open('New.md', 'See P:')
+        labels = [i['label'] for i in lsp.at('textDocument/completion', 'New.md', 0, 6)]
+        self.assertEqual(labels, ['P:1', 'P:2', 'P:3', 'P:4 a', 'P:4 c'])
+        res = lsp.at('textDocument/references', 'index.md', 2, 11, context={'includeDeclaration': True})
+        self.assertEqual([(r['uri'].rsplit('/', 1)[-1], r['range']['start']['line']) for r in res],
+                         [('Backlog.md', 2), ('Backlog.md', 4), ('index.md', 2)])
 
 
 if __name__ == '__main__':
