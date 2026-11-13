@@ -40,9 +40,12 @@ class Llms:
                 yield from self.folders(child)
 
     def heading(self, folder):
-        if folder is self.scanner.root:
-            return folder.title
-        return os.path.relpath(folder.fullpath, self.scanner.path).replace(os.sep, '/') + '/'
+        """Title of the folder given paths share, path from it of the others: a folder given in a bigger vault
+        reads as if it were the vault."""
+        top = self.selection.common or self.scanner.root
+        if folder is top:
+            return folder.title if folder is self.scanner.root or folder.page else self.title
+        return os.path.relpath(folder.fullpath, top.fullpath).replace(os.sep, '/') + '/'
 
     def pages(self, folder):
         selected = self.selection.selected

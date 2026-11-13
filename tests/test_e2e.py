@@ -1472,6 +1472,21 @@ class LlmsTest(unittest.TestCase):
                 f'- [Bee]({rel}/sub/b.md): Folded over lines.', '',
             ]))
 
+    def test_folder_of_a_bigger_vault_reads_as_the_vault(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), '')
+            write(os.path.join(tmp, 'README.md'), '# Repo\n')
+            write(os.path.join(tmp, 'knowledge', 'index.md'), '# AH knowledge\n\n[[x]]\n')
+            write(os.path.join(tmp, 'knowledge', 'sub', 'x.md'), '# X\n')
+            res = run('llms', 'knowledge', cwd=tmp)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertEqual(read(os.path.join(tmp, 'knowledge', 'llms.txt')),
+                             '# AH knowledge\n\n## AH knowledge\n\n- [AH knowledge](index.md)\n\n'
+                             '## sub/\n\n- [X](sub/x.md)\n')
+            os.remove(os.path.join(tmp, 'knowledge', 'index.md'))
+            run('llms', 'knowledge', '--title', 'Bundle', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'knowledge', 'llms.txt')), '# Bundle\n\n## sub/\n\n- [X](sub/x.md)\n')
+
     def test_check(self):
         with tempfile.TemporaryDirectory() as out:
             output = os.path.join(out, 'llms.txt')
