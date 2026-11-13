@@ -2257,10 +2257,10 @@ class RefsTest(unittest.TestCase):
                       self.html)
 
     def test_points_link_to_their_definition_else_the_first_point(self):
-        self.assertIn('Points (<a class="ref" href="#ref-p-4-c" title="P:4 c. Third point.">P:4 c</a>) and '
-                      '<a class="ref" href="#ref-p-4-a" title="P:4 a. First point.">P:4</a>, not '
-                      '<a class="ref" href="#ref-p-4-a" title="P:4 a. First point.">P:4</a> a deck.', self.html)
-        self.assertIn('<a class="ref-def" id="ref-p-4-c" href="#ref-p-4-c">P:4 c</a>', self.html)
+        first = '<a class="ref" href="#ref-p-4a" title="P:4a. First point.">'
+        self.assertIn(f'Points (<a class="ref" href="#ref-p-4c" title="P:4c. Third point.">P:4c</a>) and '
+                      f'{first}P:4</a>, {first}P:4b</a> of it, not {first}P:4</a> a deck.', self.html)
+        self.assertIn('<a class="ref-def" id="ref-p-4c" href="#ref-p-4c">P:4c</a>', self.html)
 
     def test_callout_titles_link_refs(self):
         self.assertIn('About <a class="ref" href="#ref-p-3"', self.html)
@@ -2282,13 +2282,15 @@ class RefsTest(unittest.TestCase):
 
     def test_check_reports_unresolved_and_twice_defined_refs(self):
         vault = self.copy({
-            'Extra.md': '---\nsources: [doc:999]\n---\n\n# Extra\n\nSee P:99 and [[index]].\n\n## P:2 again\n',
+            'Extra.md': '---\nsources: [doc:999]\n---\n\n# Extra\n\nSee P:99, P:99a, P:4am and [[index]].\n\n## P:2 again\n',
         })
         res = run('check', vault)
         self.assertEqual(res.stdout.splitlines(), [
             f'{vault}/Extra.md:9: ref P:2 defined again, first at Backlog.md:4',
             f'{vault}/Extra.md:2: unresolved ref: doc:999',
             f'{vault}/Extra.md:7: unresolved ref: P:99',
+            f'{vault}/Extra.md:7: unresolved ref: P:99a',
+            f'{vault}/Extra.md:7: unresolved ref: P:4am',
             f'{vault}/Extra.md:1: orphan page: no page links here',
         ], res.stderr)
 
@@ -2315,8 +2317,8 @@ class RefsTest(unittest.TestCase):
             'P:1\t./Backlog.md:3\tP:1. Space types.',
             'P:2\t./Backlog.md:4\tP:2. Done thing.',
             'P:3\t./Backlog.md:5\tP:3. Comes after P:1, see HQD-8.',
-            'P:4 a\t./Backlog.md:6\tP:4 a. First point.',
-            'P:4 c\t./Backlog.md:7\tP:4 c. Third point.',
+            'P:4a\t./Backlog.md:6\tP:4a. First point.',
+            'P:4c\t./Backlog.md:7\tP:4c. Third point.',
             'doc:245\t./Records.md:5\tdoc:245 · Blood test',
             'doc:246\t./Records.md:6\tdoc:246 · X-ray',
             'visit:4\t./Visit.md:2\tVisit four',
@@ -2335,7 +2337,7 @@ class RefsTest(unittest.TestCase):
         self.assertEqual(res['contents']['value'], '**HQD-7**: https://jira.example.com/browse/HQD-7')
         lsp.open('New.md', 'See P:')
         labels = [i['label'] for i in lsp.at('textDocument/completion', 'New.md', 0, 6)]
-        self.assertEqual(labels, ['P:1', 'P:2', 'P:3', 'P:4 a', 'P:4 c'])
+        self.assertEqual(labels, ['P:1', 'P:2', 'P:3', 'P:4a', 'P:4c'])
         res = lsp.at('textDocument/references', 'index.md', 2, 11, context={'includeDeclaration': True})
         self.assertEqual([(r['uri'].rsplit('/', 1)[-1], r['range']['start']['line']) for r in res],
                          [('Backlog.md', 2), ('Backlog.md', 4), ('index.md', 2)])

@@ -63,6 +63,9 @@ as the bold that defines a term does, or is a page's front matter `id`:
 Every other occurrence links to its definition, else to the `url` its prefix gives;
 `check` reports a ref neither defined nor with a url, and one defined twice.
 A ref of a checked item `[x]` is done, struck through where it links.
+A lowercase letter ending an id right after a digit makes a point: `**P:24a.**` defines point a of P:24.
+P:24a links there, else to P:24, and P:24 to its first point when nothing else defines it;
+a ref defined as written wins, so an id like `1a2b` stays whole where the vault defines it.
 Refs link pages for backlinks, orphans and reading order, in front matter values too;
 markdown output, Obsidian and GitHub show them as written, `ls --refs` lists where they are defined.
 

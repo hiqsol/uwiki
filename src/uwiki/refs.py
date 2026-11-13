@@ -12,8 +12,8 @@ A ref is defined where it starts a heading, starts a list item or a table row in
 `id`: the bold that defines a term defines an id too. Its other occurrences link there, or to its `url` when the
 vault defines none. A ref neither defined nor with a url is unresolved, one defined twice is ambiguous.
 
-A letter after a ref and a space, then punctuation, is a point of it: `I:75 a.` defines point a of I:75,
-`(I:75 a)` links there, else to I:75, which its first point defines when nothing else does.
+A lowercase letter ending an id right after a digit is a point: `**I:75a.**` defines point a of I:75, I:75a
+links there, else to I:75, which its first point defines when nothing else does.
 """
 
 import os
@@ -35,7 +35,7 @@ class Refs:
     # not after a word character nor one ids join with, so `a-HQD-1` and URLs keep theirs
     BEFORE = r'(?<![\w.:/-])'
     ID = r'\w(?:[\w.:-]*\w)?'
-    POINT = r'(?: ([a-z])(?=[.,;:)*]|$))?'  # `I:75 a.`, `(I:75 a)`, not the article of `P:24 a deck`
+    POINT = re.compile(r'(?<=\d)[a-z]$')  # I:75a is point a of I:75
     # links, code, tags and URLs keep refs in them as text
     SKIP = re.compile(r"""(`+).*?\1|!?\[\[.*?\]\]|!?\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])|<[^>]*>|\w+://\S+|www\.\S+""")
     FENCE = re.compile(r'^\s*(```|~~~)')
@@ -67,10 +67,10 @@ class Refs:
                 raise ValueError(f'{path}: refs."{prefix}".url should have {{id}} in it')
             self.urls[prefix] = url
         alternatives = '|'.join(map(re.escape, sorted(self.urls, key=len, reverse=True)))
-        self.pattern = re.compile(f'{self.BEFORE}({alternatives})({self.ID}){self.POINT}') if self.urls else None
-        self.definition = re.compile(f'{self.DEFINITION}({alternatives})({self.ID}){self.POINT}(?![\\w:-])') \
+        self.pattern = re.compile(f'{self.BEFORE}({alternatives})({self.ID})') if self.urls else None
+        self.definition = re.compile(f'{self.DEFINITION}({alternatives})({self.ID})(?![\\w:-])') \
             if self.urls else None
-        self.full = re.compile(f'({alternatives})({self.ID})(?: ([a-z]))?') if self.urls else None
+        self.full = re.compile(f'({alternatives})({self.ID})') if self.urls else None
         self.quick = re.compile(alternatives) if self.urls else None  # most lines have no prefix at all
         self._definitions = None
         self._points = {}  # ref: its first point's definition
@@ -95,8 +95,7 @@ class Refs:
         return refs
 
     def finditer(self, text):
-        """Refs in text outside code, links, tags and URLs, as matches: [1] prefix, [2] id, [3] point or None,
-        [0] the ref."""
+        """Refs in text outside code, links, tags and URLs, as matches: [1] prefix, [2] id, [0] the ref."""
         if self.pattern is None or not self.quick.search(text):
             return
         pos = 0
@@ -129,15 +128,20 @@ class Refs:
 
     def url(self, ref):
         """URL a ref leads to when the vault does not define it, None without one."""
-        m = self.full.fullmatch(ref.split(' ')[0]) if self.full else None
+        m = self.full.fullmatch(ref) if self.full else None
         template = m and self.urls.get(m[1])
         return template.replace('{id}', m[2]) if template else None
 
     def resolve(self, ref):
         """Definition of the ref, the first one if several, of a point the ref's if the point has none,
         of a ref its first point's if the ref has none; None if none."""
-        found = self.definitions.get(ref) or self.definitions.get(ref.split(' ')[0])
-        return found[0] if found else self._points.get(ref.split(' ')[0])
+        found = self.definitions.get(ref) or self.definitions.get(self.base(ref))
+        return found[0] if found else self._points.get(self.base(ref))
+
+    @classmethod
+    def base(cls, ref):
+        """Ref a point is of, I:75 of I:75a, the ref itself if it is no point."""
+        return cls.POINT.sub('', ref)
 
     @property
     def definitions(self):
@@ -148,8 +152,8 @@ class Refs:
                 for file, node in sorted(self.scanner.pages().items()):
                     for d in self.defined(node, file):
                         self._definitions.setdefault(d.ref, []).append(d)
-                        if ' ' in d.ref:
-                            self._points.setdefault(d.ref.split(' ')[0], d)
+                        if self.base(d.ref) != d.ref:
+                            self._points.setdefault(self.base(d.ref), d)
         return self._definitions
 
     def defined(self, node, file):
@@ -178,7 +182,7 @@ class Refs:
                 continue
             m = self.definition.match(line)
             if m and self.takes(m, 2, 3):
-                ref = m[2] + m[3] + (f' {m[4]}' if m[4] else '')
+                ref = m[2] + m[3]
                 rest = line[m.start(2):]
                 bold = rest.split('**')[0] if line[:m.start(2)].rstrip().endswith('**') else ''
                 # what the bold says, `**P:24. Space types.**`, else the whole line
