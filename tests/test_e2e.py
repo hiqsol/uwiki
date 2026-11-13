@@ -1093,10 +1093,10 @@ class LinkMentionTest(unittest.TestCase):
                       '   Force discard is a Class\n\n| Class | Force Discard |\n| - | - |\n\n'
                       'A **wrapped\nClass** stays bold.\n')
             write(os.path.join(tmp, 'Action.md'), action)
-            res = run('link', '.', '--dry-run', cwd=tmp)
+            res = run('link', '.', '--dry-run', '--mentions-every', cwd=tmp)
             self.assertEqual(read(os.path.join(tmp, 'Action.md')), action)
             self.assertIn('./Action.md:2: [[ForceDiscard|Force discard]] is a [[Class]]', res.stdout)
-            res = run('link', '.', cwd=tmp)
+            res = run('link', '.', '--mentions-every', cwd=tmp)
             self.assertEqual(res.stdout, 'linked 3 lines in ./Action.md\n', res.stderr)
             self.assertEqual(read(os.path.join(tmp, 'Action.md')),
                              '1. Of the [[Class]], or of several [[Class]]es and their [[Tile]]s,\n'
@@ -1109,6 +1109,25 @@ class LinkMentionTest(unittest.TestCase):
                 self.assertIn('| [Class](#class) | [Force Discard](#force-discard) |',
                               read(os.path.join(out, 'wiki.md')), res.stderr)
 
+
+    def test_links_first_mention_of_a_page_not_linked_yet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'generated', 'labs.md'), '# Labs\n')
+            write(os.path.join(tmp, 'Star.md'), 'Star.\n')
+            write(os.path.join(tmp, 'index.md'), 'See [[generated/labs]] for Labs, a Star, two Stars.\n')
+            res = run('link', '.', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'index.md')),
+                             'See [[generated/labs]] for Labs, a [[Star]], two Stars.\n', res.stderr)
+            self.assertEqual(run('check', '.', '--mentions', cwd=tmp).stdout, '')
+
+    def test_ignored_terms_match_in_any_case(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'CLAUDE.md'), '# CLAUDE\n')
+            write(os.path.join(tmp, 'index.md'), 'Ask Claude.\n')
+            res = run('check', '.', '--mentions', '--mentions-ignore', 'Claude', cwd=tmp)
+            self.assertEqual(res.stdout, '', res.stderr)
+            run('link', '.', '--mentions-ignore', 'Claude', cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, 'index.md')), 'Ask Claude.\n')
 
     def test_own_terms_get_bold(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1126,7 +1145,7 @@ class LinkMentionTest(unittest.TestCase):
             write(os.path.join(tmp, 'Realm.md'), 'Realm.\n')
             write(os.path.join(tmp, 'index.md'), '[[Star]] [[Realm]]: a Star, like in Star Realms, in Star\n'
                                                  '   Realms too, a Realm\n')
-            run('link', '.', '--mentions-ignore', 'Star Realms', cwd=tmp)
+            run('link', '.', '--mentions-every', '--mentions-ignore', 'Star Realms', cwd=tmp)
             self.assertEqual(read(os.path.join(tmp, 'index.md')), '[[Star]] [[Realm]]: a [[Star]], like in Star Realms, '
                                                                    'in Star\n   Realms too, a [[Realm]]\n')
 
@@ -1135,7 +1154,7 @@ class LinkMentionTest(unittest.TestCase):
             write(os.path.join(tmp, 'Cards', 'Card.md'), 'Card.\n')
             write(os.path.join(tmp, 'Cards', 'Ship.md'), 'Ship.\n')
             write(os.path.join(tmp, 'index.md'), '[[Card]], [[Ship]]: a Card, two Cards.\n')
-            res = run('link', '.', cwd=tmp)
+            res = run('link', '.', '--mentions-every', cwd=tmp)
             self.assertEqual(read(os.path.join(tmp, 'index.md')), '[[Card]], [[Ship]]: a [[Card]], two [[Card]]s.\n',
                              res.stderr)
 

@@ -326,17 +326,12 @@ class Checker:
             if scanner not in mentions:
                 o = self.options
                 mentions[scanner] = Mentions(scanner, o.mentions_ignore, o.mentions_min_length, o.mentions_ignore_case)
-            linked = set() if self.options.mentions_every else self.targets(scanner, page)
-            seen = set()
-            for mention in mentions[scanner].find(page, own=self.options.mentions_self_bold):
+            for mention in mentions[scanner].unlinked(page, self.vault_links(scanner), self.options.mentions_every,
+                                                      own=self.options.mentions_self_bold):
                 if mention.own:
                     self.add(page, shown, mention.line + 1, f'own term not bold: {mention.text}', True)
-                    continue
-                if mention.node in linked or mention.node in seen:
-                    continue
-                if not self.options.mentions_every:
-                    seen.add(mention.node)
-                self.add(page, shown, mention.line + 1, f'unlinked mention: {mention.text}', True)
+                else:
+                    self.add(page, shown, mention.line + 1, f'unlinked mention: {mention.text}', True)
 
     def check_unlisted(self):
         """Warns about pages and folders their folder page does not link, as contents should."""

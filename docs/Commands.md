@@ -55,7 +55,8 @@ and list numbering as `path:line: message`, exits 1 if any:
 
 ## link
 
-Links the plain text mentions `check --mentions-every` warns about: `[[Star]]s`.
+Links the plain text mentions `check --mentions` warns about: `[[Star]]s`, the first one of each page
+a page does not link yet, by name or path, every one with `--mentions-every`.
 
 ## llms
 

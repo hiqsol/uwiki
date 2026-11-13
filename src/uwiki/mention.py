@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from .config import Config
 from .convert import Converter
 from .index import Index
+from .order import Links
 from .vault import read_aliases
 from .wrap import WIDTH, rewrap
 
@@ -34,7 +35,7 @@ class Mentions:
     def __init__(self, scanner, ignore=(), min_length=3, ignore_case=False):
         self.scanner = scanner
         self.ignore_case = ignore_case
-        ignored = {term.lower() if ignore_case else term for term in ignore}
+        ignored = {term.lower() for term in ignore}  # in any case, as terms match: CLAUDE.md is no Claude
         exact, plural = {}, {}  # term in lower case: (node, term as written, name a link takes)
         for node in scanner.pages().values():
             if node is scanner.root and not node.page:
@@ -43,7 +44,7 @@ class Mentions:
             named = node.page if node.is_folder and node.page.name.lower() not in ('index', 'readme') else node
             for term, name in [(named.title, named.name), *((a, a) for a in read_aliases(node.file))]:
                 term = term.strip()
-                if len(term) < min_length or (term.lower() if ignore_case else term) in ignored:
+                if len(term) < min_length or term.lower() in ignored:
                     continue
                 self.add(exact, term, (node, term, name))
                 for form in self.plurals(term):
@@ -104,6 +105,18 @@ class Mentions:
                     continue
                 yield Mention(start - 1 + n, m.start(), m.end(), m[0], node, term, name, node is page)
 
+    def unlinked(self, page, links, every=False, own=False):
+        """Mentions to link: the first one of each page the page does not link yet, by name or path, or every one
+        with every; with own also mentions of the page itself."""
+        linked, seen = set() if every else set(links.targets(page)), set()
+        for mention in self.find(page, own):
+            if not mention.own:
+                if mention.node in linked or mention.node in seen:
+                    continue
+                if not every:
+                    seen.add(mention.node)
+            yield mention
+
     def lines(self, text):
         """Line indexes and prose lines with code, links and bold blanked, and how much of each an ignored name
         wrapped from the line before covers: `Star` of `Twilight\\nStar`, `Imperium` of `Twilight\\nImperium`
@@ -159,21 +172,23 @@ class Mentions:
 
 
 def link_mentions(vaults, ignore=(), min_length=3, ignore_case=False, self_bold=False, width=WIDTH, dry_run=False,
-                  exclude=()):
-    """Links every plain mention in pages of vaults but those an exclude glob from the config folder matches,
-    with self_bold makes mentions of the page itself bold, rewraps lines longer than width, yields path shown and
-    its changed lines as (line number, old, new); dry run writes nothing."""
-    mentions, configs = {}, {}
+                  exclude=(), every=False):
+    """Links plain mentions in pages of vaults but those an exclude glob from the config folder matches: the first one
+    of each page a page does not link yet, every one with every, as check warns about them; with self_bold makes
+    mentions of the page itself bold, rewraps lines longer than width, yields path shown and its changed lines as
+    (line number, old, new); dry run writes nothing."""
+    mentions, configs, links = {}, {}, {}
     for scanner, page, shown in vaults.files():
         if scanner not in mentions:
             mentions[scanner] = Mentions(scanner, ignore, min_length, ignore_case)
             configs[scanner] = Config.load(scanner.path)
+            links[scanner] = Links(scanner)
         if page.source is None:
             continue
         path = os.path.relpath(page.source.fullpath, scanner.path).replace(os.sep, '/')
         if configs[scanner].matches(path, exclude):
             continue
-        found = list(mentions[scanner].find(page, own=self_bold))
+        found = list(mentions[scanner].unlinked(page, links[scanner], every, own=self_bold))
         if not found:
             continue
         with open(page.source.fullpath, encoding='utf-8') as f:

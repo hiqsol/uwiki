@@ -96,7 +96,8 @@ def mv(args):
 def link(args):
     vaults = Vaults(args.paths, Filter(args.include, args.exclude))
     changes = link_mentions(vaults, args.mentions_ignore, args.mentions_min_length, args.mentions_ignore_case,
-                            args.mentions_self_bold, args.width, args.dry_run, tuple(args.mentions_exclude))
+                            args.mentions_self_bold, args.width, args.dry_run, tuple(args.mentions_exclude),
+                            args.mentions_every)
     for shown, lines in changes:
         if args.dry_run:
             for n, old, new in lines:
@@ -281,10 +282,11 @@ def parser():
     add_filter(p)
     p.set_defaults(func=check)
 
-    p = command(commands, 'link', 'link every plain text mention of a page title or alias, as check --mentions '
-                                  'finds them, rewrap lines it makes too long',
+    p = command(commands, 'link', 'link the plain text mentions of page titles and aliases check --mentions warns '
+                                  'about, rewrap lines it makes too long',
                 f'[--dry-run] [-w {WIDTH}] [--mentions-ignore TERM] [--mentions-min-length N] '
-                f'[--mentions-ignore-case] [--mentions-self-bold] [--mentions-exclude GLOB] {FILTER_USAGE}')
+                f'[--mentions-ignore-case] [--mentions-every] [--mentions-self-bold] [--mentions-exclude GLOB] '
+                f'{FILTER_USAGE}')
     add_paths(p, 'folders or files to link mentions in')
     p.add_argument('--dry-run', action='store_true', help='print every changed line instead, before and after')
     p.add_argument('-w', '--width', type=int, default=WIDTH, help=f'rewrap lines longer than this, default: {WIDTH}')
@@ -293,6 +295,8 @@ def parser():
     p.add_argument('--mentions-min-length', type=int, default=3, metavar='N',
                    help='shortest title or alias to link, default: 3')
     p.add_argument('--mentions-ignore-case', action='store_true', help='mentions match in any case')
+    p.add_argument('--mentions-every', action='store_true',
+                   help='link every plain text mention, not only the first one of a page the page does not link')
     p.add_argument('--mentions-self-bold', action='store_true', help='make mentions of the page itself bold')
     p.add_argument('--mentions-exclude', action='append', default=[], metavar='GLOB',
                    help='pages not to link mentions in, glob from the config folder; repeatable')
