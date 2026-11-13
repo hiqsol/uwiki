@@ -2090,6 +2090,26 @@ class WrapTest(unittest.TestCase):
         self.assertNotEqual(read(os.path.join(self.tmp.name, 'sub', 'Other.md')), self.TEXT)
         self.assertEqual(read(os.path.join(self.tmp.name, 'node_modules', 'Skip.md')), self.TEXT)
 
+    def test_nested_list_indented_with_spaces(self):
+        text = ('- top item with some words\n'
+                '  - nested item with a long line that goes past forty columns\n'
+                '  - another\n'
+                '    second paragraph of it, long enough to wrap at forty\n')
+        with open(self.file, 'w', encoding='utf-8') as f:
+            f.write(text)
+        run('wrap', '-w', '40', self.file)
+        self.assertEqual(read(self.file), (
+            '- top item with some words\n'
+            '  - nested item with a long line that\n'
+            '    goes past forty columns\n'
+            '  - another second paragraph of it, long\n'
+            '    enough to wrap at forty\n'))
+        text = '\t- tiles: one\n\t  a) of a pile that is long enough to wrap\n'  # a) a line rewrapping began
+        with open(self.file, 'w', encoding='utf-8') as f:
+            f.write(text)
+        run('wrap', '-w', '40', self.file)
+        self.assertEqual(read(self.file), '\t- tiles: one a) of a pile that is\n\t  long enough to wrap\n')
+
     def test_paragraph_continues_mid_sentence(self):
         text = ('A line that is far too long breaks off in the middle of the\n'
                 'Sentence, which goes on.\n'

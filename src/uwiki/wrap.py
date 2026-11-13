@@ -16,7 +16,8 @@ from .vault import FRONT_MATTER
 
 WIDTH = 70
 TOKEN = re.compile(r'(?:\[\[[^\]]*\]\]|`[^`]*`|[^\s`\[]+|\[)+')
-ITEM = re.compile(r'^(\t*)((?:[-*+]|\d+[.)]|>) +|[a-z]\) +)?')
+ITEM = re.compile(r'^([ \t]*)((?:[-*+]|\d+[.)]|>) +)?')  # indent and list marker, nested by tabs or spaces
+LETTERED = re.compile(r'^(\t*)([a-z]\) +)')  # by tabs only: rewrapping may start a line with `a)`
 BLOCK = re.compile(r'^\s*(?:[-*+>#|]|\d+[.)])(?:\s|$)')
 SENTENCE_END = re.compile(r'[.:!?][)"\'*_]*$')
 
@@ -27,6 +28,11 @@ def columns(s):
 
 def indent(line):
     return columns(line) - columns(line.lstrip())
+
+
+def item(line):
+    """Match of the indent and list marker of line, marker None for no list item."""
+    return LETTERED.match(line) or ITEM.match(line)
 
 
 def is_plain(line):
@@ -69,14 +75,14 @@ def rewrap(text, width=WIDTH):
             out.append(line)
             i += 1
             continue
-        m = ITEM.match(line)
+        m = item(line)
         head = line[:m.end()]
         cont = m.group(1) + (' ' * len(m.group(2)) if m.group(2) else '')
         if m.group(2) and m.group(2).startswith('>'):
             cont = m.group(1) + m.group(2)
         group = [line]
         j = i + 1
-        while j < len(src) and not code[j] and is_plain(src[j]) and not ITEM.match(src[j]).group(2):
+        while j < len(src) and not code[j] and is_plain(src[j]) and not item(src[j]).group(2):
             nl = src[j]
             if cont and nl.startswith(cont) and not nl[len(cont):].startswith((' ', '\t')):
                 group.append(nl)
