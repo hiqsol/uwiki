@@ -5,6 +5,7 @@ written as plain text, never rewritten.
 [refs."P:"]                                    # defined in the vault: where **P:24** starts an item
 [refs."HQD-"]
 url = "https://jira.example.com/browse/HQD-{id}"   # where a ref the vault does not define leads
+id = "[0-9]+"                                  # ids it takes, so HQD-NNN stays text
 ```
 
 A ref is defined where it starts a heading, starts a list item or a table row in bold, or is a page's front matter
@@ -48,11 +49,19 @@ class Refs:
         if not isinstance(table, dict):
             raise ValueError(f'{path}: refs should be a table of prefixes')
         self.urls = {}  # prefix: url template or None
+        self.ids = {}  # prefix: regex its ids fully match, if given
         for prefix, spec in table.items():
             if not prefix or re.match(r'\w', prefix[-1]):
                 raise ValueError(f'{path}: refs."{prefix}": a prefix ends in its separator, as "P:" or "HQD-"')
-            if not isinstance(spec, dict) or set(spec) - {'url'} or not isinstance(spec.get('url', ''), str):
-                raise ValueError(f'{path}: refs."{prefix}" should be a table, with url = "...{{id}}" if any')
+            if not isinstance(spec, dict) or set(spec) - {'url', 'id'} \
+                    or not all(isinstance(spec.get(k, ''), str) for k in ('url', 'id')):
+                raise ValueError(f'{path}: refs."{prefix}" should be a table, with url = "...{{id}}" and '
+                                 f'id = "regex" if any')
+            if 'id' in spec:
+                try:
+                    self.ids[prefix] = re.compile(spec['id'])
+                except re.error as e:
+                    raise ValueError(f'{path}: refs."{prefix}".id: {e}') from e
             url = spec.get('url')
             if url is not None and '{id}' not in url:
                 raise ValueError(f'{path}: refs."{prefix}".url should have {{id}} in it')
@@ -92,9 +101,14 @@ class Refs:
             return
         pos = 0
         for m in self.SKIP.finditer(text):
-            yield from self.pattern.finditer(text, pos, m.start())
+            yield from filter(self.takes, self.pattern.finditer(text, pos, m.start()))
             pos = m.end()
-        yield from self.pattern.finditer(text, pos)
+        yield from filter(self.takes, self.pattern.finditer(text, pos))
+
+    def takes(self, m, prefix=1, id=2):
+        """Whether the id of a match fits its prefix's `id` regex, any does without one."""
+        regex = self.ids.get(m[prefix])
+        return regex is None or bool(regex.fullmatch(m[id]))
 
     def sub(self, func, text):
         """Text with every ref func gives text for, as finditer finds them."""
@@ -106,7 +120,8 @@ class Refs:
 
     def is_ref(self, value):
         """Whether value is a whole ref, as a front matter value is."""
-        return bool(self.full and isinstance(value, str) and self.full.fullmatch(value.strip()))
+        m = self.full and isinstance(value, str) and self.full.fullmatch(value.strip())
+        return bool(m and self.takes(m))
 
     @staticmethod
     def anchor(ref):
@@ -162,7 +177,7 @@ class Refs:
                 fence = f[1]
                 continue
             m = self.definition.match(line)
-            if m:
+            if m and self.takes(m, 2, 3):
                 ref = m[2] + m[3] + (f' {m[4]}' if m[4] else '')
                 rest = line[m.start(2):]
                 bold = rest.split('**')[0] if line[:m.start(2)].rstrip().endswith('**') else ''

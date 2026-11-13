@@ -2246,7 +2246,7 @@ class RefsTest(unittest.TestCase):
                       '<a class="ref" href="#visit" title="Visit four">visit:4</a>.', self.html)
 
     def test_code_links_urls_and_words_keep_refs_as_text(self):
-        self.assertIn('Code <code>P:1</code> stays, as COVID-19 and a-P:1 and <a href="#backlog">P:1</a> do.',
+        self.assertIn('Code <code>P:1</code> stays, as COVID-19, HQD-NNN and a-P:1 and <a href="#backlog">P:1</a> do.',
                       self.html)
         self.assertIn('<a href="https://x.example/P:1">https://x.example/P:1</a> or www.x.example/P:2.', self.html)
 

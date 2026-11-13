@@ -18,12 +18,14 @@ The HTML page shows keys in schema order as a tree of their values, values neste
 ## Refs
 
 `[refs."P:"]` makes `P:24` a [ref](Concepts.md#refs), linking where the vault defines it,
-`url` with `{id}` where it leads when the vault does not; a prefix ends in its separator, `:` or `-`:
+`url` with `{id}` where it leads when the vault does not, `id` a regex the ids match;
+a prefix ends in its separator, `:` or `-`:
 
 ```toml
 [refs."P:"]                               # P:24 links to **P:24.** starting an item
 [refs."HQD-"]
 url = "https://jira.example.com/browse/HQD-{id}"
+id = "[0-9]+"                             # HQD-NNN stays text
 ```
 
 Schema type `ref` takes refs that lead somewhere: `sources = "ref"`.

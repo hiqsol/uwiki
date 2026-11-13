@@ -3,6 +3,7 @@
 [refs."visit:"]
 [refs."HQD-"]
 url = "https://jira.example.com/browse/HQD-{id}"
+id = "[0-9]+"                              # HQD-NNN stays text
 
 [check]
 orphans = true
