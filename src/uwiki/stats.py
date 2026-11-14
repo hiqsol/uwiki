@@ -29,7 +29,7 @@ class Stats:
             self.pages.append(self.count(scanner, page, shown))
             if scanner not in self.links:
                 self.links[scanner] = Links(scanner)
-            for target, _, _ in self.links[scanner].of(page):
+            for target, *_ in self.links[scanner].of(page):
                 if target.source and target.source is not page.source:
                     self.incoming[target.source.fullpath] = self.incoming.get(target.source.fullpath, 0) + 1
         orphans = {page.source.fullpath for links in self.links.values() for page in links.orphans() if page.source}

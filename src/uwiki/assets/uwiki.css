@@ -805,7 +805,7 @@ main.content {
     font-size: calc(12px * var(--text-scale));
     font-weight: normal;
 }
-.content :is(li, tr):has(.ref-def:target):not(:has(li .ref-def:target)) {
+.content :is(li, tr, p):has(:is(.ref-def, .ref):target):not(:has(:is(li, p) :is(.ref-def, .ref):target)) {
     animation: target 1.5s ease-out;
 }
 .content code {
@@ -1021,6 +1021,30 @@ details.callout:not([open]) > summary {
     font-size: calc(12px * var(--text-scale));
     font-weight: 500;
     letter-spacing: 0.02em;
+}
+/* backrefs of a ref definition: where each ref to it is, with the words around it; a long list scrolls */
+.preview.backrefs {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.preview.backrefs.long::after {
+    content: none;
+}
+.preview.backrefs ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.preview.backrefs li {
+    padding: 3px 0;
+}
+.preview.backrefs li + li {
+    border-top: 1px solid var(--border);
+}
+.preview.backrefs li > span {
+    display: block;
+    color: var(--fg-muted);
+    font-size: calc(13px * var(--text-scale));
 }
 .content.preview-head, .content.preview-body {
     max-width: none;

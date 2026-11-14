@@ -4,12 +4,12 @@ from .convert import Converter
 from .vault import read_front
 
 class LinkCollector(Converter):
-    """Reads page like renderer does, notes its links and embeds in order: target and heading."""
+    """Reads page like renderer does, notes its links, embeds and refs in order: target and heading."""
 
     def __init__(self, page, scanner):
         super().__init__(page, scanner)
         self.mode = 'md'
-        self.found = []  # (target, heading, line)
+        self.found = []  # (target, heading, line, ref): ref as written for a ref, else ''
 
     def local_href(self, href, line=None):
         if self.is_local(href):
@@ -41,18 +41,18 @@ class LinkCollector(Converter):
             found = self.refs.resolve(ref)
             if found is not None:
                 line = next((n for n, text in enumerate(front.splitlines(), 1) if text.startswith(key + ':')), 1)
-                self.note(found.node, '' if found.anchor == found.node.anchor else ref, line)
+                self.note(found.node, '' if found.anchor == found.node.anchor else ref, line, ref)
 
     def ref(self, ref, line):
         """A ref links the page defining it, at the ref, unless it is that definition."""
         found = self.refs.resolve(ref)
         if found is not None and not self.defines(found, line):
-            self.note(found.node, '' if found.anchor == found.node.anchor else ref, line)
+            self.note(found.node, '' if found.anchor == found.node.anchor else ref, line, ref)
         return super().ref(ref, line)
 
-    def note(self, target, heading='', line=None):
+    def note(self, target, heading='', line=None, ref=''):
         if target is not None:
-            self.found.append((target, heading, self.line if line is None else line))
+            self.found.append((target, heading, self.line if line is None else line, ref))
 
 class Links:
     """Links of vault pages, read once: folder page links are its folder's."""
@@ -63,7 +63,8 @@ class Links:
         self._reach = None
 
     def of(self, node):
-        """Links of page or folder page in order, as (target, heading, line), headings found or None if missing."""
+        """Links of page or folder page in order, as (target, heading, line, ref), headings found or None if missing,
+        ref the ref a ref link is, '' for other links."""
         if node not in self.cache:
             collector = LinkCollector(node, self.scanner)
             try:
@@ -76,7 +77,7 @@ class Links:
 
     def targets(self, node):
         """Pages and folders node links to, in order of first link."""
-        return list(dict.fromkeys(target for target, _, _ in self.of(node)))
+        return list(dict.fromkeys(target for target, *_ in self.of(node)))
 
     def reach(self):
         """Node: order it is first reached in, in a breadth-first walk of links from the root folder page."""

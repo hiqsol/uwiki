@@ -379,7 +379,7 @@ class Checker:
             for key, values in layers.items():
                 level = self.layer(page, key, values)
                 if level is not None:
-                    for target, _, line in self.vault_links(scanner).of(page):
+                    for target, _, line, _ in self.vault_links(scanner).of(page):
                         other = self.layer(target, key, values) if target is not page else None
                         if other is not None and other > level:
                             path = os.path.relpath(target.file, scanner.path).replace(os.sep, '/')

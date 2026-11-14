@@ -38,7 +38,7 @@
     try {
       return JSON.parse(el.textContent);
     } catch (e) {
-      return { facets: [], pages: {}, backlinks: {} };
+      return { facets: [], pages: {}, backlinks: {}, backrefs: {} };
     }
   }
 
@@ -54,7 +54,7 @@
       var info = data.pages[h.id], problems = h.querySelector(":scope > details.problems");
       var issues = problems ? problems.querySelector(":scope > div") : null;
       if (issues && issues.children.length) issuesOf.set(h.id, issues);
-      var blocks = [metadataBlock(h.id, info, data.backlinks[h.id] || [], issues)];
+      var blocks = [metadataBlock(h.id, info, data.backlinks[h.id] || [], backrefsOf(h.id), issues)];
       if (problems) problems.remove();
       if (info && data.frontMatter !== false) blocks.push(frontMatterBlock(h.id, info));
       blocks.filter(Boolean).reverse().forEach(function (block) { h.insertBefore(block, h.firstChild); });
@@ -63,17 +63,22 @@
       var block = e.target;
       if (!block.open || !block.dataset || !("page" in block.dataset) || block.querySelector(":scope > table")) return;
       var id = block.dataset.page, table = block.classList.contains("metadata")
-        ? metadataTable(id, data.pages[id], data.backlinks[id] || [], issuesOf.get(id))
+        ? metadataTable(id, data.pages[id], data.backlinks[id] || [], backrefsOf(id), issuesOf.get(id))
         : frontTable(frontItems(data.pages[id]));
       block.appendChild(table);
       if (content.contains(block)) addRefs(table);
     }, true);
   }
 
-  // metadata as folded line of problems, tokens, backlinks and file name unfolding into a table of problems
-  // with links to where they are, stats, links to linking pages, file name and folder; file name and folder
-  // only where title and crumb don't tell them, problems and backlinks only if any
-  function metadataBlock(id, info, links, issues) {
+  function backrefsOf(id) {
+    return (data.backrefs || {})[id] || [];
+  }
+
+  // metadata as folded line of problems, tokens, backlinks, backrefs and file name unfolding into a table of
+  // problems with links to where they are, stats, links to linking pages and to pages with refs defined here,
+  // file name and folder; file name and folder only where title and crumb don't tell them, problems,
+  // backlinks and backrefs only if any
+  function metadataBlock(id, info, links, refLinks, issues) {
     var line = [], b = null;
     if (issues) {
       b = document.createElement("b");
@@ -82,8 +87,9 @@
     }
     if (info) line.push(short(info.tokens || 0) + " tokens");
     if (links.length) line.push(plural(links.length, "backlink"));
+    if (refLinks.length) line.push(plural(refLinks.length, "backref"));
     if (info && info.file) line.push(info.file);
-    if (!b && !info && !links.length) return null;
+    if (!b && !info && !links.length && !refLinks.length) return null;
     var block = details("metadata"), span = document.createElement("span");
     block.dataset.page = id;
     if (b) span.appendChild(b);
@@ -96,8 +102,9 @@
     return issues.querySelector("a.problem") ? "problem" : "warning";
   }
 
-  // the unfolded metadata: problems linking to their lines, else to the page, stats, backlinks, file and folder
-  function metadataTable(id, info, links, issues) {
+  // the unfolded metadata: problems linking to their lines, else to the page, stats, backlinks, backrefs,
+  // file and folder
+  function metadataTable(id, info, links, refLinks, issues) {
     var rows = [];
     if (issues) {
       issues = issues.cloneNode(true);
@@ -113,6 +120,7 @@
                            plural(minutes, "minute")].join(" · ")]);
     }
     if (links.length) rows.push([plural(links.length, "backlink"), backlinks(links)]);
+    if (refLinks.length) rows.push([plural(refLinks.length, "backref"), backlinks(refLinks)]);
     if (info && info.file) rows.push(["Filename", info.file]);
     if (info && info.dir) rows.push(["Dir", info.dir]);
     var table = document.createElement("table");
@@ -127,7 +135,7 @@
     return table;
   }
 
-  // links to the linking pages, to the heading a link leads to
+  // links to the linking pages, to the heading a link leads to, or the ref of a backref
   function backlinks(links) {
     var div = document.createElement("div");
     links.forEach(function (link, i) {
@@ -188,16 +196,22 @@
     return value === null || value === undefined ? "" : String(value);
   }
 
-  // text into el with the refs the build resolved linked, as refs in the text are
+  // refs the build resolved in front matter values, null for none
   var refPattern;
-  function refText(el, text) {
-    var refs = data.refs || {};
+  function frontRefPattern() {
     if (refPattern === undefined) {
-      var keys = Object.keys(refs).sort(function (a, b) { return b.length - a.length; });
+      var keys = Object.keys(data.refs || {}).sort(function (a, b) { return b.length - a.length; });
       refPattern = keys.length ? new RegExp("(?<![\\w.:/-])(" + keys.map(function (k) {
         return k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       }).join("|") + ")(?![\\w:-]*\\w)", "g") : null;
     }
+    return refPattern;
+  }
+
+  // text into el with the refs the build resolved linked, as refs in the text are
+  function refText(el, text) {
+    var refs = data.refs || {};
+    frontRefPattern();
     if (!refPattern || !text) { el.textContent = text; return; }
     var pos = 0;
     text.replace(refPattern, function (ref, _, at) {
@@ -1398,8 +1412,8 @@
     if (!a || !a.closest("main.content, .preview, #sidebar") || a.closest(".preview-title")) return null;
     var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
     if (target && !/^H[1-6]$/.test(target.tagName)) target = target.closest("h1, h2, h3, h4, h5, h6, li, tr");
-    return target && content.contains(target) && !a.classList.contains("item-anchor")
-      && !a.classList.contains("ref-def") ? a : null;
+    if (a.classList.contains("ref-def")) return backrefsTo(a.getAttribute("href").slice(1)).length ? a : null;
+    return target && content.contains(target) && !a.classList.contains("item-anchor") ? a : null;
   }
 
   // popover the link is in, 0 for links in the page
@@ -1413,9 +1427,27 @@
 
   function openPreview(a, level) {
     closePreviews(level);
+    var el = a.classList.contains("ref-def") ? backrefsBox(a) : previewBox(a);
+    document.body.appendChild(el);
+    if (el.scrollHeight > el.clientHeight + 1) el.classList.add("long");
+    place(el, a);
+    // unfolding metadata or front matter makes it longer
+    el.addEventListener("toggle", function () {
+      el.classList.toggle("long", el.scrollHeight > el.clientHeight + 1);
+    }, true);
+    var p = { el: el, link: a, timer: null };
+    previews[level] = p;
+    el.addEventListener("pointerenter", function () { cancelClose(previews.indexOf(p)); });
+    el.addEventListener("pointerleave", function (e) {
+      if (e.pointerType === "mouse") scheduleClose(previews.indexOf(p));
+    });
+  }
+
+  // the section a link leads to
+  function previewBox(a) {
     var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
-    // a ref defined by a heading previews its section
-    if (target.classList.contains("ref-def")) target = target.closest("h1, h2, h3, h4, h5, h6") || target;
+    // a ref in a heading, as where it is defined, previews its section
+    if (target.matches(".ref-def, .ref")) target = target.closest("h1, h2, h3, h4, h5, h6") || target;
     var el = document.createElement("div");
     el.className = "preview";
     var title = document.createElement("a");
@@ -1451,19 +1483,113 @@
     });
     codeBlocks(body).forEach(renderCode);
     el.appendChild(body);
-    document.body.appendChild(el);
-    if (el.scrollHeight > el.clientHeight + 1) el.classList.add("long");
-    place(el, a);
-    // unfolding metadata or front matter makes it longer
-    el.addEventListener("toggle", function () {
-      el.classList.toggle("long", el.scrollHeight > el.clientHeight + 1);
-    }, true);
-    var p = { el: el, link: a, timer: null };
-    previews[level] = p;
-    el.addEventListener("pointerenter", function () { cancelClose(previews.indexOf(p)); });
-    el.addEventListener("pointerleave", function (e) {
-      if (e.pointerType === "mouse") scheduleClose(previews.indexOf(p));
+    return el;
+  }
+
+  // backrefs of a ref definition: where the page refs to it, each with the words around it,
+  // then the pages naming it in front matter
+  function backrefsBox(a) {
+    var id = a.getAttribute("href").slice(1), found = backrefsTo(id);
+    var el = document.createElement("div");
+    el.className = "preview backrefs";
+    var title = document.createElement("div");
+    title.className = "preview-title";
+    var crumb = document.createElement("span");
+    crumb.className = "preview-crumb";
+    crumb.textContent = plural(found.length, "backref");
+    title.appendChild(crumb);
+    title.appendChild(document.createTextNode(a.textContent));
+    el.appendChild(title);
+    var list = document.createElement("ul");
+    found.forEach(function (at, i) {
+      var li = list.appendChild(document.createElement("li"));
+      var link = li.appendChild(document.createElement("a")), words = "";
+      if (Array.isArray(at)) {
+        var page = document.getElementById(at[0]);
+        link.href = "#" + at[0];
+        link.textContent = (page ? titleOf(page) : at[0]) + " › " + at[1];
+        words = frontText(frontItems(data.pages[at[0]])[at[1]]);
+      } else {
+        if (!at.id) at.id = id + "--by-" + (i + 1);
+        link.href = "#" + at.id;
+        link.textContent = placeOf(at);
+        words = around(at);
+      }
+      if (words) li.appendChild(document.createElement("span")).textContent = words;
     });
+    el.appendChild(list);
+    return el;
+  }
+
+  // places refs lead to the definition at id from: the first ref in each item, row, paragraph or heading,
+  // metadata aside, then [page id, key] of front matter values naming a ref leading there
+  function backrefsTo(id) {
+    var res = [], blocks = new Set();
+    content.querySelectorAll('a.ref[href="#' + CSS.escape(id) + '"]').forEach(function (a) {
+      var block = blockOf(a);
+      if (a.closest(".metadata, .front-matter") || blocks.has(block)) return;
+      blocks.add(block);
+      res.push(a);
+    });
+    return res.concat(frontRefsTo()["#" + id] || []);
+  }
+
+  var frontRefs = null;  // href: [[page id, key]] of front matter values with refs leading there
+  function frontRefsTo() {
+    if (!frontRefs) {
+      frontRefs = {};
+      var pattern = frontRefPattern();
+      Object.keys(pattern ? data.pages : {}).forEach(function (page) {
+        var items = frontItems(data.pages[page]);
+        Object.keys(items).forEach(function (key) {
+          var seen = new Set();
+          (frontText(items[key]).match(pattern) || []).forEach(function (ref) {
+            var href = data.refs[ref][0];
+            if (href[0] !== "#" || seen.has(href)) return;
+            seen.add(href);
+            (frontRefs[href] = frontRefs[href] || []).push([page, key]);
+          });
+        });
+      });
+    }
+    return frontRefs;
+  }
+
+  // page and heading el is under: Page › Heading
+  function placeOf(el) {
+    var page = pageOf(el), h = el.closest("h1, h2, h3, h4, h5, h6");
+    if (!h) {
+      var n = el;
+      while (n.parentElement && n.parentElement.tagName !== "SECTION" && n.parentElement !== content) n = n.parentElement;
+      for (n = n.previousElementSibling; n && !h; n = n.previousElementSibling) {
+        if (n.classList.contains("page")) break;
+        if (/^H[1-6]$/.test(n.tagName)) h = n;
+      }
+    }
+    var title = page ? titleOf(page) : "";
+    return h && !h.classList.contains("page") ? title + " › " + h.textContent : title;
+  }
+
+  function blockOf(a) {
+    return a.closest("h1, h2, h3, h4, h5, h6, .callout-title") || a.closest("li, tr")
+      || a.closest("p, dd, blockquote") || a;
+  }
+
+  // words around a ref in its item, row or paragraph, sublists left out, none where it is a heading
+  var AROUND = 60;
+  function around(a) {
+    var block = blockOf(a);
+    if (block === a || /^H[1-6]$/.test(block.tagName)) return "";
+    var copy = block.cloneNode(true);
+    copy.querySelectorAll("ul, ol, .item-anchor").forEach(function (n) { n.remove(); });
+    var mark = copy.querySelector("#" + CSS.escape(a.id));
+    if (mark) mark.textContent = "\u0000" + mark.textContent;
+    var text = (block.tagName === "TR" ? Array.prototype.map.call(copy.cells, function (c) { return c.textContent; })
+      .join(" · ") : copy.textContent).replace(/\s+/g, " ").trim();
+    var at = Math.max(0, text.indexOf("\u0000"));
+    text = text.replace("\u0000", "");
+    var start = Math.max(0, at - AROUND), end = Math.min(text.length, at + a.textContent.length + AROUND);
+    return (start ? "…" : "") + text.slice(start, end).trim() + (end < text.length ? "…" : "");
   }
 
   // metadata and front matter of a page
@@ -1496,7 +1622,7 @@
 
   function previewTitle(target) {
     if (target.classList.contains("page")) return titleOf(target);
-    if (target.classList.contains("ref-def")) {
+    if (target.matches(".ref-def, .ref")) {
       var at = pageOf(target);
       return (at ? titleOf(at) + " › " : "") + target.textContent;
     }

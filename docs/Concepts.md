@@ -66,8 +66,9 @@ A ref of a checked item `[x]` is done, struck through where it links.
 A lowercase letter ending an id right after a digit makes a point: `**P:24a.**` defines point a of P:24.
 P:24a links there, else to P:24, and P:24 to its first point when nothing else defines it;
 a ref defined as written wins, so an id like `1a2b` stays whole where the vault defines it.
-Refs link pages for backlinks, orphans and reading order, in front matter values too;
-markdown output, Obsidian and GitHub show them as written, `ls --refs` lists where they are defined.
+Refs link pages for orphans and reading order and count as backrefs, apart from backlinks,
+in front matter values too; markdown output, Obsidian and GitHub show them as written,
+`ls --refs` lists where they are defined.
 
 ## Orphan
 

@@ -2269,10 +2269,15 @@ class RefsTest(unittest.TestCase):
         self.assertIn('Proposals P:1 and P:2, ticket HQD-7, record doc:245 at visit:4.', self.md)
         self.assertIn('- [ ] **P:1. Space types.**', self.md)
 
-    def test_refs_are_backlinks_and_front_matter_links(self):
+    def test_refs_are_backrefs_and_front_matter_links(self):
         data = page_data(self.html)
-        self.assertIn(['root', 'P:1'], data['backlinks']['backlog'])
-        self.assertIn(['notes', 'doc:246'], data['backlinks']['records'])
+        self.assertEqual(data['backlinks']['backlog'], ['root'])  # a link, refs are apart
+        self.assertEqual(data['backrefs']['backlog'], [['root', 'P:1'], ['root', 'P:2'], ['root', 'P:4c'],
+                                                       ['root', 'P:4'], ['root', 'P:4b'], ['notes', 'P:3']])
+        self.assertEqual(data['backrefs']['records'], [['root', 'doc:245'], ['notes', 'doc:245'],
+                                                       ['notes', 'doc:246']])
+        self.assertNotIn('records', data['backlinks'])
+        self.assertIn('Backlinks: [Refs](#root)\n\nBackrefs: [Refs › P:1](#root), [Refs › P:2](#root)', self.md)
         self.assertEqual(data['refs'], {'doc:246': ['#ref-doc-246', 'doc:246 · X-ray', False],
                                         'HQD-9': ['https://jira.example.com/browse/HQD-9', '', False]})
 

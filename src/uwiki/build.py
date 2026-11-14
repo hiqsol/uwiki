@@ -119,33 +119,39 @@ class Builder:
     def converter(self, node):
         return Converter(node, self.scanner, self.outdir, scope=self)
 
-    def backlinks(self, node):
-        """Built pages linking to node, in reading order, with headings links lead to: [(page, heading)]."""
+    def incoming(self, node):
+        """Built pages linking to node, in reading order: (backlinks [(page, heading a link leads to)],
+        backrefs [(page, ref to a definition in node)])."""
         if not self.options.backlinks:
-            return []
+            return [], []
         if self._backlinks is None:
-            self._backlinks = {}
+            self._backlinks = {}, {}
             for source, body in self.nodes():
                 if not body:
                     continue
-                for target, heading, _ in self.links.of(source):
+                for target, heading, _, ref in self.links.of(source):
                     if target is source:
+                        continue
+                    if ref:
+                        self._backlinks[1].setdefault(target, {}).setdefault((source, ref), (source, ref))
                         continue
                     heading = (heading or '').strip()
                     if heading and cebabize(heading) == cebabize(target.title):
                         heading = ''
-                    entries = self._backlinks.setdefault(target, {})
+                    entries = self._backlinks[0].setdefault(target, {})
                     entries.setdefault((source, cebabize(heading)), (source, heading))
-        return list(self._backlinks.get(node, {}).values())
+        return tuple(list(found.get(node, {}).values()) for found in self._backlinks)
 
     def backlink_text(self, source, heading):
         return source.title + (self.SEP + heading if heading else '')
 
     def md_backlinks(self, node):
         escape = lambda text: re.sub(r'([\\\[\]])', r'\\\1', text)
-        links = [f'[{escape(self.backlink_text(source, heading))}](#{source.anchor})'
-                 for source, heading in self.backlinks(node)]
-        return f'Backlinks: {", ".join(links)}\n\n' if links else ''
+        res = ''
+        for label, found in zip(('Backlinks', 'Backrefs'), self.incoming(node)):
+            links = [f'[{escape(self.backlink_text(source, heading))}](#{source.anchor})' for source, heading in found]
+            res += f'{label}: {", ".join(links)}\n\n' if links else ''
+        return res
 
     def issues_of(self, node):
         """What check reports for built page, split: (lines of its text: [(message, warning)], the rest)
@@ -190,12 +196,13 @@ class Builder:
         in schema order, built pages by anchor with vault path, top level front matter in schema order with
         nested maps and lists of maps as such, words as stats counts them, tokens and what check reports,
         file name and folder path where its title and folders don't tell them, backlinks by anchor as anchors
-        of linking pages, with headings links lead to."""
-        pages, backlinks, refs = {}, {}, {}
+        of linking pages, with headings links lead to, backrefs as such with the refs."""
+        pages, backlinks, backrefs, refs = {}, {}, {}, {}
         for node, body in nodes:
-            links = [[source.anchor, heading] if heading else source.anchor for source, heading in self.backlinks(node)]
-            if links:
-                backlinks[node.anchor] = links
+            for res, found in zip((backlinks, backrefs), self.incoming(node)):
+                links = [[source.anchor, heading] if heading else source.anchor for source, heading in found]
+                if links:
+                    res[node.anchor] = links
             if not body or node.file is None:
                 continue
             _, front, text, _ = read_parts(node.file)
@@ -217,6 +224,8 @@ class Builder:
             pages[node.anchor] = page
             self.front_refs(front, refs)
         data = {'facets': list(self.schema.facets().items()), 'pages': pages, 'backlinks': backlinks}
+        if backrefs:
+            data['backrefs'] = backrefs
         if refs:
             data['refs'] = refs
         if not self.options.front_matter:

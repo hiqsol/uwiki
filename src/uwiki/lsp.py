@@ -510,7 +510,7 @@ class Server:
             keys = next((k for _, p, k in self.item_lines(file) if p == item and section_key(heading) in k), [])
         res = []
         for page in sorted(set(self.pages.values()), key=lambda p: p.source.fullpath if p.source else ''):
-            for target, linked, line in self.links.of(page):
+            for target, linked, line, _ in self.links.of(page):
                 if target is not node or not self.leads(linked or '', heading, item, keys):
                     continue
                 res.append(self.location(page.source.fullpath, line - 1))

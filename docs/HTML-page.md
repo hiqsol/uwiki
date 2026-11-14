@@ -9,10 +9,11 @@
 - hover preview of a link target under the folders it is in, a page's with its metadata and front matter
   folded top right of its header, links in it preview too, sidebar entries beside the sidebar
 - [refs](Concepts.md#refs) link where they are defined, titled with what they define, a done one struck through,
-  in front matter too, previewing the item, row or section defining them; a click on a definition copies its link
+  in front matter too, previewing the item, row or section defining them; a definition previews its backrefs,
+  where refs to it are with the words around them, and front matter naming it; a click on it copies its link
 - metadata and front matter top right of page header, problems marked at their lines;
-  metadata folds to problems, tokens, backlinks and file name, unfolds to what `check` reports, words, tokens
-  and reading time, backlinks, file name and folder; file name and folder only where title and folders
+  metadata folds to problems, tokens, backlinks, backrefs and file name, unfolds to what `check` reports, words,
+  tokens and reading time, backlinks, backrefs (pages with refs defined in the page), file name and folder; file name and folder only where title and folders
   don't tell them; nested front matter keys beside the key above them in the same table
 - tokens estimated as 4 bytes of UTF-8 each, so text in other scripts than Latin counts more
 - code blocks highlighted by Prism and `mermaid` blocks drawn as they near the window, the libraries
