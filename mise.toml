@@ -1,0 +1,82 @@
+# Tools pinned for everyone and CI, tasks in place of a Makefile: `mise run test`, `mise tasks` lists them.
+# Lint steps live in hk.pkl: `mise run lint` checks, `mise run fix` fixes, `mise run hooks` installs git hooks.
+
+[tools]
+uv = "0.13.8"
+hk = "2.12.0"
+node = "24"                               # for markdownlint-cli2
+"npm:markdownlint-cli2" = "0.24.1"
+typos = "1.52.2"
+lychee = "0.24.2"
+vale = "3.27.0"
+gitleaks = "8.30.1"
+shellcheck = "0.11.0"
+
+[env]
+HK_MISE = "1"                             # git hooks run hk through mise, with the tools above
+# lint steps run this checkout's uwiki, `mise run venv` installs it; a vault pins a release in [tools] instead:
+# "pipx:hiqsol/uwiki" = "0.30.0"
+_.path = ["{{config_root}}/.venv/bin"]
+
+[tasks.venv]
+description = "install this checkout's uwiki into .venv, editable"
+run = "uv sync -q"
+
+[tasks.test]
+description = "run tests"
+run = "uv run --no-project --with markdown-it-py --with linkify-it-py python -m unittest discover tests"
+
+[tasks.lint]
+depends = ["venv"]
+description = "pages: uwiki check, markdownlint, typos, Vale; repo: hygiene, gitleaks"
+run = "hk check --all"
+
+[tasks.fix]
+depends = ["venv"]
+description = "fix what markdownlint, typos and the hygiene steps can"
+run = "hk fix --all"
+
+[tasks.links]
+depends = ["venv"]
+description = "external links alive, lychee over the files uwiki reads; network, not a gate"
+run = "hk run links --all"
+
+[tasks.secrets]
+description = "gitleaks over the whole git history, a leak stays there after its fix"
+run = "hk run secrets --all"
+
+[tasks.hooks]
+depends = ["venv"]
+description = "install git hooks: pre-commit checks staged files"
+run = "hk install --mise"
+
+[tasks.build]
+description = "build sdist and wheel"
+run = "uv build"
+
+[tasks.clean]
+description = "remove dist, build and __pycache__"
+run = "./tasks.sh clean"
+
+[tasks.version]
+run = "./tasks.sh version"
+quiet = true
+
+# test, bump version in src/uwiki/__init__.py, commit and tag it
+[tasks.patch]
+description = "fixes: 0.2.1 -> 0.2.2, tagged"
+run = "./tasks.sh bump patch"
+[tasks.minor]
+description = "features: 0.2.1 -> 0.3.0, tagged"
+run = "./tasks.sh bump minor"
+[tasks.major]
+description = "0.2.1 -> 1.0.0, tagged"
+run = "./tasks.sh bump major"
+
+[tasks.release]
+description = "push master and the tag, the release workflow tests and creates the GitHub release"
+run = "./tasks.sh release"
+
+[tasks.up]
+description = "install the current tag with mise, it becomes latest locally without GitHub API lag"
+run = "./tasks.sh up"

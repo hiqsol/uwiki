@@ -621,4 +621,3 @@ class Converter:
         """Page header and text as markdown, header only without body."""
         self.mode = 'md'
         return self.md_header() + (self.read().strip() + '\n\n' if body else '')
-

@@ -18,3 +18,10 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install markdown-it-py linkify-it-py
       - run: python -m unittest discover tests
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v5          # installs the tools mise.toml pins
+      - run: mise run lint

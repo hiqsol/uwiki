@@ -521,4 +521,3 @@ class Checker:
         self.check_refs(scanner, page, front, report)
         converter = CheckConverter(page, scanner, report, self.options)
         converter.read()
-

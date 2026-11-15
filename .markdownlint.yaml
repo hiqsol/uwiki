@@ -6,3 +6,6 @@ MD031: false
 MD032: false
 MD040: false
 MD060: false
+MD033:                                    # a centered logo in README
+  allowed_elements: [p, img]
+MD041: false                              # front matter title is the page title in uwiki, no H1 needed
