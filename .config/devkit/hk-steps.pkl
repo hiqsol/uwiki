@@ -42,7 +42,6 @@ steps: Mapping<String, Config.Step> = new {
   ["byte-order-marker"] = Builtins.byte_order_marker
   ["merge-conflict"] = Builtins.check_merge_conflict
   ["case-conflict"] = Builtins.check_case_conflict    // Page.md and page.md are one file on macOS and Windows
-  ["large-files"] = Builtins.check_added_large_files  // attachments over 500 kB
   ["symlinks"] = Builtins.check_symlinks
   ["shellcheck"] = Builtins.shellcheck
 
@@ -64,6 +63,8 @@ function hooks(all: Mapping<String, Config.Step>): Mapping<String, Config.Hook> 
   ["pre-commit"] {
     steps = (all) {
       ["gitleaks"] { check = "gitleaks git --pre-commit --staged --redact --no-banner" }
+      // files added over 500 kB; here only, as files committed earlier were meant to be
+      ["large-files"] = Builtins.check_added_large_files
     }
   }
   // external links alive: other people's servers, so on demand or on a schedule, never a gate
