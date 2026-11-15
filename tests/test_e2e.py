@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 from urllib.parse import quote
 
 import linkify_it  # noqa: F401 -- required, build tests must not be skipped
@@ -2030,6 +2031,27 @@ class LsTest(unittest.TestCase):
         self.assertEqual(self.ls('external'), 'external/index.md\nexternal/my page.md\n')
         self.assertEqual(self.ls('external', '-z'), 'external/index.md\0external/my page.md\0')
         self.assertEqual(self.ls('external', '--exclude', 'index.md'), 'external/my page.md\n')
+
+    def test_only_keeps_files_the_paths_list_as_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(os.path.join(tmp, 'uwiki.toml'), 'exclude = ["data"]\n')
+            write(os.path.join(tmp, 'a.md'), 'A https://a.example/x.\n')
+            write(os.path.join(tmp, 'docs', 'my page.md'), 'Doc https://d.example.\n')
+            write(os.path.join(tmp, 'data', 'raw.md'), 'Raw.\n')
+            write(os.path.join(tmp, 'sub', 'uwiki.toml'), 'exclude = []\n')  # a vault of its own, excluding nothing
+            write(os.path.join(tmp, 'sub', 'b.md'), 'B.\n')
+            write(os.path.join(tmp, 'notes.txt'), 'Notes.\n')
+            # named alone, data/raw.md would be in the vault of data/, which excludes nothing
+            given = ['docs/my page.md', 'data/raw.md', 'sub/b.md', 'notes.txt', 'gone.md', 'a.md', './a.md']
+            res = run('ls', '.', '--only', *given, cwd=tmp)
+            self.assertEqual((res.returncode, res.stdout.splitlines()), (0, ['docs/my page.md', 'sub/b.md', 'a.md']))
+            res = run('ls', '.', '--only', 'data/raw.md', cwd=tmp)
+            self.assertEqual((res.returncode, res.stdout), (0, ''))
+            self.assertEqual(run('ls', 'docs', '--only', 'a.md', 'docs/my page.md', cwd=tmp).stdout, 'docs/my page.md\n')
+            self.assertEqual(run('ls', '--external', '.', '--only', 'a.md', cwd=tmp).stdout, 'https://a.example/x\n')
+            for stdin in ('data/raw.md\0a.md\0', 'data/raw.md\na.md\n'):
+                with mock.patch('sys.stdin', io.StringIO(stdin)):
+                    self.assertEqual(run('ls', '-z', '.', '--only', '-', cwd=tmp).stdout, 'a.md\0', stdin)
 
     def test_files_skip_symlinks_and_skip_list(self):
         self.assertEqual(self.ls('project').splitlines(), [

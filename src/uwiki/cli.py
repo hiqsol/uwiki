@@ -166,7 +166,11 @@ def index(args):
         print(f'updated {shown}')
 
 def ls(args):
-    listing = Listing(args.paths, args.include, args.exclude)
+    only = args.only
+    if only == ['-']:  # names from stdin, NUL separated as find -print0 and git -z give them, else one per line
+        text = sys.stdin.read()
+        only = [name for name in (text.split('\0') if '\0' in text else text.splitlines()) if name]
+    listing = Listing(args.paths, args.include, args.exclude, only)
     for line in listing.urls() if args.external else listing.refs() if args.refs else listing.files():
         print(line, end='\0' if args.null else '\n')
 
@@ -327,13 +331,16 @@ def parser():
     p.set_defaults(func=index)
 
     p = command(commands, 'ls', 'list markdown files, external links or refs defined in them, one per line',
-                f'[--external | --refs] [-z] {FILTER_USAGE}')
+                f'[--external | --refs] [-z] {FILTER_USAGE} [--only FILE...]')
     add_paths(p, 'folders or files to list')
     p.add_argument('--external', action='store_true',
                    help='list unique http and https links outside front matter and code instead')
     p.add_argument('--refs', action='store_true',
                    help='list refs defined in them instead: ref, path:line and what it defines, tab separated')
     p.add_argument('-z', '--null', action='store_true', help='end lines with NUL, for xargs -0')
+    p.add_argument('--only', nargs='+', metavar='FILE',
+                   help='of these files the paths list, as named: the ones a hook or a linter gives, '
+                        'checked by the vault of the paths, not their own; - reads them from stdin')
     add_filter(p)
     p.set_defaults(func=ls)
 

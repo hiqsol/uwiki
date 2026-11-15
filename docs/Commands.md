@@ -8,7 +8,7 @@ uwiki check  <paths> [--orphans] [--unlisted] [--mentions] [--mentions-exclude G
 uwiki link   <paths> [--dry-run] [-w 70]
 uwiki llms   <paths> [-o FILE] [--title TITLE] [--check]
 uwiki index  <paths> [--check]
-uwiki ls     <paths> [--external | --refs] [-z]
+uwiki ls     <paths> [--external | --refs] [-z] [--only FILE...]
 uwiki stats  <paths> [--by folder|KEY] [--top N] [--json]
 uwiki wrap   <paths> [-w 70] [--check]
 uwiki mv     <from> <to> [--dry-run]
@@ -74,6 +74,9 @@ keeping their order and the lines linking subfolders, `--check` reports blocks o
 Lists the files commands take, `--external` external links, `--refs` the [refs](Concepts.md#refs) they define
 as `ref<TAB>path:line<TAB>what it defines`, for other tools and agents:
 `uwiki ls -z docs | xargs -0 typos`, `uwiki ls --external docs | lychee -`, `uwiki ls --refs . | grep ^doc:245`.
+`--only FILE...` lists just those of the files given the paths list, as named, `-` reads them from stdin:
+what a git hook or a lint runner hands over, judged by the vault of the paths and its excludes,
+where named as paths each would be in the vault of its own folder: `uwiki ls -z . --only {{files}} | xargs -0 -r typos`.
 
 ## stats
 
