@@ -18,7 +18,7 @@ The HTML page shows keys in schema order as a tree of their values, values neste
 ## Refs
 
 `[refs."P:"]` makes `P:24` a [ref](Concepts.md#refs), linking where the vault defines it,
-`url` with `{id}` where it leads when the vault does not, `id` a regex the ids match;
+`url` with `{id}` makes its refs external, leading there wherever they are defined, `id` a regex the ids match;
 a prefix ends in its separator, `:` or `-`:
 
 ```toml

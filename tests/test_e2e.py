@@ -2240,7 +2240,7 @@ class WrapTest(unittest.TestCase):
 
 
 class RefsTest(unittest.TestCase):
-    """Refs: ids under configured prefixes link to where the vault defines them, else to their url."""
+    """Refs: ids under configured prefixes link to where the vault defines them, of a prefix with a url there."""
 
     @classmethod
     def setUpClass(cls):
@@ -2263,7 +2263,8 @@ class RefsTest(unittest.TestCase):
     def test_refs_link_to_definitions_and_urls(self):
         self.assertIn('Proposals <a class="ref" href="#ref-p-1" title="P:1. Space types.">P:1</a> and '
                       '<a class="ref done" href="#ref-p-2" title="P:2. Done thing.">P:2</a>, ticket '
-                      '<a class="ref" href="https://jira.example.com/browse/HQD-7">HQD-7</a>, record '
+                      '<a class="ref done" href="https://jira.example.com/browse/HQD-7" data-def="ref-hqd-7">HQD-7</a>, '
+                      'record '
                       '<a class="ref" href="#ref-doc-245" title="doc:245 · Blood test">doc:245</a> at '
                       '<a class="ref" href="#visit" title="Visit four">visit:4</a>.', self.html)
 
@@ -2277,6 +2278,11 @@ class RefsTest(unittest.TestCase):
                       self.html)
         self.assertIn('<td><strong><a class="ref-def" id="ref-doc-245" href="#ref-doc-245">doc:245</a></strong></td>',
                       self.html)
+
+    def test_external_refs_lead_to_their_url_where_the_vault_defines_them(self):
+        self.assertIn('see <a class="ref" href="https://jira.example.com/browse/HQD-8">HQD-8</a>.', self.html)
+        self.assertIn('<strong><a class="ref-def" id="ref-hqd-7" href="https://jira.example.com/browse/HQD-7" '
+                      'data-def="ref-hqd-7">HQD-7</a></strong> Done ticket', self.html)
 
     def test_points_link_to_their_definition_else_the_first_point(self):
         first = '<a class="ref" href="#ref-p-4a" title="P:4a. First point.">'
@@ -2299,9 +2305,10 @@ class RefsTest(unittest.TestCase):
         self.assertEqual(data['backrefs']['records'], [['root', 'doc:245'], ['notes', 'doc:245'],
                                                        ['notes', 'doc:246']])
         self.assertNotIn('records', data['backlinks'])
+        self.assertEqual(data['backrefs']['tickets'], [['root', 'HQD-7'], ['notes', 'HQD-9']])
         self.assertIn('Backlinks: [Refs](#root)\n\nBackrefs: [Refs › P:1](#root), [Refs › P:2](#root)', self.md)
         self.assertEqual(data['refs'], {'doc:246': ['#ref-doc-246', 'doc:246 · X-ray', False],
-                                        'HQD-9': ['https://jira.example.com/browse/HQD-9', '', False]})
+                                        'HQD-9': ['https://jira.example.com/browse/HQD-9', '', False, '#ref-hqd-9']})
 
     def test_check_passes_refs_reached_only_by_refs(self):
         res = run('check', REFS)
@@ -2320,6 +2327,12 @@ class RefsTest(unittest.TestCase):
             f'{vault}/Extra.md:7: unresolved ref: P:4am',
             f'{vault}/Extra.md:1: orphan page: no page links here',
         ], res.stderr)
+
+    def test_external_refs_reach_no_page(self):
+        vault = self.copy({'index.md': read(os.path.join(REFS, 'index.md')).replace('- [[Tickets]]\n', '')})
+        res = run('check', vault)
+        self.assertEqual(res.stdout.splitlines(), [f'{vault}/Tickets.md:1: orphan page: no page links here'],
+                         res.stderr)
 
     def test_schema_ref_type(self):
         vault = self.copy({'uwiki.toml': read(os.path.join(REFS, 'uwiki.toml')) + '\n[schema]\nsources = "ref"\n'
@@ -2348,6 +2361,8 @@ class RefsTest(unittest.TestCase):
             'P:4c\t./Backlog.md:7\tP:4c. Third point.',
             'doc:245\t./Records.md:5\tdoc:245 · Blood test',
             'doc:246\t./Records.md:6\tdoc:246 · X-ray',
+            'HQD-7\t./Tickets.md:3\tHQD-7 Done ticket, refs to it lead to the tracker.',
+            'HQD-9\t./Tickets.md:4\tHQD-9 Ticket the notes name.',
             'visit:4\t./Visit.md:2\tVisit four',
         ])
 
@@ -2361,7 +2376,10 @@ class RefsTest(unittest.TestCase):
         self.assertEqual(res['contents']['value'], '**P:1. Space types.**\n\n'
                                                    '- [ ] **P:1. Space types.** No dice: every effect is fixed.')
         res = lsp.at('textDocument/hover', 'index.md', 2, 30)
-        self.assertEqual(res['contents']['value'], '**HQD-7**: https://jira.example.com/browse/HQD-7')
+        self.assertEqual(res['contents']['value'], '**HQD-7**: https://jira.example.com/browse/HQD-7\n\n'
+                                                   '- [x] **HQD-7** Done ticket, refs to it lead to the tracker.')
+        res = lsp.at('textDocument/definition', 'index.md', 2, 30)
+        self.assertEqual((res['uri'].rsplit('/', 1)[-1], res['range']['start']['line']), ('Tickets.md', 2))
         lsp.open('New.md', 'See P:')
         labels = [i['label'] for i in lsp.at('textDocument/completion', 'New.md', 0, 6)]
         self.assertEqual(labels, ['P:1', 'P:2', 'P:3', 'P:4a', 'P:4c'])

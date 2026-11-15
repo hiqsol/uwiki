@@ -364,19 +364,22 @@ class Converter:
                 and found.node.source.fullpath == self.source.fullpath)
 
     def ref(self, ref, line):
-        """Ref as HTML: anchor where it is defined, link to the definition, else to its URL;
-        as written in markdown and when unresolved."""
+        """Ref as HTML: anchor where it is defined, link to the definition, of an external ref to its URL,
+        with the definition it has in data-def; as written in markdown and when unresolved."""
         found = self.ref_target(ref)
         if self.mode != 'html':
             return ref
+        url = self.refs.url(ref)
+        kind = 'ref done' if found is not None and found.done else 'ref'
+        if url:
+            to = f' data-def="{found.anchor}"' if found is not None else ''
+            if self.defines(found, line):
+                return f'<a class="ref-def" id="{found.anchor}" href="{html.escape(url)}"{to}>{ref}</a>'
+            return f'<a class="{kind}" href="{html.escape(url)}"{to}>{ref}</a>'
         if self.defines(found, line):
             return f'<a class="ref-def" id="{found.anchor}" href="#{found.anchor}">{ref}</a>'
         if found is not None:
-            kind = 'ref done' if found.done else 'ref'
             return f'<a class="{kind}" href="#{found.anchor}" title="{html.escape(found.text)}">{ref}</a>'
-        url = self.refs.url(ref)
-        if url:
-            return f'<a class="ref" href="{html.escape(url)}">{ref}</a>'
         return ref
 
     def markdown_link(self, match):

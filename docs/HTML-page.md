@@ -10,7 +10,8 @@
   folded top right of its header, links in it preview too, sidebar entries beside the sidebar
 - [refs](Concepts.md#refs) link where they are defined, titled with what they define, a done one struck through,
   in front matter too, previewing the item, row or section defining them; a definition previews its backrefs,
-  where refs to it are with the words around them, and front matter naming it; a click on it copies its link
+  where refs to it are with the words around them, and front matter naming it; a click on it copies its link;
+  an external ref and its definition link to its url
 - metadata and front matter top right of page header, problems marked at their lines;
   metadata folds to problems, tokens, backlinks, backrefs and file name, unfolds to what `check` reports, words,
   tokens and reading time, backlinks, backrefs (pages with refs defined in the page), file name and folder; file name and folder only where title and folders

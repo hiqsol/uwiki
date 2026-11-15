@@ -1408,11 +1408,11 @@
   }
 
   function previewLink(el) {
-    var a = el.closest && el.closest("a[href^='#']");
+    var a = el.closest && el.closest("a[href^='#'], a.ref-def");
     if (!a || !a.closest("main.content, .preview, #sidebar") || a.closest(".preview-title")) return null;
+    if (a.classList.contains("ref-def")) return backrefsTo(defOf(a)).length ? a : null;
     var target = document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));
     if (target && !/^H[1-6]$/.test(target.tagName)) target = target.closest("h1, h2, h3, h4, h5, h6, li, tr");
-    if (a.classList.contains("ref-def")) return backrefsTo(a.getAttribute("href").slice(1)).length ? a : null;
     return target && content.contains(target) && !a.classList.contains("item-anchor") ? a : null;
   }
 
@@ -1486,10 +1486,15 @@
     return el;
   }
 
+  // anchor of the definition a ref or definition is of: an external one links its url, data-def names it
+  function defOf(a) {
+    return a.dataset.def || a.getAttribute("href").slice(1);
+  }
+
   // backrefs of a ref definition: where the page refs to it, each with the words around it,
   // then the pages naming it in front matter
   function backrefsBox(a) {
-    var id = a.getAttribute("href").slice(1), found = backrefsTo(id);
+    var id = defOf(a), found = backrefsTo(id);
     var el = document.createElement("div");
     el.className = "preview backrefs";
     var title = document.createElement("div");
@@ -1521,11 +1526,11 @@
     return el;
   }
 
-  // places refs lead to the definition at id from: the first ref in each item, row, paragraph or heading,
-  // metadata aside, then [page id, key] of front matter values naming a ref leading there
+  // places refs to the definition at id are: the first ref in each item, row, paragraph or heading,
+  // metadata aside, then [page id, key] of front matter values naming such a ref
   function backrefsTo(id) {
-    var res = [], blocks = new Set();
-    content.querySelectorAll('a.ref[href="#' + CSS.escape(id) + '"]').forEach(function (a) {
+    var res = [], blocks = new Set(), at = CSS.escape(id);
+    content.querySelectorAll('a.ref[href="#' + at + '"], a.ref[data-def="' + at + '"]').forEach(function (a) {
       var block = blockOf(a);
       if (a.closest(".metadata, .front-matter") || blocks.has(block)) return;
       blocks.add(block);
@@ -1534,7 +1539,7 @@
     return res.concat(frontRefsTo()["#" + id] || []);
   }
 
-  var frontRefs = null;  // href: [[page id, key]] of front matter values with refs leading there
+  var frontRefs = null;  // href: [[page id, key]] of front matter values with refs to the definition there
   function frontRefsTo() {
     if (!frontRefs) {
       frontRefs = {};
@@ -1544,7 +1549,7 @@
         Object.keys(items).forEach(function (key) {
           var seen = new Set();
           (frontText(items[key]).match(pattern) || []).forEach(function (ref) {
-            var href = data.refs[ref][0];
+            var href = data.refs[ref][3] || data.refs[ref][0];
             if (href[0] !== "#" || seen.has(href)) return;
             seen.add(href);
             (frontRefs[href] = frontRefs[href] || []).push([page, key]);
@@ -1799,7 +1804,7 @@
       if (m) a.dataset.item = m[1];
     });
     content.addEventListener("click", function (e) {
-      var a = e.target.closest(".item-anchor, .ref-def");
+      var a = e.target.closest(".item-anchor, .ref-def[href^='#']");
       if (!a) return;
       e.preventDefault();
       history.replaceState(null, "", a.getAttribute("href"));

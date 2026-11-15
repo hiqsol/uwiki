@@ -234,14 +234,16 @@ class Builder:
 
     def front_refs(self, front, res):
         """Refs in front matter values with where they lead, the page links them as the text does:
-        ref: [href, title, done], title and done of a definition the build shows."""
+        ref: [href, title, done], title and done of a definition the build shows, an external ref's url
+        with the anchor of its definition after them if the build shows one."""
         refs = Refs.of(self.scanner)
         for _, ref in refs.front_refs(front):
             found = refs.resolve(ref)
-            if found is not None and self.inside(found.node):
+            found = found if found is not None and self.inside(found.node) else None
+            if refs.url(ref):
+                res[ref] = [refs.url(ref), '', False] + ([f'#{found.anchor}'] if found else [])
+            elif found:
                 res[ref] = [f'#{found.anchor}', found.text, found.done]
-            elif refs.url(ref):
-                res[ref] = [refs.url(ref), '', False]
 
     @staticmethod
     def named(node, path):

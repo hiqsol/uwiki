@@ -2,15 +2,17 @@
 written as plain text, never rewritten.
 
 ```
-[refs."P:"]                                    # defined in the vault: where **P:24** starts an item
+[refs."P:"]                                    # internal: defined in the vault, where **P:24** starts an item
 [refs."HQD-"]
-url = "https://jira.example.com/browse/HQD-{id}"   # where a ref the vault does not define leads
+url = "https://jira.example.com/browse/HQD-{id}"   # external: every ref leads there
 id = "[0-9]+"                                  # ids it takes, so HQD-NNN stays text
 ```
 
 A ref is defined where it starts a heading, starts a list item or a table row in bold, or is a page's front matter
-`id`: the bold that defines a term defines an id too. Its other occurrences link there, or to its `url` when the
-vault defines none. A ref neither defined nor with a url is unresolved, one defined twice is ambiguous.
+`id`: the bold that defines a term defines an id too. A ref of an internal prefix links to its definition, one the
+vault does not define is unresolved. A ref of an external prefix, one with a url, links there, even where the vault
+defines it: such a definition is where its backrefs are, the refs lead outside, not to it. One defined twice is
+ambiguous.
 
 A lowercase letter ending an id right after a digit is a point: `**I:75a.**` defines point a of I:75, I:75a
 links there, else to I:75, which its first point defines when nothing else does.
@@ -127,10 +129,14 @@ class Refs:
         return 'ref-' + re.sub(r'[^0-9a-z]+', '-', ref.lower()).strip('-')
 
     def url(self, ref):
-        """URL a ref leads to when the vault does not define it, None without one."""
+        """URL a ref of an external prefix leads to, None for an internal one."""
         m = self.full.fullmatch(ref) if self.full else None
         template = m and self.urls.get(m[1])
         return template.replace('{id}', m[2]) if template else None
+
+    def external(self, ref):
+        """Whether the ref's prefix has a url: the ref leads there, not to a definition in the vault."""
+        return self.url(ref) is not None
 
     def resolve(self, ref):
         """Definition of the ref, the first one if several, of a point the ref's if the point has none,

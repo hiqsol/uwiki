@@ -47,6 +47,7 @@ Ambiguous text is decided once and written into the source, exact text is resolv
 ## Refs
 
 `[refs]` of the [config](Config.md#refs) names prefixes, the separator ending them: `P:`, `doc:`, `HQD-`.
+A prefix is internal, its refs defined in the vault, or external, with a `url` its refs lead to.
 A ref is a prefix not after a word character, then an id of word characters, `.`, `-` and `:`
 ending in a word character: `ai:claude-code:1a2b` is id `claude-code:1a2b` when `ai:` is a prefix.
 Only configured prefixes match, so COVID-19 stays text; none match in code, links and URLs,
@@ -60,15 +61,16 @@ as the bold that defines a term does, or is a page's front matter `id`:
 | **doc:245** | Blood test | 2026-03-01 |
 ```
 
-Every other occurrence links to its definition, else to the `url` its prefix gives;
-`check` reports a ref neither defined nor with a url, and one defined twice.
+Every other occurrence of an internal ref links to its definition, `check` reports one the vault does not define.
+An external ref links to its url, even where the vault defines it: its definition is optional,
+the place listing its backrefs, where the refs to it are. `check` reports a ref defined twice.
 A ref of a checked item `[x]` is done, struck through where it links.
 A lowercase letter ending an id right after a digit makes a point: `**P:24a.**` defines point a of P:24.
 P:24a links there, else to P:24, and P:24 to its first point when nothing else defines it;
 a ref defined as written wins, so an id like `1a2b` stays whole where the vault defines it.
-Refs link pages for orphans and reading order and count as backrefs, apart from backlinks,
-in front matter values too; markdown output, Obsidian and GitHub show them as written,
-`ls --refs` lists where they are defined.
+Internal refs link pages for orphans and reading order, external ones lead outside the vault and do not;
+both count as backrefs, apart from backlinks, in front matter values too;
+markdown output, Obsidian and GitHub show them as written, `ls --refs` lists where they are defined.
 
 ## Orphan
 

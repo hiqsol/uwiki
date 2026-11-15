@@ -3,7 +3,8 @@
 Go to definition of wiki and markdown links, headings and items, hover shows what a link leads to,
 completion of page names, aliases, headings and items, references of a page, heading or item,
 outline of headings and items, diagnostics of `check` on open and save;
-refs go to their definition, hover shows it, complete from the vault's definitions and find their occurrences.
+refs go to their definition, hover shows it and an external one's url, complete from the vault's definitions
+and find their occurrences.
 """
 
 import json
@@ -354,15 +355,14 @@ class Server:
         ref = self.ref_definition(params)
         if ref:
             text, span, found = ref
-            if found is None:
-                url = Refs.of(self.scanner).url(text)
-                value = f'**{text}**: {url}' if url else ''
-            else:
+            url = Refs.of(self.scanner).url(text)
+            value = f'**{text}**: {url}' if url else ''
+            if found is not None:
                 lines = self.lines(found.node.source.fullpath)
                 at = found.line - 1
                 block = self.item_block(lines, at) if at < len(lines) and lines[at].lstrip()[:1] in '-*+0123456789' \
                     else lines[at:at + HOVER_LINES]
-                value = f'**{found.text}**\n\n' + '\n'.join(block).strip()
+                value = (value + '\n\n' if value else f'**{found.text}**\n\n') + '\n'.join(block).strip()
             path, lines, n, _ = self.position(params)
             return {'contents': {'kind': 'markdown', 'value': value}, 'range': self.range(lines, n, *span)} \
                 if value else None

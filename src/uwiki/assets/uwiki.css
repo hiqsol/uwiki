@@ -792,7 +792,8 @@ main.content {
     color: var(--accent);
     text-decoration: none;
 }
-/* a ref of a checked item is done; where a ref is defined it reads as text, a click copies its link */
+/* a ref of a checked item is done; where a ref is defined it reads as text, a click copies its link,
+   an external one is a link to its url */
 .content a.ref.done {
     text-decoration: line-through;
 }

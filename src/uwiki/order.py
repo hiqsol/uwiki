@@ -1,6 +1,7 @@
 """Links between pages and reading order of pages in a folder, one for build, llms and the sidebar."""
 
 from .convert import Converter
+from .refs import Refs
 from .vault import read_front
 
 class LinkCollector(Converter):
@@ -32,7 +33,8 @@ class LinkCollector(Converter):
         return ''
 
     def front_refs(self):
-        """Refs in front matter values link the pages defining them, at the key's line."""
+        """Refs in front matter values link the pages defining them, at the key's line, external ones as
+        backrefs only, see Links.targets."""
         node = self.page.source
         if node is None or not self.refs:
             return
@@ -44,7 +46,8 @@ class LinkCollector(Converter):
                 self.note(found.node, '' if found.anchor == found.node.anchor else ref, line, ref)
 
     def ref(self, ref, line):
-        """A ref links the page defining it, at the ref, unless it is that definition."""
+        """A ref links the page defining it, at the ref, unless it is that definition; an external one as a
+        backref only, see Links.targets."""
         found = self.refs.resolve(ref)
         if found is not None and not self.defines(found, line):
             self.note(found.node, '' if found.anchor == found.node.anchor else ref, line, ref)
@@ -76,8 +79,10 @@ class Links:
         return self.cache[node]
 
     def targets(self, node):
-        """Pages and folders node links to, in order of first link."""
-        return list(dict.fromkeys(target for target, *_ in self.of(node)))
+        """Pages and folders node links to, in order of first link; an external ref leads outside the vault,
+        not to the page defining it."""
+        refs = Refs.of(self.scanner)
+        return list(dict.fromkeys(target for target, _, _, ref in self.of(node) if not (ref and refs.external(ref))))
 
     def reach(self):
         """Node: order it is first reached in, in a breadth-first walk of links from the root folder page."""
