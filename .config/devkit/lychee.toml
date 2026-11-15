@@ -1,5 +1,5 @@
-# External links only: uwiki check covers links between pages, offline.
-# Run by `mise run links` on demand or on a schedule, never as a gate:
+# Managed by devkit (github.com/hiqdev/devkit). lychee for external links only: uwiki check covers links
+# between pages, offline. `mise run links` runs it on demand or on a schedule, never as a gate:
 # a dead link is someone else's server, not this change.
 scheme = ["https", "http"]
 

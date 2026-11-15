@@ -1,0 +1,15 @@
+# Managed by devkit (github.com/hiqdev/devkit): the checks of `mise run lint`, with the tools mise pins
+name: lint
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v5
+      - run: mise run lint

@@ -1,11 +1,12 @@
 # Development
 
-[mise](https://mise.jdx.dev) pins the tools in `mise.toml` and runs its tasks, `mise tasks` lists them,
-those of more than a line are functions of `tasks.sh`:
+[mise](https://mise.jdx.dev) pins the tools and runs the tasks, `mise tasks` lists them:
+`mise.toml` has uwiki's own, [devkit](https://github.com/hiqdev/devkit) the lint and release ones,
+in `.config/mise/conf.d/devkit.toml` and `.config/devkit/`; `uvx copier update --trust` brings in devkit changes.
 
 ```
 mise run test                # run tests
-mise run lint                # pages: uwiki check, markdownlint, typos, Vale; repo: hygiene, gitleaks
+mise run lint                # pages: uwiki check, markdownlint, typos, Vale; repo: hygiene, shellcheck, gitleaks
 mise run fix                 # fix what markdownlint, typos and the hygiene steps can
 mise run links               # external links alive, lychee, on demand
 mise run secrets             # gitleaks over the whole git history, on demand
@@ -23,9 +24,10 @@ The fixture vaults in `tests/fixtures` are left out of the build of this repo by
 
 ## Lint
 
-[hk](https://hk.jdx.dev) runs the steps of `hk.pkl`. Page steps take the pages `uwiki ls` lists, so uwiki.toml excludes hold for each:
-`uwiki check`, markdownlint by `.markdownlint.yaml`, typos, Vale by `.vale.ini` with proselint and the vocabulary in `.vale/`;
-lychee by `lychee.toml` for external links only, on demand, a dead link being someone else's server.
+[hk](https://hk.jdx.dev) runs devkit's steps, `hk.pkl` adds uwiki's settings. Page steps take the pages `uwiki ls` lists,
+so uwiki.toml excludes hold for each: `uwiki check`, markdownlint by `.markdownlint.yaml`, typos,
+Vale by `.vale.ini` with proselint and the vocabulary in `.vale/`; lychee for external links only, on demand,
+a dead link being someone else's server.
 Repo steps take every file but test fixtures: trailing whitespace, final newline, line endings, BOM, merge conflict markers,
 names differing only in case, files over 500 kB, broken symlinks, shellcheck for shell scripts, and gitleaks for secrets.
 The pre-commit hook checks staged files and rewrites nothing.

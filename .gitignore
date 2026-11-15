@@ -1,6 +1,3 @@
 __pycache__/
 dist/
 uv.lock
-# Vale style packages, vale sync fetches them; config/ holds this repo's vocabulary
-.vale/styles/*
-!.vale/styles/config/

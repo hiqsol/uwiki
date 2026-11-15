@@ -1,7 +1,7 @@
 #!/bin/sh
-# Tasks of more than one line, mise.toml runs them and lists them all: `mise tasks`.
+# Managed by devkit (github.com/hiqdev/devkit): release tasks, .config/mise/conf.d/devkit.toml runs them.
 set -eu
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 INIT=src/uwiki/__init__.py
 
 die() { echo "$*" >&2; exit 1; }
@@ -27,19 +27,19 @@ bump() {
     echo "tagged v$v, mise run release to publish"
 }
 
-# pushes master and the tag at once, the release workflow tests and creates the GitHub release
+# pushes master and the tag at once, CI publishes the release
 release() {
     v=$(version) || exit
     git tag --points-at HEAD | grep -qx "v$v" || die "HEAD is not tagged v$v, mise run patch first"
     git push --atomic origin master "v$v"
 }
 
-# installs the current tag with mise, it becomes latest locally without GitHub API lag
+# installs the tagged version with mise, it becomes latest locally without GitHub API lag
 up() {
     v=$(version) || exit
     mise install "pipx:hiqsol/uwiki@v$v"
     mise prune --yes pipx:hiqsol/uwiki
-    # the uwiki a shell outside this repo gets: here .venv/bin comes first, this checkout's uwiki
+    # the uwiki a shell outside this project gets, not one this project's mise config puts first
     got=$("$(cd && mise which uwiki)" --version)
     [ "$got" = "uwiki $v" ] || die "$got on PATH, not $v"
     echo "$got"

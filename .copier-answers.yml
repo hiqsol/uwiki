@@ -1,0 +1,11 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v0.1.0
+_src_path: gh:hiqdev/devkit
+branch: master
+ci: github
+command: uwiki
+package: pipx:hiqsol/uwiki
+releases: python
+uwiki: checkout
+vault: .
+version_file: src/uwiki/__init__.py

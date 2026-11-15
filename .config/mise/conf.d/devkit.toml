@@ -1,0 +1,72 @@
+# Managed by devkit (github.com/hiqdev/devkit): `uvx copier update --trust` rewrites it, change the template instead.
+# mise merges it with mise.toml, which holds the project's own tools and tasks; `mise tasks` lists both.
+
+[tools]
+uv = "0.13.8"
+hk = "2.12.0"
+node = "24"                               # for markdownlint-cli2
+"npm:markdownlint-cli2" = "0.24.1"
+typos = "1.52.2"
+lychee = "0.24.2"
+vale = "3.27.0"
+gitleaks = "8.30.1"
+shellcheck = "0.11.0"
+
+[env]
+HK_MISE = "1"                             # git hooks run hk through mise, with the tools above
+_.path = ["{{config_root}}/.venv/bin"]    # lint runs this checkout's uwiki, `mise run venv` installs it
+
+[tasks.venv]
+description = "install this checkout's uwiki into .venv, editable"
+run = "uv sync -q"
+
+[tasks.lint]
+depends = ["venv"]
+description = "pages: uwiki check, markdownlint, typos, Vale; repo: hygiene, shellcheck, gitleaks"
+run = "hk check --all"
+
+[tasks.fix]
+depends = ["venv"]
+description = "fix what markdownlint, typos and the hygiene steps can"
+run = "hk fix --all"
+
+[tasks.links]
+depends = ["venv"]
+description = "external links alive, lychee over the pages uwiki reads; network, not a gate"
+run = "hk run links --all"
+
+[tasks.secrets]
+description = "gitleaks over the whole git history, a leak stays there after its fix"
+run = "hk run secrets --all"
+
+[tasks.hooks]
+depends = ["venv"]
+description = "install the git pre-commit hook: checks staged files, rewrites nothing"
+run = "hk install --mise"
+
+[tasks.version]
+run = "sh .config/devkit/tasks.sh version"
+quiet = true
+
+# test (mise.toml has it), bump the version in src/uwiki/__init__.py, commit and tag it
+[tasks.patch]
+description = "fixes: 0.2.1 -> 0.2.2, tagged"
+run = "sh .config/devkit/tasks.sh bump patch"
+[tasks.minor]
+description = "features: 0.2.1 -> 0.3.0, tagged"
+run = "sh .config/devkit/tasks.sh bump minor"
+[tasks.major]
+description = "0.2.1 -> 1.0.0, tagged"
+run = "sh .config/devkit/tasks.sh bump major"
+
+[tasks.release]
+description = "push master and the tag at once, CI publishes the release"
+run = "sh .config/devkit/tasks.sh release"
+
+[tasks.up]
+description = "install the tagged version with mise, it becomes latest locally"
+run = "sh .config/devkit/tasks.sh up"
+
+[tasks.clean]
+description = "remove dist, build and __pycache__"
+run = "sh .config/devkit/tasks.sh clean"
