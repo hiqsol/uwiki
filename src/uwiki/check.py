@@ -135,7 +135,8 @@ class CheckConverter(Converter):
             self.report(self.line, f'missing item: [[{text.partition("|")[0].strip()}]]')
 
     def check_numbering(self, line, lineno):
-        """Numbered lists count from 1, nesting by indentation, lazy continuation lines keep list going."""
+        """Numbered lists count on by one from any first number, as Markdown renders them (`<ol start>`),
+        nesting by indentation, lazy continuation lines keep list going."""
         m = self.NUMBERED.match(line)
         if not m:
             if line.strip() and not line[0].isspace() and (self.blank or self.LIST_BREAK.match(line)):
@@ -147,7 +148,7 @@ class CheckConverter(Converter):
         while self.lists and self.lists[-1][0] > indent:
             self.lists.pop()
         if not self.lists or self.lists[-1][0] < indent:
-            self.lists.append([indent, 0])
+            self.lists.append([indent, num - 1])
         expected = self.lists[-1][1] + 1
         if num != expected:
             self.report(lineno, f'list number {num}, expected {expected}')

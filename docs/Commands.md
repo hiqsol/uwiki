@@ -39,7 +39,8 @@ output files are replaced at once, never served half written.
 ## check
 
 Reports unresolved links, headings, items and [refs](Concepts.md#refs), refs defined twice, missing images,
-front matter out of `[schema]` and list numbering as `path:line: message`, exits 1 if any:
+front matter out of `[schema]` and list numbering (a numbered list counts on by one from its first number)
+as `path:line: message`, exits 1 if any:
 
 - `--orphans` reports [orphans](Concepts.md#orphan)
 - `--unlisted` and `--mentions` warn about pages their folder page does not link

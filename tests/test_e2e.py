@@ -550,7 +550,7 @@ class CheckTest(unittest.TestCase):
             'subtle/Links.md:1: missing heading: [[Page#NoSuchHeading]]',
             'subtle/Links.md:3: missing heading: [[Sub/Page#Nope]]',
             'subtle/Lists.md:5: list number 3, expected 2',
-            'subtle/Lists.md:10: list number 2, expected 1',
+            'subtle/Lists.md:13: list number 21, expected 20',
         ], err)
         self.assertEqual(code, 1)
 
