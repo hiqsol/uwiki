@@ -1,12 +1,13 @@
 """Builds given folders and files of a vault into single HTML and markdown file."""
 
+import contextlib
 import html
 import json
 import os
 import re
 import time
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -20,14 +21,17 @@ from .source import Source
 from .stats import Stats
 from .vault import Filter, Selection, cebabize, front_matter_items, front_matter_tree, read_parts, titleize
 
-ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'assets')
+ASSETS = os.path.join(os.path.dirname(os.path.realpath(__file__)), "assets")
+
 
 class UsageError(ValueError):
     """Command line options that do not go together."""
 
+
 def read_asset(name):
-    with open(os.path.join(ASSETS, name), encoding='utf-8') as f:
+    with open(os.path.join(ASSETS, name), encoding="utf-8") as f:
         return f.read()
+
 
 def write_atomic(file, text):
     """Writes a temporary file beside, then renames it over file, so a reader never gets half of it;
@@ -35,35 +39,34 @@ def write_atomic(file, text):
     file = os.path.realpath(file)
     folder, name = os.path.split(file)
     os.makedirs(folder, exist_ok=True)
-    tmp = os.path.join(folder, f'.{name}.{os.getpid()}.tmp')
+    tmp = os.path.join(folder, f".{name}.{os.getpid()}.tmp")
     try:
-        with open(tmp, 'w', encoding='utf-8') as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             f.write(text)
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.chmod(tmp, os.stat(file).st_mode & 0o7777)
-        except FileNotFoundError:
-            pass
         os.replace(tmp, file)
     except BaseException:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(tmp)
-        except OSError:
-            pass
         raise
+
 
 def icon():
     """Favicon of built pages as a data URI, so the HTML stays one file."""
-    return 'data:image/svg+xml,' + quote(read_asset('favicon.svg').strip(), safe=' /=:.,-()')
+    return "data:image/svg+xml," + quote(read_asset("favicon.svg").strip(), safe=" /=:.,-()")
+
 
 @dataclass
 class BuildOptions:
     backlinks: bool = True
     front_matter: bool = True
-    up: str = ''  # URL of a page above the wiki, as a site index, the logo before the title links to
+    up: str = ""  # URL of a page above the wiki, as a site index, the logo before the title links to
     live: bool = False  # page reloads when its file is rebuilt, as Last-Modified of the page tells
     live_reload: bool = False  # served only: page reloads after a rebuild, as the server tells
-    attachment_base: str = ''  # served only: URL attachments are served at
+    attachment_base: str = ""  # served only: URL attachments are served at
     source_lines: bool = False  # served only: blocks carry the source line they start at, for editing
+
 
 class Builder:
     """Renders selected pages in reading order, folders on the way to them by title only.
@@ -71,9 +74,9 @@ class Builder:
     Collects links to vault pages left out of the build as `path:line: message` problems.
     """
 
-    SEP = ' › '
+    SEP = " › "
 
-    def __init__(self, selection, outdir='.', options=None, build_id='', issues=None, settings=None):
+    def __init__(self, selection, outdir=".", options=None, build_id="", issues=None, settings=None):
         self.selection = selection
         self.settings = settings or {}  # build options as config and command line give them, help shows them
         self.scanner = selection.scanner
@@ -102,7 +105,7 @@ class Builder:
         return self.selection.inside(node)
 
     def report(self, source, line, message):
-        self.problems.setdefault(f'{self.selection.show(source)}:{line}: {message}')
+        self.problems.setdefault(f"{self.selection.show(source)}:{line}: {message}")
 
     def nodes(self, folder=None):
         """Shown pages and folders in reading order, each with whether its text is built."""
@@ -135,22 +138,22 @@ class Builder:
                     if ref:
                         self._backlinks[1].setdefault(target, {}).setdefault((source, ref), (source, ref))
                         continue
-                    heading = (heading or '').strip()
+                    heading = (heading or "").strip()
                     if heading and cebabize(heading) == cebabize(target.title):
-                        heading = ''
+                        heading = ""
                     entries = self._backlinks[0].setdefault(target, {})
                     entries.setdefault((source, cebabize(heading)), (source, heading))
         return tuple(list(found.get(node, {}).values()) for found in self._backlinks)
 
     def backlink_text(self, source, heading):
-        return source.title + (self.SEP + heading if heading else '')
+        return source.title + (self.SEP + heading if heading else "")
 
     def md_backlinks(self, node):
-        escape = lambda text: re.sub(r'([\\\[\]])', r'\\\1', text)
-        res = ''
-        for label, found in zip(('Backlinks', 'Backrefs'), self.incoming(node)):
-            links = [f'[{escape(self.backlink_text(source, heading))}](#{source.anchor})' for source, heading in found]
-            res += f'{label}: {", ".join(links)}\n\n' if links else ''
+        escape = lambda text: re.sub(r"([\\\[\]])", r"\\\1", text)
+        res = ""
+        for label, found in zip(("Backlinks", "Backrefs"), self.incoming(node), strict=True):
+            links = [f"[{escape(self.backlink_text(source, heading))}](#{source.anchor})" for source, heading in found]
+            res += f"{label}: {', '.join(links)}\n\n" if links else ""
         return res
 
     def issues_of(self, node):
@@ -171,25 +174,27 @@ class Builder:
                 text.setdefault(line, []).append((message, warning))
         return text, rest
 
-    PAGE_ISSUES = ('orphan page', 'missing front matter key', 'not listed in')
+    PAGE_ISSUES = ("orphan page", "missing front matter key", "not listed in")
 
     def html_problems(self, node, text, rest):
         """What check reports for the page as folded line of messages unfolding into links to where they are."""
         issues = sorted([(line, m, w) for line, items in text.items() for m, w in items] + rest)
         if not issues:
-            return ''
+            return ""
         links = []
         for line, message, warning in issues:
-            href = f'problem-{node.anchor}-{line}' if line in text else node.anchor
-            kind = 'warning' if warning else 'problem'
+            href = f"problem-{node.anchor}-{line}" if line in text else node.anchor
+            kind = "warning" if warning else "problem"
             links.append(f'<a class="{kind}" href="#{href}">{line}: {html.escape(message)}</a>')
-        label = 'Problems' if any(not w for _, _, w in issues) else 'Warnings'
-        return (f'<details class="problems"><summary><b>{label} ({len(issues)}):</b>'
-                f'<span>{html.escape(", ".join(m for _, m, _ in issues))}</span></summary>'
-                f'<div>{"".join(links)}</div></details>')
+        label = "Problems" if any(not w for _, _, w in issues) else "Warnings"
+        return (
+            f'<details class="problems"><summary><b>{label} ({len(issues)}):</b>'
+            f"<span>{html.escape(', '.join(m for _, m, _ in issues))}</span></summary>"
+            f"<div>{''.join(links)}</div></details>"
+        )
 
     def path(self, node):
-        return os.path.relpath(node.file, self.scanner.path).replace(os.sep, '/')
+        return os.path.relpath(node.file, self.scanner.path).replace(os.sep, "/")
 
     def data(self, nodes):
         """What the page filters, counts and shows beside page titles by: front matter keys listing values
@@ -199,7 +204,7 @@ class Builder:
         of linking pages, with headings links lead to, backrefs as such with the refs."""
         pages, backlinks, backrefs, refs = {}, {}, {}, {}
         for node, body in nodes:
-            for res, found in zip((backlinks, backrefs), self.incoming(node)):
+            for res, found in zip((backlinks, backrefs), self.incoming(node), strict=True):
                 links = [[source.anchor, heading] if heading else source.anchor for source, heading in found]
                 if links:
                     res[node.anchor] = links
@@ -208,29 +213,31 @@ class Builder:
             _, front, text, _ = read_parts(node.file)
             path = self.path(node)
             meta = dict(self.schema.sort(front_matter_items(front), path))
-            page = {'path': path, 'meta': meta}
+            page = {"path": path, "meta": meta}
             nested = {key: value for key, value in front_matter_tree(front).items() if value != meta.get(key)}
             if nested:
-                page['nested'] = nested
+                page["nested"] = nested
             _, rest = self.issues_of(node)
             if any(line > 1 for line, _, _ in rest):
-                page['frontProblem'] = True
-            page.update({
-                'words': Stats.words(text),
-                'tokens': Stats.tokens(text),
-                'problems': len(self.issues.get(os.path.realpath(node.file), [])),
-            })
+                page["frontProblem"] = True
+            page.update(
+                {
+                    "words": Stats.words(text),
+                    "tokens": Stats.tokens(text),
+                    "problems": len(self.issues.get(os.path.realpath(node.file), [])),
+                }
+            )
             page.update(self.named(node, path))
             pages[node.anchor] = page
             self.front_refs(front, refs)
-        data = {'facets': list(self.schema.facets().items()), 'pages': pages, 'backlinks': backlinks}
+        data = {"facets": list(self.schema.facets().items()), "pages": pages, "backlinks": backlinks}
         if backrefs:
-            data['backrefs'] = backrefs
+            data["backrefs"] = backrefs
         if refs:
-            data['refs'] = refs
+            data["refs"] = refs
         if not self.options.front_matter:
-            data['frontMatter'] = False
-        return json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
+            data["frontMatter"] = False
+        return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
 
     def front_refs(self, front, res):
         """Refs in front matter values with where they lead, the page links them as the text does:
@@ -241,9 +248,9 @@ class Builder:
             found = refs.resolve(ref)
             found = found if found is not None and self.inside(found.node) else None
             if refs.url(ref):
-                res[ref] = [refs.url(ref), '', False] + ([f'#{found.anchor}'] if found else [])
+                res[ref] = [refs.url(ref), "", False] + ([f"#{found.anchor}"] if found else [])
             elif found:
-                res[ref] = [f'#{found.anchor}', found.text, found.done]
+                res[ref] = [f"#{found.anchor}", found.text, found.done]
 
     @staticmethod
     def named(node, path):
@@ -252,41 +259,44 @@ class Builder:
         res = {}
         folder, name = os.path.split(path)
         if titleize(os.path.splitext(name)[0]) != node.title:
-            res['file'] = name
+            res["file"] = name
         f = node if node.is_folder else node.folder
         while f and f.folder:
             if f.title != f.default_title:
-                res['dir'] = folder + '/'
+                res["dir"] = folder + "/"
                 break
             f = f.folder
         return res
 
     def html(self, title):
         nodes = list(self.nodes())
-        content = ''.join(f'<section>{self.html_node(node, body)}</section>\n' for node, body in nodes)
-        return self.render('uwiki.html', {
-            'title':    html.escape(title),
-            'home':     html.escape(title).replace('/', '/<wbr>'),  # a long title wraps after a slash
-            'up':       self.html_up(),
-            'up_key':   '<dt><kbd>u</kbd></dt><dd>up, where the logo leads</dd>' if self.options.up else '',
-            'version':  __version__,
-            'built':    datetime.now().astimezone().isoformat(timespec='seconds'),
-            'source':   self.html_source(),
-            'logo':     read_asset('logo.svg').strip(),
-            'settings': html.escape(dumps(self.settings)) if self.settings else '',
-            'config':   self.html_config(),
-            'content':  content,
-            'data':     self.data(nodes),
-            'icon':     icon(),
-            'style':    read_asset('uwiki.css'),
-            'script':   read_asset('uwiki.js') + self.reload_script(),
-        })
+        content = "".join(f"<section>{self.html_node(node, body)}</section>\n" for node, body in nodes)
+        return self.render(
+            "uwiki.html",
+            {
+                "title": html.escape(title),
+                "home": html.escape(title).replace("/", "/<wbr>"),  # a long title wraps after a slash
+                "up": self.html_up(),
+                "up_key": "<dt><kbd>u</kbd></dt><dd>up, where the logo leads</dd>" if self.options.up else "",
+                "version": __version__,
+                "built": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "source": self.html_source(),
+                "logo": read_asset("logo.svg").strip(),
+                "settings": html.escape(dumps(self.settings)) if self.settings else "",
+                "config": self.html_config(),
+                "content": content,
+                "data": self.data(nodes),
+                "icon": icon(),
+                "style": read_asset("uwiki.css"),
+                "script": read_asset("uwiki.js") + self.reload_script(),
+            },
+        )
 
     def html_node(self, node, body):
         """Page as converted, what check reports on it in its header, the page builds backlinks and
         front matter beside them from the data."""
         converter = self.converter(node)
-        aside = ''
+        aside = ""
         if body:
             text, rest = self.issues_of(node)
             converter.problems = text
@@ -296,44 +306,51 @@ class Builder:
     def html_up(self):
         """uWiki logo linking to the page --up gives, before the title; none without it."""
         if not self.options.up:
-            return ''
-        return (f'<a id="up" href="{html.escape(self.options.up)}" title="Up (u)" aria-label="Up">'
-                f'{read_asset("mark.svg").strip()}</a>')
+            return ""
+        return (
+            f'<a id="up" href="{html.escape(self.options.up)}" title="Up (u)" aria-label="Up">'
+            f"{read_asset('mark.svg').strip()}</a>"
+        )
 
     def html_source(self):
         """Where in git the pages are built from, for the help: ` from repo at commit on name branch`."""
         source = Source.of(self.scanner.path)
         if not source:
-            return ''
-        link = lambda url, text: f'<a href="{html.escape(url)}" target="_blank" rel="noopener">{text}</a>' if url else text
-        res = f' from {link(source.url, html.escape(source.repo))} at' if source.repo else ' from commit'
-        res += f' {link(source.commit_url, f"<code>{html.escape(source.commit)}</code>")}'
+            return ""
+        link = lambda url, text: (
+            f'<a href="{html.escape(url)}" target="_blank" rel="noopener">{text}</a>' if url else text
+        )
+        res = f" from {link(source.url, html.escape(source.repo))} at" if source.repo else " from commit"
+        res += f" {link(source.commit_url, f'<code>{html.escape(source.commit)}</code>')}"
         if source.branch:
-            res += f' on {html.escape(source.branch)} branch'
+            res += f" on {html.escape(source.branch)} branch"
         if source.dirty:
-            res += ', with uncommitted changes'
+            res += ", with uncommitted changes"
         return res
 
     def html_config(self):
         """Vault config file as it is, for the config window of the help."""
         config = self.config
         if not config.path:
-            return '<h2>Config</h2><p>none: no <code>uwiki.toml</code> nor <code>[tool.uwiki]</code> in <code>pyproject.toml</code></p>'
-        shown = os.path.relpath(config.path, self.scanner.path).replace(os.sep, '/')
-        return f'<h2>{html.escape(shown)}</h2><pre><code class="language-toml">{html.escape(config.text())}</code></pre>'
+            return "<h2>Config</h2><p>none: no <code>uwiki.toml</code> nor <code>[tool.uwiki]</code> in <code>pyproject.toml</code></p>"
+        shown = os.path.relpath(config.path, self.scanner.path).replace(os.sep, "/")
+        return (
+            f'<h2>{html.escape(shown)}</h2><pre><code class="language-toml">{html.escape(config.text())}</code></pre>'
+        )
 
     def reload_script(self):
         if not (self.options.live_reload or self.options.live):
-            return ''
-        mode = 'serve' if self.options.live_reload else 'page'
-        return read_asset('reload.js').replace('{build}', self.build_id).replace('{mode}', mode)
+            return ""
+        mode = "serve" if self.options.live_reload else "page"
+        return read_asset("reload.js").replace("{build}", self.build_id).replace("{mode}", mode)
 
     def md(self):
-        return ''.join(self.converter(node).md(body) + self.md_backlinks(node) for node, body in self.nodes())
+        return "".join(self.converter(node).md(body) + self.md_backlinks(node) for node, body in self.nodes())
 
     @staticmethod
     def render(name, vars):
-        return re.sub(r'\{(\w+)\}', lambda m: vars.get(m[1], m[0]), read_asset(name))
+        return re.sub(r"\{(\w+)\}", lambda m: vars.get(m[1], m[0]), read_asset(name))
+
 
 class Build:
     """Build of given folders and files into one HTML and one markdown file, as `uwiki build` takes options.
@@ -344,10 +361,11 @@ class Build:
     The title is the given one, else of the index page of the folder built, else the name.
     """
 
-    KINDS = ('html', 'md')
+    KINDS = ("html", "md")
 
-    def __init__(self, paths, output=None, title=None, html=False, md=False, include=(), exclude=(), options=None,
-                 name=None):
+    def __init__(
+        self, paths, output=None, title=None, html=False, md=False, include=(), exclude=(), options=None, name=None
+    ):
         self.paths = list(paths)
         self.options = options or BuildOptions()
         self.include, self.exclude = list(include), list(exclude)
@@ -357,34 +375,34 @@ class Build:
         self.title = title or self.name  # till scan reads the index page
         self.selection = None
         self.warnings = []
-        self.build_id = ''
+        self.build_id = ""
 
     @classmethod
     def targets(cls, paths, output, title, html, md):
         """Output files by kind and title, UsageError for options that do not go together."""
         if output is None:
             if len(paths) > 1:
-                raise UsageError('-o is required for several paths')
-            output = '.'
-        folder = os.path.isdir(output) or output.endswith(('/', os.sep))
-        ext = '' if folder else os.path.splitext(output)[1].lower()
-        ext = ext if ext[1:] in cls.KINDS else ''
+                raise UsageError("-o is required for several paths")
+            output = "."
+        folder = os.path.isdir(output) or output.endswith(("/", os.sep))
+        ext = "" if folder else os.path.splitext(output)[1].lower()
+        ext = ext if ext[1:] in cls.KINDS else ""
         single = paths[0] if len(paths) == 1 and os.path.isdir(paths[0]) else None
         title = title or (Path(os.path.abspath(single)).name if single else None)
         if not folder:
-            base = output[:len(output) - len(ext)]
+            base = output[: len(output) - len(ext)]
             title = title or Path(base).name
         if not title:
-            raise UsageError('--title is required with an -o folder, unless one folder is built')
+            raise UsageError("--title is required with an -o folder, unless one folder is built")
         if folder:
             base = os.path.join(output, title)
         if ext:
-            if html and ext != '.html' or md and ext != '.md':
-                raise UsageError(f'--html and --md do not go with -o {output}')
+            if html and ext != ".html" or md and ext != ".md":
+                raise UsageError(f"--html and --md do not go with -o {output}")
             kinds = [ext[1:]]
         else:
-            kinds = [kind for kind, on in zip(cls.KINDS, (html, md)) if on] or list(cls.KINDS)
-        return {kind: f'{base}.{kind}' for kind in kinds}, title
+            kinds = [kind for kind, on in zip(cls.KINDS, (html, md), strict=True) if on] or list(cls.KINDS)
+        return {kind: f"{base}.{kind}" for kind in kinds}, title
 
     def scan(self):
         try:
@@ -399,7 +417,7 @@ class Build:
 
     def check(self, selection):
         """What check with the vault config reports for the built pages, by real path of page file."""
-        options = CheckOptions.from_values(Config.load(selection.scanner.path).options('check', ()))
+        options = CheckOptions.from_values(Config.load(selection.scanner.path).options("check", ()))
         checker = Checker(self.paths, self.include, self.exclude, options)
         try:
             checker.check()
@@ -410,19 +428,24 @@ class Build:
     def settings(self, selection):
         """Options the build runs with, config defaults and command line merged, paths from the vault root."""
         root = selection.scanner.path
-        rel = lambda path: os.path.relpath(os.path.abspath(path), root).replace(os.sep, '/')
-        return {'paths': [rel(p) for p in self.paths], 'title': self.title,
-                'include': self.include, 'exclude': self.exclude,
-                'backlinks': self.options.backlinks, 'front-matter': self.options.front_matter}
+        rel = lambda path: os.path.relpath(os.path.abspath(path), root).replace(os.sep, "/")
+        return {
+            "paths": [rel(p) for p in self.paths],
+            "title": self.title,
+            "include": self.include,
+            "exclude": self.exclude,
+            "backlinks": self.options.backlinks,
+            "front-matter": self.options.front_matter,
+        }
 
     def run(self):
         """Scans vault, renders and writes outputs; returns problems instead of writing if any."""
         selection = self.scan()
         outdir = os.path.dirname(os.path.abspath(next(iter(self.outputs.values()))))
         build_id = str(time.time_ns())
-        issues = self.check(selection) if 'html' in self.outputs else {}
+        issues = self.check(selection) if "html" in self.outputs else {}
         builder = Builder(selection, outdir, self.options, build_id, issues, self.settings(selection))
-        texts = {kind: builder.html(self.title) if kind == 'html' else builder.md() for kind in self.outputs}
+        texts = {kind: builder.html(self.title) if kind == "html" else builder.md() for kind in self.outputs}
         if builder.problems:
             return list(builder.problems)
         for kind, file in self.outputs.items():

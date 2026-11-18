@@ -15,6 +15,7 @@ of built pages, the uncolored mark of their `--up` link and the uncolored wordma
 Shapes only, no font needed to show them. `social.png` is the card GitHub shows for links to the repo,
 uploaded by hand in its Settings, Social preview.
 """
+
 import sys
 from pathlib import Path
 
@@ -28,22 +29,26 @@ from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 
 HERE = Path(__file__).parent
-ASSETS = HERE.parent.parent / 'src' / 'uwiki' / 'assets'
-FONT = sys.argv[1] if len(sys.argv) > 1 else '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+ASSETS = HERE.parent.parent / "src" / "uwiki" / "assets"
+FONT = sys.argv[1] if len(sys.argv) > 1 else "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 BOWL_DEPTH = 0.45  # height where the bowl's outside meets the stem, in bowl widths
-BOWL_ROUND = 0.6   # roundness of the bowl's outside: 0.55 is a circle, higher is squarer
-FILLET = 0.45      # radius of the valley between the bowls, in stem widths
+BOWL_ROUND = 0.6  # roundness of the bowl's outside: 0.55 is a circle, higher is squarer
+FILLET = 0.45  # radius of the valley between the bowls, in stem widths
 
-ACCENT = ('#4f64ee', '#7c93ff')  # on light, on dark: the accent of the HTML build
-INK = ('#1b1f2b', '#e3e5ea')
-TILE = '#6176f5'
+ACCENT = ("#4f64ee", "#7c93ff")  # on light, on dark: the accent of the HTML build
+INK = ("#1b1f2b", "#e3e5ea")
+TILE = "#6176f5"
 
 
 def rect(x0, y0, x1, y1):
     p = pathops.Path()
     pen = p.getPen()
-    pen.moveTo((x0, y0)); pen.lineTo((x1, y0)); pen.lineTo((x1, y1)); pen.lineTo((x0, y1)); pen.closePath()
+    pen.moveTo((x0, y0))
+    pen.lineTo((x1, y0))
+    pen.lineTo((x1, y1))
+    pen.lineTo((x0, y1))
+    pen.closePath()
     return p
 
 
@@ -69,8 +74,8 @@ class Font:
         self.tt = TTFont(path)
         self.glyphs = self.tt.getGlyphSet()
         self.cmap = self.tt.getBestCmap()
-        self.upm = self.tt['head'].unitsPerEm
-        self.xh = self.glyph('x')[0].bounds[3]
+        self.upm = self.tt["head"].unitsPerEm
+        self.xh = self.glyph("x")[0].bounds[3]
 
     def glyph(self, ch, dx=0):
         p = pathops.Path()
@@ -80,12 +85,13 @@ class Font:
 
     def stems(self, path):
         """Left and right edges of the vertical stems crossing 60% of x-height, left to right."""
-        cut = op(path, rect(-5000, self.xh * .58, 20000, self.xh * .62), pathops.PathOp.INTERSECTION)
+        cut = op(path, rect(-5000, self.xh * 0.58, 20000, self.xh * 0.62), pathops.PathOp.INTERSECTION)
         return sorted((c.bounds[0], c.bounds[2]) for c in cut.contours)
 
 
 class Flatten(BasePen):
     """Contours of a path as point rings, curves sampled."""
+
     def __init__(self):
         super().__init__(None)
         self.rings, self.cur = [], []
@@ -100,14 +106,20 @@ class Flatten(BasePen):
         p0 = self.cur[-1]
         for i in range(1, 33):
             t = i / 32
-            self.cur.append(tuple((1-t)**3 * a + 3 * (1-t)**2 * t * b + 3 * (1-t) * t * t * c + t**3 * d
-                                  for a, b, c, d in zip(p0, p1, p2, p3)))
+            self.cur.append(
+                tuple(
+                    (1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b + 3 * (1 - t) * t * t * c + t**3 * d
+                    for a, b, c, d in zip(p0, p1, p2, p3, strict=True)
+                )
+            )
 
     def _qCurveToOne(self, p1, p2):
         p0 = self.cur[-1]
         for i in range(1, 33):
             t = i / 32
-            self.cur.append(tuple((1-t)**2 * a + 2 * (1-t) * t * b + t * t * d for a, b, d in zip(p0, p1, p2)))
+            self.cur.append(
+                tuple((1 - t) ** 2 * a + 2 * (1 - t) * t * b + t * t * d for a, b, d in zip(p0, p1, p2, strict=True))
+            )
 
     def _closePath(self):
         self.rings.append(self.cur)
@@ -123,7 +135,7 @@ def fillet(path, r, area):
     shape = unary_union([shape, closed.intersection(area)]).simplify(0.6)
     out = pathops.Path()
     pen = out.getPen()
-    for poly in getattr(shape, 'geoms', [shape]):
+    for poly in getattr(shape, "geoms", [shape]):
         for ring in [poly.exterior, *poly.interiors]:
             pts = list(ring.coords)[:-1]
             pen.moveTo(pts[0])
@@ -135,21 +147,21 @@ def fillet(path, r, area):
 
 def letter(f):
     """The μw letter and its advance width."""
-    u, advance = f.glyph('u')
+    u, advance = f.glyph("u")
     (a0, a1), (_, b1) = f.stems(u)[0], f.stems(u)[-1]
     c = (a0 + b1) / 2
     left = op(u, rect(-5000, -5000, c + 1, 5000), pathops.PathOp.INTERSECTION)
     bowl = union(left, moved(left, (-1, 0, 0, 1, 2 * c, 0)))  # u without its foot, symmetric about c
     cols = []
     for x in range(int(a1) + 4, int(c) + 1, 2):
-        _, lo, _, hi = op(bowl, rect(x - .5, -5000, x + .5, f.xh * .7), pathops.PathOp.INTERSECTION).bounds
+        _, lo, _, hi = op(bowl, rect(x - 0.5, -5000, x + 0.5, f.xh * 0.7), pathops.PathOp.INTERSECTION).bounds
         cols.append((x, lo, hi))
     _, yo, _ = min(cols, key=lambda r: (r[1], -r[0]))  # lowest outside
     xi, _, yi = min(cols, key=lambda r: (r[2], -r[0]))  # lowest inside
     bowl = op(bowl, rect(xi, yi, 2 * c - xi, f.xh * 2), pathops.PathOp.DIFFERENCE)  # no ridge in the counter
     # DejaVu's u is nearly flat underneath: a round U outside, the font's stems and counter kept
     width = 2 * (c - a0)
-    ytop = min(yo + width * BOWL_DEPTH, f.xh * .75)
+    ytop = min(yo + width * BOWL_DEPTH, f.xh * 0.75)
     k = BOWL_ROUND
     outside = pathops.Path()
     pen = outside.getPen()
@@ -159,10 +171,12 @@ def letter(f):
     pen.closePath()
     counter = op(rect(a1 - 1, yo - 1, 2 * c - a1 + 1, f.xh * 2), bowl, pathops.PathOp.DIFFERENCE)
     counter = next(cc for cc in pathops.Path(counter).contours if cc.bounds[3] >= f.xh * 1.5)
-    bowl = union(op(bowl, rect(-5000, ytop, 10000, 5000), pathops.PathOp.INTERSECTION),
-                 op(outside, counter, pathops.PathOp.DIFFERENCE))
+    bowl = union(
+        op(bowl, rect(-5000, ytop, 10000, 5000), pathops.PathOp.INTERSECTION),
+        op(outside, counter, pathops.PathOp.DIFFERENCE),
+    )
     shift = (2 * c - a1) - a0  # second bowl's left stem on the first bowl's right stem
-    mu, _ = f.glyph('μ')
+    mu, _ = f.glyph("μ")
     descender = rect(a0, mu.bounds[1], a1, ytop)
     res = union(bowl, moved(bowl, (1, 0, 0, 1, shift, 0)), descender)
     # round valley between the two bowl bottoms; the descender meets the first bowl in a plain corner
@@ -170,30 +184,31 @@ def letter(f):
 
 
 def svg_d(path):
-    pen = SVGPathPen(None, ntos=lambda v: f'{v:.0f}')
+    pen = SVGPathPen(None, ntos=lambda v: f"{v:.0f}")
     path.draw(TransformPen(pen, (1, 0, 0, -1, 0, 0)))
     return pen.getCommands()
 
 
-def svg(view, body, label='uWiki'):
+def svg(view, body, label="uWiki"):
     """SVG of body, labeled image, or hidden from screen readers without label, as decoration."""
     a11y = f'role="img" aria-label="{label}"' if label else 'aria-hidden="true"'
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{" ".join(f"{v:.0f}" for v in view)}" '
-            f'{a11y}>{body}</svg>\n')
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{" ".join(f"{v:.0f}" for v in view)}" {a11y}>{body}</svg>\n'
+    )
 
 
 def themed(*rules):
     """Colors for light, and for dark when the viewer prefers it."""
-    light = ''.join(f'.{cls}{{fill:{pair[0]}}}' for cls, pair in rules)
-    dark = ''.join(f'.{cls}{{fill:{pair[1]}}}' for cls, pair in rules)
-    return f'<style>{light}@media (prefers-color-scheme:dark){{{dark}}}</style>'
+    light = "".join(f".{cls}{{fill:{pair[0]}}}" for cls, pair in rules)
+    dark = "".join(f".{cls}{{fill:{pair[1]}}}" for cls, pair in rules)
+    return f"<style>{light}@media (prefers-color-scheme:dark){{{dark}}}</style>"
 
 
 def main():
     f = Font(FONT)
     mark, advance = letter(f)
     rest, x = [], advance
-    for ch in 'iki':
+    for ch in "iki":
         p, w = f.glyph(ch, x)
         rest.append(p)
         x += w
@@ -203,40 +218,43 @@ def main():
     side = max(x1 - x0, y1 - y0) * 1.1
     cx, cy = (x0 + x1) / 2, -(y0 + y1) / 2
     view = (cx - side / 2, cy - side / 2, side, side)
-    (HERE / 'mark.svg').write_text(svg(view, themed(('a', ACCENT)) + f'<path class="a" d="{svg_d(mark)}"/>'))
+    (HERE / "mark.svg").write_text(svg(view, themed(("a", ACCENT)) + f'<path class="a" d="{svg_d(mark)}"/>'))
     # the --up link of built pages: no colors of its own, the page fills it, nor label, the link has one
-    (ASSETS / 'mark.svg').write_text(svg(view, f'<path d="{svg_d(mark)}"/>', label=None))
+    (ASSETS / "mark.svg").write_text(svg(view, f'<path d="{svg_d(mark)}"/>', label=None))
 
     wx0, wy0, wx1, wy1 = union(mark, rest).bounds
-    pad = f.upm * .04
+    pad = f.upm * 0.04
     wview = (wx0 - pad, -wy1 - pad, wx1 - wx0 + 2 * pad, wy1 - wy0 + 2 * pad)
     word = f'<path class="a" d="{svg_d(mark)}"/><path class="i" d="{svg_d(rest)}"/>'
-    (HERE / 'uwiki.svg').write_text(svg(wview, themed(('a', ACCENT), ('i', INK)) + word))
+    (HERE / "uwiki.svg").write_text(svg(wview, themed(("a", ACCENT), ("i", INK)) + word))
     # the help of built pages: no colors of its own, the page fills .a and .i, nor label, the link has one
-    (ASSETS / 'logo.svg').write_text(svg(wview, word, label=None))
+    (ASSETS / "logo.svg").write_text(svg(wview, word, label=None))
 
     # favicon: white letter on an accent tile, the same on light and dark tabs
     tile = side * 1.12
-    scale = .82
-    icon = svg((cx - tile / 2, cy - tile / 2, tile, tile),
-               f'<rect x="{cx - tile / 2:.0f}" y="{cy - tile / 2:.0f}" width="{tile:.0f}" height="{tile:.0f}" '
-               f'rx="{tile * .22:.0f}" fill="{TILE}"/>'
-               f'<path transform="translate({cx:.0f} {cy:.0f}) scale({scale}) translate({-cx:.0f} {-cy:.0f})" '
-               f'd="{svg_d(mark)}" fill="#fff"/>')
-    (HERE / 'favicon.svg').write_text(icon)
-    (ASSETS / 'favicon.svg').write_text(icon)
+    scale = 0.82
+    icon = svg(
+        (cx - tile / 2, cy - tile / 2, tile, tile),
+        f'<rect x="{cx - tile / 2:.0f}" y="{cy - tile / 2:.0f}" width="{tile:.0f}" height="{tile:.0f}" '
+        f'rx="{tile * 0.22:.0f}" fill="{TILE}"/>'
+        f'<path transform="translate({cx:.0f} {cy:.0f}) scale({scale}) translate({-cx:.0f} {-cy:.0f})" '
+        f'd="{svg_d(mark)}" fill="#fff"/>',
+    )
+    (HERE / "favicon.svg").write_text(icon)
+    (ASSETS / "favicon.svg").write_text(icon)
 
     # social preview: the wordmark in light colors on white, 2:1 as GitHub wants, raster as it takes no SVG
-    ww, wh = wx1 - wx0, wy1 - wy0
-    cw = ww / .6
+    ww = wx1 - wx0
+    cw = ww / 0.6
     ch = cw / 2
-    card = svg((wx0 + ww / 2 - cw / 2, -(wy0 + wy1) / 2 - ch / 2, cw, ch),
-               f'<rect x="{wx0 + ww / 2 - cw / 2:.0f}" y="{-(wy0 + wy1) / 2 - ch / 2:.0f}" '
-               f'width="{cw:.0f}" height="{ch:.0f}" fill="#fff"/>'
-               f'<path d="{svg_d(mark)}" fill="{ACCENT[0]}"/><path d="{svg_d(rest)}" fill="{INK[0]}"/>')
-    cairosvg.svg2png(bytestring=card.encode(), write_to=str(HERE / 'social.png'),
-                     output_width=1280, output_height=640)
+    card = svg(
+        (wx0 + ww / 2 - cw / 2, -(wy0 + wy1) / 2 - ch / 2, cw, ch),
+        f'<rect x="{wx0 + ww / 2 - cw / 2:.0f}" y="{-(wy0 + wy1) / 2 - ch / 2:.0f}" '
+        f'width="{cw:.0f}" height="{ch:.0f}" fill="#fff"/>'
+        f'<path d="{svg_d(mark)}" fill="{ACCENT[0]}"/><path d="{svg_d(rest)}" fill="{INK[0]}"/>',
+    )
+    cairosvg.svg2png(bytestring=card.encode(), write_to=str(HERE / "social.png"), output_width=1280, output_height=640)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

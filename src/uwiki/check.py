@@ -3,7 +3,7 @@
 import os
 import re
 from dataclasses import dataclass, fields
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -13,6 +13,7 @@ from .mention import Mentions
 from .order import Links
 from .refs import Refs
 from .vault import Filter, Scanner, Vaults, front_matter_items, front_matter_tree, read_aliases, read_parts
+
 
 @dataclass
 class CheckOptions:
@@ -31,7 +32,7 @@ class CheckOptions:
     acyclic: tuple = ()
     stale_days: int = 0
     stale_date: tuple = ()
-    stale_until: str = ''
+    stale_until: str = ""
 
     @classmethod
     def from_values(cls, values):
@@ -39,24 +40,25 @@ class CheckOptions:
         names = {field.name for field in fields(cls)}
         res = {}
         for key, value in values.items():
-            name = key.replace('-', '_')
+            name = key.replace("-", "_")
             if name in names:
                 res[name] = tuple(value) if isinstance(value, list) else value
-            elif name.startswith('no_') and name[3:] in names:
+            elif name.startswith("no_") and name[3:] in names:
                 res[name[3:]] = not value
         return cls(**res)
+
 
 class CheckConverter(Converter):
     """Converts page like renderer does, reports what would render broken."""
 
-    IMAGE = re.compile(r'!\[[^\]]*\]\(([^)\s]+)\)')
-    NUMBERED = re.compile(r'^([ \t]*)(\d+)\. ')
+    IMAGE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
+    NUMBERED = re.compile(r"^([ \t]*)(\d+)\. ")
 
     def __init__(self, page, scanner, report, options):
         super().__init__(page, scanner)
         self.report = report
         self.options = options
-        self.mode = 'md'
+        self.mode = "md"
         self.lists = []  # [indent, last number] of open numbered lists, outermost first
         self.blank = False
 
@@ -68,43 +70,43 @@ class CheckConverter(Converter):
     def process_links(self, text):
         res = super().process_links(text)
         for src in self.IMAGE.findall(text):
-            if '://' not in src and not (Path(self.source.fullpath).parent / src).exists():
-                self.report(self.line, f'missing image: {src}')
+            if "://" not in src and not (Path(self.source.fullpath).parent / src).exists():
+                self.report(self.line, f"missing image: {src}")
         return res
 
     def markdown_link(self, match):
         if not match[1]:
-            self.check_href(match[3], self.line + match.string.count('\n', 0, match.start()))
+            self.check_href(match[3], self.line + match.string.count("\n", 0, match.start()))
         return super().markdown_link(match)
 
     def link_definition(self, match):
-        self.check_href(match[1].strip('<>'), self.line)
+        self.check_href(match[1].strip("<>"), self.line)
         return super().link_definition(match)
 
     def check_href(self, href, line):
         """Relative link names existing file inside vault, as spelled, page link also its heading."""
-        path, _, fragment = unquote(href).partition('#')
-        if ':' in path or path.startswith('//'):
+        path, _, fragment = unquote(href).partition("#")
+        if ":" in path or path.startswith("//"):
             return
-        if path.startswith('/'):
-            return self.report(line, f'absolute link: {href}')
+        if path.startswith("/"):
+            return self.report(line, f"absolute link: {href}")
         if Scanner.vault_path(path, self.source.path) is None:
-            return self.report(line, f'link leaves vault: {href}')
+            return self.report(line, f"link leaves vault: {href}")
         target, heading = self.resolve_href(href)
         if target is not None and self.ITEM.fullmatch(fragment):
             node = target.source
             heading = True
-            if node is None or not self.find_item(node, '', fragment):
-                self.report(line, f'missing item: {href}')
+            if node is None or not self.find_item(node, "", fragment):
+                self.report(line, f"missing item: {href}")
         file = os.path.join(os.path.dirname(self.source.fullpath), path)
         if path and not os.path.exists(file):
-            return self.report(line, f'link differs from file name: {href}' if target else f'unresolved link: {href}')
-        if target is None and path.lower().endswith('.md'):
-            return self.report(line, f'unresolved link: {href}')
+            return self.report(line, f"link differs from file name: {href}" if target else f"unresolved link: {href}")
+        if target is None and path.lower().endswith(".md"):
+            return self.report(line, f"unresolved link: {href}")
         if path and os.path.isdir(file) and not self.options.folder_links:
-            self.report(line, f'folder link: {href}')
+            self.report(line, f"folder link: {href}")
         elif target is not None and heading is None:
-            self.report(line, f'missing heading: {href}')
+            self.report(line, f"missing heading: {href}")
 
     def link(self, text, checked=False):
         self.check_link(text)
@@ -113,26 +115,29 @@ class CheckConverter(Converter):
     def ref(self, ref, line):
         """Ref the vault defines, else one with a url."""
         if self.refs.resolve(ref) is None and self.refs.url(ref) is None:
-            self.report(line, f'unresolved ref: {ref}')
+            self.report(line, f"unresolved ref: {ref}")
         return super().ref(ref, line)
 
     def embed_note(self, text):
         self.check_link(text)
-        return ''
+        return ""
 
     def check_link(self, text):
         name, heading, item, _ = self.parse_target(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.source
         if target is None:
             if heading or item or not self.attachment(text):
-                self.report(self.line, f'unresolved link: [[{name}]]')
+                self.report(self.line, f"unresolved link: [[{name}]]")
             return
         node = target.source
-        if heading and not heading.startswith('^'):
-            if node is None or not self.section(self.read_text(node)[0], heading):
-                return self.report(self.line, f'missing heading: [[{name}#{heading}]]')
+        if (
+            heading
+            and not heading.startswith("^")
+            and (node is None or not self.section(self.read_text(node)[0], heading))
+        ):
+            return self.report(self.line, f"missing heading: [[{name}#{heading}]]")
         if item and (node is None or not self.find_item(node, self.title_section(target, heading), item)):
-            self.report(self.line, f'missing item: [[{text.partition("|")[0].strip()}]]')
+            self.report(self.line, f"missing item: [[{text.partition('|')[0].strip()}]]")
 
     def check_numbering(self, line, lineno):
         """Numbered lists count on by one from any first number, as Markdown renders them (`<ol start>`),
@@ -151,17 +156,18 @@ class CheckConverter(Converter):
             self.lists.append([indent, num - 1])
         expected = self.lists[-1][1] + 1
         if num != expected:
-            self.report(lineno, f'list number {num}, expected {expected}')
+            self.report(lineno, f"list number {num}, expected {expected}")
         self.lists[-1][1] = num
+
 
 class Checker:
     """Checks vault consistency the way builder sees it, reports problems as `path:line: message`."""
 
-    FRONT_MATTER_START = re.compile(r'\A---[ \t]*\r?\n')
-    DAY = re.compile(r'\d{4}-\d\d-\d\d')
-    FENCE = re.compile(r' {0,3}(`{3,}|~{3,})')
-    CODE_SPAN = re.compile(r'(`+)([^`\n]+?)\1(?!`)')
-    CODE_PATH = re.compile(r'[\w.-]+(?:/[\w.-]+)*/?')
+    FRONT_MATTER_START = re.compile(r"\A---[ \t]*\r?\n")
+    DAY = re.compile(r"\d{4}-\d\d-\d\d")
+    FENCE = re.compile(r" {0,3}(`{3,}|~{3,})")
+    CODE_SPAN = re.compile(r"(`+)([^`\n]+?)\1(?!`)")
+    CODE_PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)*/?")
 
     def __init__(self, paths, include=(), exclude=(), options=None, today=None):
         self.vaults = Vaults(paths, Filter(include, exclude))
@@ -172,7 +178,7 @@ class Checker:
         self.links = {}  # scanner: links of its pages
         self.checked = {}  # checked page: (scanner, path to show)
         self.configs = {}  # scanner: its vault config
-        self.today = today or datetime.now(timezone.utc).date()
+        self.today = today or datetime.now(UTC).date()
         self.edges = {}  # (page, key): pages its page valued key names
 
     def check(self):
@@ -198,10 +204,14 @@ class Checker:
                 for there, here in ((key, back), (back, key)):
                     for target in self.named_by(scanner, page, there):
                         if page not in self.named_by(scanner, target, here):
-                            path = os.path.relpath(target.file, scanner.path).replace(os.sep, '/')
+                            path = os.path.relpath(target.file, scanner.path).replace(os.sep, "/")
                             front = read_parts(page.source.fullpath)[1]
-                            self.add(page, shown, self.key_line(front, there),
-                                     f'{there} {path}, whose {here} does not name it')
+                            self.add(
+                                page,
+                                shown,
+                                self.key_line(front, there),
+                                f"{there} {path}, whose {here} does not name it",
+                            )
 
     def check_acyclic(self):
         """Chains of page valued front matter keys, `[check] acyclic = ["supersedes"]`, lead back to no page,
@@ -210,10 +220,14 @@ class Checker:
             for page, (scanner, shown) in self.checked.items():
                 cycle = self.cycle(scanner, page, key)
                 if cycle:
-                    show = lambda node: os.path.relpath(node.file, scanner.path).replace(os.sep, '/')
+                    show = lambda node, root=scanner.path: os.path.relpath(node.file, root).replace(os.sep, "/")
                     front = read_parts(page.source.fullpath)[1]
-                    self.add(page, shown, self.key_line(front, key),
-                             f'{key} chain leads back to it: {" -> ".join(show(node) for node in cycle)}')
+                    self.add(
+                        page,
+                        shown,
+                        self.key_line(front, key),
+                        f"{key} chain leads back to it: {' -> '.join(show(node) for node in cycle)}",
+                    )
 
     def cycle(self, scanner, page, key):
         """Pages from page back to it by values of key, breadth first so the shortest, None if none lead back."""
@@ -240,7 +254,7 @@ class Checker:
                 try:
                     front = read_parts(page.source.fullpath)[1]
                 except (OSError, UnicodeDecodeError):
-                    front = ''
+                    front = ""
                 value = front_matter_tree(front).get(key) if front else None
                 for name in value if isinstance(value, list) else [value]:
                     target = self.page_named(scanner, page.source, name) if isinstance(name, str) else None
@@ -263,18 +277,22 @@ class Checker:
                 day, key = max(dates)
                 ago = (self.today - day).days
                 if ago > o.stale_days:
-                    report(self.key_line(front, key.split('.')[0]),
-                           f'stale: {key} {day.isoformat()}, {ago} days ago, more than {o.stale_days}')
+                    report(
+                        self.key_line(front, key.split(".")[0]),
+                        f"stale: {key} {day.isoformat()}, {ago} days ago, more than {o.stale_days}",
+                    )
         if o.stale_until:
             until = [day for day in map(self.day, self.values_at(tree, o.stale_until)) if day is not None]
             if until and min(until) <= self.today:
-                report(self.key_line(front, o.stale_until.split('.')[0]),
-                       f'stale: {o.stale_until} {min(until).isoformat()} passed')
+                report(
+                    self.key_line(front, o.stale_until.split(".")[0]),
+                    f"stale: {o.stale_until} {min(until).isoformat()} passed",
+                )
 
     @classmethod
     def values_at(cls, tree, key):
         """Text values of dotted key in front matter tree, in a map or in every map of a list."""
-        head, _, rest = key.partition('.')
+        head, _, rest = key.partition(".")
         value = tree.get(head) if isinstance(tree, dict) else None
         for item in value if isinstance(value, list) else [value]:
             if rest:
@@ -301,7 +319,7 @@ class Checker:
             return
         folder = os.path.dirname(config.path)
         fence = None
-        for n, line in enumerate(text.splitlines()[front.count('\n'):], front.count('\n') + 1):
+        for n, line in enumerate(text.splitlines()[front.count("\n") :], front.count("\n") + 1):
             m = self.FENCE.match(line)
             if m and (fence is None or m[1][0] == fence[0] and len(m[1]) >= len(fence)):
                 fence = m[1] if fence is None else None
@@ -310,17 +328,17 @@ class Checker:
                 continue
             for span in self.CODE_SPAN.finditer(line):
                 path = span[2].strip()
-                if not self.CODE_PATH.fullmatch(path) or not (path.endswith('.md') or '/' in path):
+                if not self.CODE_PATH.fullmatch(path) or not (path.endswith(".md") or "/" in path):
                     continue
                 if not any(os.path.exists(os.path.join(folder, base, path)) for base in bases):
-                    report(n, f'missing path: {path} in {", ".join(bases)}')
+                    report(n, f"missing path: {path} in {', '.join(bases)}")
 
     def add(self, page, shown, line, message, warning=False):
         """Reports problem or warning of page as `path:line: message`, keeps it by page file too."""
         if warning:
-            self.warnings.append(f'{shown}:{line}: warning: {message}')
+            self.warnings.append(f"{shown}:{line}: warning: {message}")
         else:
-            self.problems.append(f'{shown}:{line}: {message}')
+            self.problems.append(f"{shown}:{line}: {message}")
         file = page.file or page.source.fullpath
         self.issues.setdefault(os.path.realpath(file), []).append((line, message, warning))
 
@@ -334,12 +352,13 @@ class Checker:
             if scanner not in mentions:
                 o = self.options
                 mentions[scanner] = Mentions(scanner, o.mentions_ignore, o.mentions_min_length, o.mentions_ignore_case)
-            for mention in mentions[scanner].unlinked(page, self.vault_links(scanner), self.options.mentions_every,
-                                                      own=self.options.mentions_self_bold):
+            for mention in mentions[scanner].unlinked(
+                page, self.vault_links(scanner), self.options.mentions_every, own=self.options.mentions_self_bold
+            ):
                 if mention.own:
-                    self.add(page, shown, mention.line + 1, f'own term not bold: {mention.text}', True)
+                    self.add(page, shown, mention.line + 1, f"own term not bold: {mention.text}", True)
                 else:
-                    self.add(page, shown, mention.line + 1, f'unlinked mention: {mention.text}', True)
+                    self.add(page, shown, mention.line + 1, f"unlinked mention: {mention.text}", True)
 
     def check_unlisted(self):
         """Warns about pages and folders their folder page does not link, as contents should."""
@@ -348,7 +367,7 @@ class Checker:
             if folder is None or folder.page is None or page is scanner.root:
                 continue
             if page not in self.targets(scanner, folder):
-                self.add(page, shown, 1, f'not listed in {folder.page.name}.md', True)
+                self.add(page, shown, 1, f"not listed in {folder.page.name}.md", True)
 
     def vault_links(self, scanner):
         if scanner not in self.links:
@@ -367,7 +386,7 @@ class Checker:
                 vaults[scanner] = self.vault_links(scanner).orphans()
             reason = vaults[scanner].get(page)
             if reason:
-                self.add(page, shown, 1, f'orphan page: {reason}')
+                self.add(page, shown, 1, f"orphan page: {reason}")
 
     def check_layers(self):
         """Pages of a layer link only to pages of their layer or earlier ones, a folder page but the root one comes
@@ -383,8 +402,8 @@ class Checker:
                     for target, _, line, _ in self.vault_links(scanner).of(page):
                         other = self.layer(target, key, values) if target is not page else None
                         if other is not None and other > level:
-                            path = os.path.relpath(target.file, scanner.path).replace(os.sep, '/')
-                            self.add(page, shown, line, f'{values[level]} page links {values[other]} page: {path}')
+                            path = os.path.relpath(target.file, scanner.path).replace(os.sep, "/")
+                            self.add(page, shown, line, f"{values[level]} page links {values[other]} page: {path}")
                 if page.is_folder and page is not scanner.root:
                     self.check_folder_layer(page, shown, scanner, key, values)
 
@@ -396,13 +415,17 @@ class Checker:
         earlier = sorted((n, child.file) for n, child in earlier if n is not None and (level is None or n < level))
         if not earlier:
             return
-        first = os.path.relpath(earlier[0][1], scanner.path).replace(os.sep, '/')
-        more = f' and {len(earlier) - 1} more' if len(earlier) > 1 else ''
+        first = os.path.relpath(earlier[0][1], scanner.path).replace(os.sep, "/")
+        more = f" and {len(earlier) - 1} more" if len(earlier) > 1 else ""
         _, front, _, _ = read_parts(folder.file)
         value = dict(front_matter_items(front)).get(key) if front else None
-        name = values[level] if level is not None else value if isinstance(value, str) and value else f'no {key}'
-        self.add(folder, shown, self.key_line(front, key),
-                 f'{name} folder page of {values[earlier[0][0]]} page: {first}{more}')
+        name = values[level] if level is not None else value if isinstance(value, str) and value else f"no {key}"
+        self.add(
+            folder,
+            shown,
+            self.key_line(front, key),
+            f"{name} folder page of {values[earlier[0][0]]} page: {first}{more}",
+        )
 
     @staticmethod
     def layer(node, key, values):
@@ -430,7 +453,7 @@ class Checker:
         schema = self.schema(scanner)
         if schema.empty:
             return
-        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
+        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, "/")
         resolve = lambda value: self.names_page(scanner, source, value)
         refs = Refs.of(scanner)
         ref = lambda value: refs.is_ref(value) and bool(refs.resolve(value.strip()) or refs.url(value.strip()))
@@ -445,9 +468,9 @@ class Checker:
     @staticmethod
     def page_named(scanner, source, value):
         """Page other than source value names, see names_page, None if none."""
-        name = value[2:-2].partition('|')[0] if value.startswith('[[') and value.endswith(']]') else value
-        name = name.partition('#')[0].strip()
-        if name.endswith('.md') or name.startswith('.'):
+        name = value[2:-2].partition("|")[0] if value.startswith("[[") and value.endswith("]]") else value
+        name = name.partition("#")[0].strip()
+        if name.endswith(".md") or name.startswith("."):
             target = scanner.resolve_path(name, source.path)
         else:
             target = scanner.resolve(name, source.path) if name else None
@@ -456,37 +479,43 @@ class Checker:
     def check_length(self, scanner, source, text, report):
         """Page no longer than max_lines, unless a max_lines_ignore glob matches it from the config folder."""
         limit = self.options.max_lines
-        lines = text.count('\n') + (not text.endswith('\n') and bool(text))
+        lines = text.count("\n") + (not text.endswith("\n") and bool(text))
         if not limit or lines <= limit:
             return
         if not self.matches(scanner, source, self.options.max_lines_ignore):
-            report(limit + 1, f'{lines} lines, more than {limit}')
+            report(limit + 1, f"{lines} lines, more than {limit}")
 
     def matches(self, scanner, source, globs):
         """Whether a glob matches the source page's path from the config folder."""
         if not globs or source is None:
             return False
-        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, '/')
+        path = os.path.relpath(source.fullpath, scanner.path).replace(os.sep, "/")
         return self.config(scanner).matches(path, globs)
 
     @staticmethod
     def key_line(front, key):
         """Line of front matter key, 1 if missing."""
-        return next((n for n, text in enumerate(front.splitlines(), 1)
-                     if key is not None and re.match(rf'[\'"]?{re.escape(key)}[\'"]?:', text)), 1)
+        return next(
+            (
+                n
+                for n, text in enumerate(front.splitlines(), 1)
+                if key is not None and re.match(rf'[\'"]?{re.escape(key)}[\'"]?:', text)
+            ),
+            1,
+        )
 
     def check_aliases(self, scanner, page, front, report):
         """Aliases page names win over, aliases two pages share."""
         items = dict(front_matter_items(front)) if front else {}
-        key = 'aliases' if 'aliases' in items else 'alias'
+        key = "aliases" if "aliases" in items else "alias"
         for alias in read_aliases(page.file):
-            show = lambda node: os.path.relpath(node.file or node.fullpath, scanner.path).replace(os.sep, '/')
+            show = lambda node: os.path.relpath(node.file or node.fullpath, scanner.path).replace(os.sep, "/")
             named = [node for folderless, node in scanner.named(alias) if not folderless and node is not page]
             if named:
-                report(self.key_line(front, key), f'alias {alias}: {show(named[0])} has this name, links lead there')
+                report(self.key_line(front, key), f"alias {alias}: {show(named[0])} has this name, links lead there")
             for _, other in scanner.aliases.get(alias.lower(), []):
                 if other is not page:
-                    report(self.key_line(front, key), f'alias {alias}: also alias of {show(other)}')
+                    report(self.key_line(front, key), f"alias {alias}: also alias of {show(other)}")
 
     def check_refs(self, scanner, page, front, report):
         """Refs page defines that another definition comes before, refs in its front matter values that
@@ -498,7 +527,7 @@ class Checker:
             report(line, message)
         for key, ref in refs.front_refs(front):
             if refs.resolve(ref) is None and refs.url(ref) is None:
-                report(self.key_line(front, key), f'unresolved ref: {ref}')
+                report(self.key_line(front, key), f"unresolved ref: {ref}")
 
     def check_file(self, scanner, page, shown):
         report = lambda line, msg: self.add(page, shown, line, msg)
@@ -506,12 +535,12 @@ class Checker:
         try:
             text, front, _, _ = read_parts(source.fullpath)
         except UnicodeDecodeError:
-            return report(1, 'not UTF-8')
+            return report(1, "not UTF-8")
         for n, line in enumerate(front.splitlines()[1:-1], 2):
-            if line and not line.startswith((' ', '-')) and ':' not in line:
-                report(n, f'malformed frontmatter: {line}')
+            if line and not line.startswith((" ", "-")) and ":" not in line:
+                report(n, f"malformed frontmatter: {line}")
         if not front and self.FRONT_MATTER_START.match(text):
-            report(1, 'unclosed frontmatter')
+            report(1, "unclosed frontmatter")
         self.check_schema(scanner, source, front, report)
         self.check_aliases(scanner, page, front, report)
         self.check_length(scanner, source, text, report)

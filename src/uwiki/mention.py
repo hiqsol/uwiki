@@ -30,8 +30,10 @@ class Mentions:
     outside code, headings, links, bold definitions and generated blocks `index` fills from front matter;
     terms naming two pages are left out."""
 
-    SKIP = re.compile(r"""(`+).*?\1|!?\[\[.*?\]\]|!?\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])|<[^>]*>|https?://\S+"""
-                      r"""|\*\*[^*\n]+?\*\*""")
+    SKIP = re.compile(
+        r"""(`+).*?\1|!?\[\[.*?\]\]|!?\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])|<[^>]*>|https?://\S+"""
+        r"""|\*\*[^*\n]+?\*\*"""
+    )
 
     def __init__(self, scanner, ignore=(), min_length=3, ignore_case=False):
         self.scanner = scanner
@@ -43,7 +45,7 @@ class Mentions:
             if node is scanner.root and not node.page:
                 continue
             # folder page Card.md of Cards/ goes by its own title, README.md and index.md by the folder's
-            named = node.page if node.is_folder and node.page.name.lower() not in ('index', 'readme') else node
+            named = node.page if node.is_folder and node.page.name.lower() not in ("index", "readme") else node
             for term, name in [(named.title, named.name), *((a, a) for a in read_aliases(node.file))]:
                 term = term.strip()
                 if len(term) < min_length or term.lower() in ignored:
@@ -54,8 +56,7 @@ class Mentions:
         self.terms = {k: v for k, v in {**plural, **exact}.items() if v is not None}
         # an ignored name that is no term, e.g. a game title Star Realms, keeps the terms in it unlinked
         self.terms.update({term.lower(): None for term in ignore if term.lower() not in self.terms})
-        self.pattern = re.compile(r'(?<!\w)' + self.trie(self.terms) + r'(?!\w)', re.IGNORECASE) \
-            if self.terms else None
+        self.pattern = re.compile(r"(?<!\w)" + self.trie(self.terms) + r"(?!\w)", re.IGNORECASE) if self.terms else None
 
     @staticmethod
     def add(terms, form, value):
@@ -68,9 +69,9 @@ class Mentions:
 
     @staticmethod
     def plurals(term):
-        res = [term + 's', term + 'es']
-        if term.endswith('y'):
-            res.append(term[:-1] + 'ies')
+        res = [term + "s", term + "es"]
+        if term.endswith("y"):
+            res.append(term[:-1] + "ies")
         return res
 
     @classmethod
@@ -81,13 +82,15 @@ class Mentions:
             node = tree
             for c in word:
                 node = node.setdefault(c, {})
-            node[''] = {}
+            node[""] = {}
+
         def pattern(node):
             alts = [re.escape(c) + pattern(sub) for c, sub in node.items() if c]
             if not alts:
-                return ''
-            res = alts[0] if len(alts) == 1 else '(?:' + '|'.join(alts) + ')'
-            return f'(?:{res})?' if '' in node else res
+                return ""
+            res = alts[0] if len(alts) == 1 else "(?:" + "|".join(alts) + ")"
+            return f"(?:{res})?" if "" in node else res
+
         return pattern(tree)
 
     def find(self, page, own=False):
@@ -129,32 +132,32 @@ class Mentions:
                 generated = True
             if generated:
                 generated = Index.CLOSING not in line
-                res.append((n, ''))
+                res.append((n, ""))
                 continue
             if Converter.HEADING.match(line) or Converter.LINK_DEF.match(line) or not line.strip():
                 bold = False
-                res.append((n, ''))
+                res.append((n, ""))
                 continue
             if bold:
-                end = line.find('**')
+                end = line.find("**")
                 if end < 0:
-                    res.append((n, ''))
+                    res.append((n, ""))
                     continue
-                line, bold = ' ' * (end + 2) + line[end + 2:], False
-            line = self.SKIP.sub(lambda m: ' ' * len(m[0]), line)
-            line = self.refs.sub(lambda m: ' ' * len(m[0]), line)  # a page aliased `doc` gets no link from doc:245
-            if '**' in line:
-                line, bold = line[:line.index('**')], True
+                line, bold = " " * (end + 2) + line[end + 2 :], False
+            line = self.SKIP.sub(lambda m: " " * len(m[0]), line)
+            line = self.refs.sub(lambda m: " " * len(m[0]), line)  # a page aliased `doc` gets no link from doc:245
+            if "**" in line:
+                line, bold = line[: line.index("**")], True
             res.append((n, line))
         spill = 0
         for i, (n, line) in enumerate(res):
-            after = res[i + 1][1] if i + 1 < len(res) and res[i + 1][0] == n + 1 else ''
+            after = res[i + 1][1] if i + 1 < len(res) and res[i + 1][0] == n + 1 else ""
             indent = len(after) - len(after.lstrip())
-            joined = line.rstrip() + ' ' + after.lstrip()
+            joined = line.rstrip() + " " + after.lstrip()
             ends, wrapped = len(line.rstrip()), 0
             for m in self.pattern.finditer(joined):
                 if m.start() < ends < m.end() and self.terms[m[0].lower()] is None:
-                    line = line[:m.start()] + ' ' * (len(line) - m.start())
+                    line = line[: m.start()] + " " * (len(line) - m.start())
                     wrapped = indent + m.end() - ends - 1
             yield n, line, spill
             spill = wrapped
@@ -164,18 +167,30 @@ class Mentions:
         `[[Warp orbit]]` for alias `Warp Orbit` as names match in any case; a table cell escapes the pipe."""
         name = mention.name
         if self.scanner.resolve(name, source.path) is not mention.node:
-            name = mention.node.path.strip('/')
+            name = mention.node.path.strip("/")
         text = mention.text
-        for suffix in ('', 's', 'es'):
-            base = text[:len(text) - len(suffix)]
-            if text.endswith(suffix) and base.lower() == name.lower() \
-                    and (base == name or self.scanner.resolve(base, source.path) is mention.node):
-                return f'[[{base}]]{suffix}'
-        return f'[[{name}\\|{text}]]' if table else f'[[{name}|{text}]]'
+        for suffix in ("", "s", "es"):
+            base = text[: len(text) - len(suffix)]
+            if (
+                text.endswith(suffix)
+                and base.lower() == name.lower()
+                and (base == name or self.scanner.resolve(base, source.path) is mention.node)
+            ):
+                return f"[[{base}]]{suffix}"
+        return f"[[{name}\\|{text}]]" if table else f"[[{name}|{text}]]"
 
 
-def link_mentions(vaults, ignore=(), min_length=3, ignore_case=False, self_bold=False, width=WIDTH, dry_run=False,
-                  exclude=(), every=False):
+def link_mentions(
+    vaults,
+    ignore=(),
+    min_length=3,
+    ignore_case=False,
+    self_bold=False,
+    width=WIDTH,
+    dry_run=False,
+    exclude=(),
+    every=False,
+):
     """Links plain mentions in pages of vaults but those an exclude glob from the config folder matches: the first one
     of each page a page does not link yet, every one with every, as check warns about them; with self_bold makes
     mentions of the page itself bold, rewraps lines longer than width, yields path shown and its changed lines as
@@ -188,27 +203,27 @@ def link_mentions(vaults, ignore=(), min_length=3, ignore_case=False, self_bold=
             links[scanner] = Links(scanner)
         if page.source is None:
             continue
-        path = os.path.relpath(page.source.fullpath, scanner.path).replace(os.sep, '/')
+        path = os.path.relpath(page.source.fullpath, scanner.path).replace(os.sep, "/")
         if configs[scanner].matches(path, exclude):
             continue
         found = list(mentions[scanner].unlinked(page, links[scanner], every, own=self_bold))
         if not found:
             continue
-        with open(page.source.fullpath, encoding='utf-8') as f:
+        with open(page.source.fullpath, encoding="utf-8") as f:
             text = f.read()
-        lines = text.split('\n')
+        lines = text.split("\n")
         old = list(lines)
         for mention in reversed(found):
             line = lines[mention.line]
             if mention.own:
-                link = f'**{mention.text}**'
+                link = f"**{mention.text}**"
             else:
-                link = mentions[scanner].link(mention, page, table=line.lstrip().startswith('|'))
-            lines[mention.line] = line[:mention.start] + link + line[mention.end:]
+                link = mentions[scanner].link(mention, page, table=line.lstrip().startswith("|"))
+            lines[mention.line] = line[: mention.start] + link + line[mention.end :]
         if lines == old:
             continue
-        new = rewrap('\n'.join(lines), width)[0]
+        new = rewrap("\n".join(lines), width)[0]
         if not dry_run:
-            with open(page.source.fullpath, 'w', encoding='utf-8') as f:
+            with open(page.source.fullpath, "w", encoding="utf-8") as f:
                 f.write(new)
-        yield shown, [(n + 1, a, b) for n, (a, b) in enumerate(zip(old, lines)) if a != b]
+        yield shown, [(n + 1, a, b) for n, (a, b) in enumerate(zip(old, lines, strict=False)) if a != b]

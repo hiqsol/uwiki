@@ -13,17 +13,19 @@ import tomllib
 
 from .vault import Filter, Glob
 
+
 class ConfigError(ValueError):
     """Config that cannot be read or does not fit the commands."""
 
+
 class Config:
-    def __init__(self, data=None, path=None, prefix=''):
+    def __init__(self, data=None, path=None, prefix=""):
         self.data = data or {}
         self.path = path
         self.prefix = prefix  # vault root relative to the config folder, schema globs match from there
         self._schema = None
 
-    NAMES = ('uwiki.toml', 'pyproject.toml')
+    NAMES = ("uwiki.toml", "pyproject.toml")
 
     @classmethod
     def load(cls, root):
@@ -32,8 +34,8 @@ class Config:
             config = cls.find(folder)
             if config:
                 data, file = config
-                prefix = os.path.relpath(os.path.abspath(root), folder).replace(os.sep, '/')
-                return cls(data, file, '' if prefix == '.' else prefix)
+                prefix = os.path.relpath(os.path.abspath(root), folder).replace(os.sep, "/")
+                return cls(data, file, "" if prefix == "." else prefix)
         return cls()
 
     @staticmethod
@@ -43,7 +45,7 @@ class Config:
         while True:
             yield folder
             parent = os.path.dirname(folder)
-            if parent == folder or os.path.exists(os.path.join(folder, '.git')):
+            if parent == folder or os.path.exists(os.path.join(folder, ".git")):
                 return
             folder = parent
 
@@ -55,12 +57,12 @@ class Config:
     @classmethod
     def find(cls, folder):
         """Config data and its file in folder, None if there is none."""
-        file = os.path.join(folder, 'uwiki.toml')
+        file = os.path.join(folder, "uwiki.toml")
         if os.path.isfile(file):
             return cls.read(file), file
-        file = os.path.join(folder, 'pyproject.toml')
+        file = os.path.join(folder, "pyproject.toml")
         if os.path.isfile(file):
-            data = cls.read(file).get('tool', {}).get('uwiki')
+            data = cls.read(file).get("tool", {}).get("uwiki")
             if data is not None:
                 return data, file
         return None
@@ -68,10 +70,10 @@ class Config:
     @staticmethod
     def read(file):
         try:
-            with open(file, 'rb') as f:
+            with open(file, "rb") as f:
                 return tomllib.load(f)
         except (OSError, tomllib.TOMLDecodeError) as e:
-            raise ConfigError(f'{file}: {e}') from e
+            raise ConfigError(f"{file}: {e}") from e
 
     def globs(self, value):
         """Globs of an exclude or include value, one or a list, matching from the config folder."""
@@ -79,90 +81,96 @@ class Config:
 
     def matches(self, path, globs):
         """Whether a glob from the config folder matches path, relative to the vault root."""
-        path = f'{self.prefix}/{path}' if self.prefix else path
+        path = f"{self.prefix}/{path}" if self.prefix else path
         return any(Filter.compile(glob).fullmatch(path) for glob in globs)
 
-    def options(self, command, takes=('build',)):
+    def options(self, command, takes=("build",)):
         """Option defaults for command: top level ones, then of its own table and of tables it takes."""
         res = {k: v for k, v in self.data.items() if not isinstance(v, dict)}
         for table in (*takes, command):
             value = self.data.get(table, {})
             if not isinstance(value, dict):
-                raise ConfigError(f'{self.path}: {table} should be a table')
+                raise ConfigError(f"{self.path}: {table} should be a table")
             res.update(value)
         return res
 
     @property
     def layers(self):
         """Front matter keys with their values in layer order, `[check] layers.KEY = [values]`."""
-        table = self.data.get('check', {})
-        layers = table.get('layers', {}) if isinstance(table, dict) else {}
+        table = self.data.get("check", {})
+        layers = table.get("layers", {}) if isinstance(table, dict) else {}
         if not isinstance(layers, dict) or not all(
-                isinstance(v, list) and all(isinstance(x, str) for x in v) for v in layers.values()):
-            raise ConfigError(f'{self.path}: check.layers should be a table of keys with lists of values')
+            isinstance(v, list) and all(isinstance(x, str) for x in v) for v in layers.values()
+        ):
+            raise ConfigError(f"{self.path}: check.layers should be a table of keys with lists of values")
         return layers
 
     @property
     def inverse(self):
         """Page valued front matter keys with the key naming back, `[check] inverse.supersedes = "superseded_by"`."""
-        table = self.data.get('check', {})
-        pairs = table.get('inverse', {}) if isinstance(table, dict) else {}
+        table = self.data.get("check", {})
+        pairs = table.get("inverse", {}) if isinstance(table, dict) else {}
         if not isinstance(pairs, dict) or not all(isinstance(v, str) for v in pairs.values()):
-            raise ConfigError(f'{self.path}: check.inverse should be a table of keys with the key naming back')
+            raise ConfigError(f"{self.path}: check.inverse should be a table of keys with the key naming back")
         return pairs
 
     @property
     def code_paths(self):
         """Page globs with the folder code spans in those pages name paths in, `[check.code-paths]
         "skills/**/map.md" = "docs"`, both from the config folder."""
-        table = self.data.get('check', {})
-        paths = table.get('code-paths', {}) if isinstance(table, dict) else {}
+        table = self.data.get("check", {})
+        paths = table.get("code-paths", {}) if isinstance(table, dict) else {}
         if not isinstance(paths, dict) or not all(isinstance(v, str) for v in paths.values()):
-            raise ConfigError(f'{self.path}: check.code-paths should be a table of page globs with folders')
+            raise ConfigError(f"{self.path}: check.code-paths should be a table of page globs with folders")
         return paths
 
     def text(self):
         """Config as its file has it: uwiki.toml whole, comments too, `[tool.uwiki]` of pyproject.toml
         as TOML; empty without config."""
         if not self.path:
-            return ''
-        if os.path.basename(self.path) == 'uwiki.toml':
-            with open(self.path, encoding='utf-8') as f:
+            return ""
+        if os.path.basename(self.path) == "uwiki.toml":
+            with open(self.path, encoding="utf-8") as f:
                 return f.read()
-        return dumps(self.data, ('tool', 'uwiki'))
+        return dumps(self.data, ("tool", "uwiki"))
 
     @property
     def schema(self):
         if self._schema is None:
-            self._schema = Schema(self.data.get('schema', {}), self.path, self.prefix)
+            self._schema = Schema(self.data.get("schema", {}), self.path, self.prefix)
         return self._schema
 
-BARE_KEY = re.compile(r'[A-Za-z0-9_-]+')
+
+BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
+
 
 def toml_key(key):
     return key if BARE_KEY.fullmatch(key) else json.dumps(key, ensure_ascii=False)
 
+
 def toml_value(value):
     if isinstance(value, bool):
-        return 'true' if value else 'false'
+        return "true" if value else "false"
     if isinstance(value, (int, float)):
         return repr(value)
     if isinstance(value, str):
         return json.dumps(value, ensure_ascii=False)  # its escapes are TOML ones
     if isinstance(value, list):
-        return '[' + ', '.join(map(toml_value, value)) + ']'
+        return "[" + ", ".join(map(toml_value, value)) + "]"
     if isinstance(value, dict):
-        return '{' + ', '.join(f'{toml_key(k)} = {toml_value(v)}' for k, v in value.items()) + '}'
+        return "{" + ", ".join(f"{toml_key(k)} = {toml_value(v)}" for k, v in value.items()) + "}"
     return value.isoformat()  # date, time, datetime
+
 
 def dumps(data, table=()):
     """Data as TOML, keys before tables, under given table name."""
-    lines = [f'[{".".join(map(toml_key, table))}]'] if table else []
-    lines += [f'{toml_key(k)} = {toml_value(v)}' for k, v in data.items() if not isinstance(v, dict)]
+    lines = [f"[{'.'.join(map(toml_key, table))}]"] if table else []
+    lines += [f"{toml_key(k)} = {toml_value(v)}" for k, v in data.items() if not isinstance(v, dict)]
     for key, value in data.items():
         if isinstance(value, dict):
-            lines += ['', dumps(value, (*table, key)).rstrip('\n')]
-    return '\n'.join(lines).strip('\n') + '\n'
+            lines += ["", dumps(value, (*table, key)).rstrip("\n")]
+    return "\n".join(lines).strip("\n") + "\n"
+
 
 class Schema:
     """Front matter keys allowed, value is allowed values or a type, `_required` lists required keys,
@@ -187,42 +195,42 @@ class Schema:
     later ones win. Keys go in schema order, build shows front matter so.
     """
 
-    TYPES = ('string', 'number', 'bool', 'date', 'datetime', 'page', 'ref', 'list', 'any')
-    LENGTH = re.compile(r'string\((\d+)\)')  # string of at most N characters
-    NUMBER = re.compile(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?')
-    DATE = re.compile(r'\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)?)?')
-    DATETIME = re.compile(r'\d{4}-\d\d-\d\d[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)')
+    TYPES = ("string", "number", "bool", "date", "datetime", "page", "ref", "list", "any")
+    LENGTH = re.compile(r"string\((\d+)\)")  # string of at most N characters
+    NUMBER = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
+    DATE = re.compile(r"\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)?)?")
+    DATETIME = re.compile(r"\d{4}-\d\d-\d\d[T ]\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[-+]\d\d:?\d\d)")
 
-    def __init__(self, table, path=None, prefix=''):
+    def __init__(self, table, path=None, prefix=""):
         self.path = path
         self.prefix = prefix
         self.rules = []  # (glob regex or None, {key: spec}, required keys, inherit)
         if not isinstance(table, dict):
-            raise ConfigError(f'{path}: schema should be a table')
+            raise ConfigError(f"{path}: schema should be a table")
         top = self.flat({key: value for key, value in table.items() if not self.folder_rule(key, value)})
-        self.rules.append((None, *self.parse(top, 'schema'), True))
+        self.rules.append((None, *self.parse(top, "schema"), True))
         for key, value in table.items():
             if self.folder_rule(key, value):
-                inherit = value.get('_inherit', True)
+                inherit = value.get("_inherit", True)
                 if not isinstance(inherit, bool):
                     raise ConfigError(f'{path}: schema."{key}"._inherit should be true or false')
                 known = self.rules[0][1] if inherit else ()
-                specs = self.flat({k: v for k, v in value.items() if k != '_inherit'})
+                specs = self.flat({k: v for k, v in value.items() if k != "_inherit"})
                 self.rules.append((Filter.compile(key), *self.parse(specs, f'schema."{key}"', known), inherit))
         self.empty = not table
 
     @staticmethod
     def folder_rule(key, value):
         """Table of folder rules: key is a glob, a table of other keys gives nested keys."""
-        return isinstance(value, dict) and any(c in key for c in '/*?.')
+        return isinstance(value, dict) and any(c in key for c in "/*?.")
 
     @classmethod
-    def flat(cls, table, prefix=''):
+    def flat(cls, table, prefix=""):
         """Table with nested key tables, `generated.at = ...` too, as dotted keys."""
         res = {}
         for key, value in table.items():
             if isinstance(value, dict):
-                res.update(cls.flat(value, f'{prefix}{key}.'))
+                res.update(cls.flat(value, f"{prefix}{key}."))
             else:
                 res[prefix + key] = value
         return res
@@ -231,30 +239,35 @@ class Schema:
         """Specs of keys of table and its required keys, ones of known specs too."""
         specs = {}
         for key, spec in table.items():
-            if key == '_required':
+            if key == "_required":
                 continue
-            if key.endswith('!'):
+            if key.endswith("!"):
                 raise ConfigError(f'{self.path}: {where}."{key}": list required keys in _required instead of !')
-            if not isinstance(spec, list) and spec not in self.TYPES \
-                    and not (isinstance(spec, str) and self.LENGTH.fullmatch(spec)):
-                raise ConfigError(f'{self.path}: {where}.{key}: {spec!r} is no list of values '
-                                  f'nor type: {", ".join(self.TYPES)}, string(N)')
+            if (
+                not isinstance(spec, list)
+                and spec not in self.TYPES
+                and not (isinstance(spec, str) and self.LENGTH.fullmatch(spec))
+            ):
+                raise ConfigError(
+                    f"{self.path}: {where}.{key}: {spec!r} is no list of values "
+                    f"nor type: {', '.join(self.TYPES)}, string(N)"
+                )
             specs[key] = spec
-        required = table.get('_required', [])
+        required = table.get("_required", [])
         if not isinstance(required, list) or not all(isinstance(key, str) for key in required):
-            raise ConfigError(f'{self.path}: {where}._required should be a list of keys')
+            raise ConfigError(f"{self.path}: {where}._required should be a list of keys")
         keys = set()
         for key in required:
-            nested = [k for k in (*specs, *known) if k == key or k.startswith(key + '.')]
+            nested = [k for k in (*specs, *known) if k == key or k.startswith(key + ".")]
             if not nested:
-                raise ConfigError(f'{self.path}: {where}._required: {key} is not in schema')
+                raise ConfigError(f"{self.path}: {where}._required: {key} is not in schema")
             keys.update([key] if key in nested else nested)
         return specs, keys
 
     def keys(self, path):
         """Rules for page at vault relative path in schema order: key: (required, spec)."""
         specs, required = {}, set()
-        path = f'{self.prefix}/{path}' if self.prefix else path
+        path = f"{self.prefix}/{path}" if self.prefix else path
         for glob, rules, keys, inherit in self.rules:
             if glob is None or glob.fullmatch(path):
                 if not inherit:
@@ -285,8 +298,8 @@ class Schema:
         if self.empty:
             return []
         res = []
-        resolve = {'page': resolve or (lambda value: True), 'ref': ref or (lambda value: True)}
-        self.check_map(tree, '', self.keys(path), res, None, resolve)
+        resolve = {"page": resolve or (lambda value: True), "ref": ref or (lambda value: True)}
+        self.check_map(tree, "", self.keys(path), res, None, resolve)
         return res
 
     def check_map(self, values, prefix, rules, res, at, resolve):
@@ -294,59 +307,65 @@ class Schema:
         for key, value in values.items():
             full = prefix + key
             top = at or key
-            nested = any(k.startswith(full + '.') for k in rules)
+            nested = any(k.startswith(full + ".") for k in rules)
             if nested and isinstance(value, dict):
-                self.check_map(value, full + '.', rules, res, top, resolve)
+                self.check_map(value, full + ".", rules, res, top, resolve)
                 continue
             if nested and isinstance(value, list) and value and all(isinstance(v, dict) for v in value):
                 for item in value:
-                    self.check_map(item, full + '.', rules, res, top, resolve)
+                    self.check_map(item, full + ".", rules, res, top, resolve)
                 continue
             if full not in rules:
-                res.append((top, f'unknown front matter key: {full}'))
+                res.append((top, f"unknown front matter key: {full}"))
                 continue
             required, spec = rules[full]
-            if value in ('', [], {}):
+            if value in ("", [], {}):
                 if required:
-                    res.append((top, f'front matter {full}: empty, required'))
+                    res.append((top, f"front matter {full}: empty, required"))
                 continue
             bad = self.mismatch(spec, value, resolve)
             if bad:
-                res.append((top, f'front matter {full}: {bad}'))
+                res.append((top, f"front matter {full}: {bad}"))
         for key, (required, _) in rules.items():
-            if required and key.startswith(prefix) and key[len(prefix):].split('.')[0] not in values:
-                res.append((at, f'missing front matter key: {key}'))
+            if required and key.startswith(prefix) and key[len(prefix) :].split(".")[0] not in values:
+                res.append((at, f"missing front matter key: {key}"))
 
     @classmethod
     def mismatch(cls, spec, value, resolve=None):
         """What is wrong with the value, None if it fits; resolve by type tells page and ref values that lead
         somewhere."""
         if isinstance(value, dict):
-            return None if spec == 'any' else f'map, expected {spec if isinstance(spec, str) else "one of values"}'
+            return None if spec == "any" else f"map, expected {spec if isinstance(spec, str) else 'one of values'}"
         if isinstance(spec, list):
             allowed = [cls.text(v) for v in spec]
             bad = [v for v in (value if isinstance(value, list) else [value]) if v not in allowed]
-            return f'{", ".join(bad)}, expected one of {", ".join(allowed)}' if bad else None
-        if spec == 'any':
+            return f"{', '.join(bad)}, expected one of {', '.join(allowed)}" if bad else None
+        if spec == "any":
             return None
-        if spec == 'list':
-            return None if isinstance(value, list) else f'{value}, expected list'
-        if spec in ('page', 'ref'):
+        if spec == "list":
+            return None if isinstance(value, list) else f"{value}, expected list"
+        if spec in ("page", "ref"):
             fits = (resolve or {}).get(spec, lambda value: True)
             bad = [v for v in (value if isinstance(value, list) else [value]) if not fits(v)]
-            return f'{", ".join(bad)}, expected {spec}' if bad else None
+            return f"{', '.join(bad)}, expected {spec}" if bad else None
         if isinstance(value, list):
-            return f'list, expected {spec}'
+            return f"list, expected {spec}"
         length = cls.LENGTH.fullmatch(spec)
         if length and len(value) > int(length[1]):
-            return f'{len(value)} characters, more than {length[1]}'
-        if spec == 'number' and not cls.NUMBER.fullmatch(value) \
-                or spec == 'bool' and value not in ('true', 'false') \
-                or spec == 'date' and not cls.DATE.fullmatch(value) \
-                or spec == 'datetime' and not cls.DATETIME.fullmatch(value):
-            return f'{value}, expected {spec}'
+            return f"{len(value)} characters, more than {length[1]}"
+        if (
+            spec == "number"
+            and not cls.NUMBER.fullmatch(value)
+            or spec == "bool"
+            and value not in ("true", "false")
+            or spec == "date"
+            and not cls.DATE.fullmatch(value)
+            or spec == "datetime"
+            and not cls.DATETIME.fullmatch(value)
+        ):
+            return f"{value}, expected {spec}"
         return None
 
     @staticmethod
     def text(value):
-        return ('true' if value else 'false') if isinstance(value, bool) else str(value)
+        return ("true" if value else "false") if isinstance(value, bool) else str(value)

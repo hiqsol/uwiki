@@ -5,6 +5,7 @@ import os
 from .order import Order
 from .vault import read_description
 
+
 class Llms:
     """Root pages first, then each folder's, depth first, all in reading order.
 
@@ -24,12 +25,12 @@ class Llms:
         self.summary = summary
 
     def text(self):
-        lines = [f'# {self.title}', '']
+        lines = [f"# {self.title}", ""]
         if self.summary:
-            lines += [f'> {line}'.rstrip() for line in self.summary.strip().splitlines()] + ['']
+            lines += [f"> {line}".rstrip() for line in self.summary.strip().splitlines()] + [""]
         for folder in self.folders(self.scanner.root):
-            lines += [f'## {self.heading(folder)}', '', *map(self.entry, self.pages(folder)), '']
-        return '\n'.join(lines)
+            lines += [f"## {self.heading(folder)}", "", *map(self.entry, self.pages(folder)), ""]
+        return "\n".join(lines)
 
     def folders(self, folder):
         """Folders with pages, depth first."""
@@ -45,7 +46,7 @@ class Llms:
         top = self.selection.common or self.scanner.root
         if folder is top:
             return folder.title if folder is self.scanner.root or folder.page else self.title
-        return os.path.relpath(folder.fullpath, top.fullpath).replace(os.sep, '/') + '/'
+        return os.path.relpath(folder.fullpath, top.fullpath).replace(os.sep, "/") + "/"
 
     def pages(self, folder):
         selected = self.selection.selected
@@ -53,6 +54,6 @@ class Llms:
         return [folder, *pages] if selected(folder) else pages
 
     def entry(self, page):
-        href = os.path.relpath(page.file, self.outdir).replace(os.sep, '/')
+        href = os.path.relpath(page.file, self.outdir).replace(os.sep, "/")
         description = read_description(page.file)
-        return f'- [{page.title}]({href})' + (f': {description}' if description else '')
+        return f"- [{page.title}]({href})" + (f": {description}" if description else "")

@@ -14,7 +14,8 @@ from .config import Config
 from .vault import Scanner
 
 CODE = os.path.dirname(os.path.abspath(__file__))
-RESTARTED = 'UWIKI_RESTARTED'  # port of serve in the environment of the restarted one
+RESTARTED = "UWIKI_RESTARTED"  # port of serve in the environment of the restarted one
+
 
 class Restart(Exception):
     """uwiki code changed: the command runs again as a new process, with the environment of args[0] added."""
@@ -22,6 +23,7 @@ class Restart(Exception):
     @property
     def environ(self):
         return self.args[0]
+
 
 def stats(files):
     """Mtime and size of the files that exist."""
@@ -34,32 +36,37 @@ def stats(files):
         res[file] = st.st_mtime_ns, st.st_size
     return res
 
+
 def code_files():
     for folder, folders, files in os.walk(CODE):
-        folders[:] = [f for f in folders if f != '__pycache__']
+        folders[:] = [f for f in folders if f != "__pycache__"]
         yield from (os.path.join(folder, f) for f in files)
+
 
 def restart_command():
     """This command again: the same python and arguments, or uwiki from PATH when an upgrade removed them."""
     if os.path.exists(sys.executable) and os.path.exists(sys.argv[0]):
         return [sys.executable, *sys.orig_argv[1:]]
-    uwiki = shutil.which('uwiki')
+    uwiki = shutil.which("uwiki")
     return uwiki and [uwiki, *sys.argv[1:]]
+
 
 def broken(command):
     """Last line of the error of importing the changed code by the python of command, None when it imports."""
     if command[0] != sys.executable:
         return None
-    res = subprocess.run([sys.executable, '-c', 'import uwiki.cli'], capture_output=True, text=True)
-    return res.returncode and (res.stderr.strip().splitlines() or ['import failed'])[-1] or None
+    res = subprocess.run([sys.executable, "-c", "import uwiki.cli"], capture_output=True, text=True, check=False)
+    return res.returncode and (res.stderr.strip().splitlines() or ["import failed"])[-1] or None
+
 
 def restart(environ):
     """Replaces this process with its command run again, environ added to the environment."""
     command = restart_command()
     if not command:
-        sys.exit('uwiki code changed, no uwiki to restart')
+        sys.exit("uwiki code changed, no uwiki to restart")
     sys.stdout.flush()
     os.execve(command[0], command, {**os.environ, **environ})
+
 
 class Watcher:
     """Builds once, then again on change of any file the vault takes: pages and attachments,
@@ -101,21 +108,21 @@ class Watcher:
     def run_build(self):
         """Builds, prints time, pages and outputs or the problems; True when built."""
         start = time.monotonic()
-        stamp = time.strftime('%H:%M:%S')
+        stamp = time.strftime("%H:%M:%S")
         try:
             problems = self.build.run()
         except (OSError, ValueError) as e:
-            problems = [f'error: {e}']
+            problems = [f"error: {e}"]
         for warning in self.build.warnings:
-            self.print(f'warning: {warning}')
+            self.print(f"warning: {warning}")
         for problem in problems:
             self.print(problem, error=True)
         if problems:
-            self.print(f'{stamp} build failed, last good output stays')
+            self.print(f"{stamp} build failed, last good output stays")
             return False
         pages = len(self.build.selection.shown)
-        outputs = ', '.join(self.build.outputs.values())
-        self.print(f'{stamp} built {pages} pages: {outputs} ({time.monotonic() - start:.2f}s)')
+        outputs = ", ".join(self.build.outputs.values())
+        self.print(f"{stamp} built {pages} pages: {outputs} ({time.monotonic() - start:.2f}s)")
         return True
 
     def changes(self, last):
@@ -134,25 +141,25 @@ class Watcher:
 
     def restart(self, what):
         """Raises `Restart` unless the code fails to import, then tells so and goes on."""
-        stamp = time.strftime('%H:%M:%S')
+        stamp = time.strftime("%H:%M:%S")
         command = restart_command()
         error = command and broken(command)
         if not error:
-            self.print(f'{stamp} {what} changed, restarting')
+            self.print(f"{stamp} {what} changed, restarting")
             raise Restart({})
-        self.print(f'{stamp} uwiki code fails to import, not restarting: {error}', error=True)
+        self.print(f"{stamp} uwiki code fails to import, not restarting: {error}", error=True)
 
     def config_changed(self):
         """Raises `Restart` when the options the config gives change, False when it fails to load."""
         try:
             options = self.options and self.options()
-            Config.load(self.root).schema
+            _ = Config.load(self.root).schema  # the property validates it
         except ValueError as e:
-            self.print(f'error: {e}', error=True)
-            self.print(f'{time.strftime("%H:%M:%S")} config fails to load, last good output stays')
+            self.print(f"error: {e}", error=True)
+            self.print(f"{time.strftime('%H:%M:%S')} config fails to load, last good output stays")
             return False
         if options != self.given:
-            self.restart('config options')
+            self.restart("config options")
         return True
 
     def run(self, first=None):
@@ -166,7 +173,7 @@ class Watcher:
                     first = None
                 current = self.changes(last)
                 if current[1] != last[1]:
-                    self.restart('uwiki code')
+                    self.restart("uwiki code")
                 vault_changed = current[0] != last[0]
                 if current[2] != last[2]:
                     vault_changed = self.config_changed()

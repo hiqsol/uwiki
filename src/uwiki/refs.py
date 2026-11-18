@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 from .vault import front_matter_items, front_matter_tree, read_parts
 
+
 @dataclass
 class Definition:
     ref: str  # as written: P:24
@@ -33,46 +34,52 @@ class Definition:
     text: str  # what it defines, as plain text: P:24. Space type behaviors.
     done: bool = False  # a checked item: [x]
 
+
 class Refs:
     # not after a word character nor one ids join with, so `a-HQD-1` and URLs keep theirs
-    BEFORE = r'(?<![\w.:/-])'
-    ID = r'\w(?:[\w.:-]*\w)?'
-    POINT = re.compile(r'(?<=\d)[a-z]$')  # I:75a is point a of I:75
+    BEFORE = r"(?<![\w.:/-])"
+    ID = r"\w(?:[\w.:-]*\w)?"
+    POINT = re.compile(r"(?<=\d)[a-z]$")  # I:75a is point a of I:75
     # links, code, tags and URLs keep refs in them as text
     SKIP = re.compile(r"""(`+).*?\1|!?\[\[.*?\]\]|!?\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])|<[^>]*>|\w+://\S+|www\.\S+""")
-    FENCE = re.compile(r'^\s*(```|~~~)')
+    FENCE = re.compile(r"^\s*(```|~~~)")
     # a heading starting with the ref, a list item or table row starting with it in bold, after quote marks
-    DEFINITION = (r'^[ \t]*(?:>[ \t]?)*(?:#{1,6}[ \t]+(?:\*\*)?|(?:(?:[-*+]|\d+[.)])[ \t]+(?:\[(?P<x>[ xX])\][ \t]+)?'
-                  r'|\|[ \t]*)\*\*)')
+    DEFINITION = (
+        r"^[ \t]*(?:>[ \t]?)*(?:#{1,6}[ \t]+(?:\*\*)?|(?:(?:[-*+]|\d+[.)])[ \t]+(?:\[(?P<x>[ xX])\][ \t]+)?"
+        r"|\|[ \t]*)\*\*)"
+    )
     EMPTY = None
 
     def __init__(self, table=None, path=None):
         table = table or {}
         if not isinstance(table, dict):
-            raise ValueError(f'{path}: refs should be a table of prefixes')
+            raise ValueError(f"{path}: refs should be a table of prefixes")  # noqa: TRY004  config errors are ValueError
         self.urls = {}  # prefix: url template or None
         self.ids = {}  # prefix: regex its ids fully match, if given
         for prefix, spec in table.items():
-            if not prefix or re.match(r'\w', prefix[-1]):
+            if not prefix or re.match(r"\w", prefix[-1]):
                 raise ValueError(f'{path}: refs."{prefix}": a prefix ends in its separator, as "P:" or "HQD-"')
-            if not isinstance(spec, dict) or set(spec) - {'url', 'id'} \
-                    or not all(isinstance(spec.get(k, ''), str) for k in ('url', 'id')):
-                raise ValueError(f'{path}: refs."{prefix}" should be a table, with url = "...{{id}}" and '
-                                 f'id = "regex" if any')
-            if 'id' in spec:
+            if (
+                not isinstance(spec, dict)
+                or set(spec) - {"url", "id"}
+                or not all(isinstance(spec.get(k, ""), str) for k in ("url", "id"))
+            ):
+                raise ValueError(
+                    f'{path}: refs."{prefix}" should be a table, with url = "...{{id}}" and id = "regex" if any'
+                )
+            if "id" in spec:
                 try:
-                    self.ids[prefix] = re.compile(spec['id'])
+                    self.ids[prefix] = re.compile(spec["id"])
                 except re.error as e:
                     raise ValueError(f'{path}: refs."{prefix}".id: {e}') from e
-            url = spec.get('url')
-            if url is not None and '{id}' not in url:
+            url = spec.get("url")
+            if url is not None and "{id}" not in url:
                 raise ValueError(f'{path}: refs."{prefix}".url should have {{id}} in it')
             self.urls[prefix] = url
-        alternatives = '|'.join(map(re.escape, sorted(self.urls, key=len, reverse=True)))
-        self.pattern = re.compile(f'{self.BEFORE}({alternatives})({self.ID})') if self.urls else None
-        self.definition = re.compile(f'{self.DEFINITION}({alternatives})({self.ID})(?![\\w:-])') \
-            if self.urls else None
-        self.full = re.compile(f'({alternatives})({self.ID})') if self.urls else None
+        alternatives = "|".join(map(re.escape, sorted(self.urls, key=len, reverse=True)))
+        self.pattern = re.compile(f"{self.BEFORE}({alternatives})({self.ID})") if self.urls else None
+        self.definition = re.compile(f"{self.DEFINITION}({alternatives})({self.ID})(?![\\w:-])") if self.urls else None
+        self.full = re.compile(f"({alternatives})({self.ID})") if self.urls else None
         self.quick = re.compile(alternatives) if self.urls else None  # most lines have no prefix at all
         self._definitions = None
         self._points = {}  # ref: its first point's definition
@@ -84,12 +91,13 @@ class Refs:
     @classmethod
     def of(cls, scanner):
         """Refs of the vault scanner scans, as its config gives them, read once."""
-        refs = getattr(scanner, '_refs', None)
+        refs = getattr(scanner, "_refs", None)
         if refs is None:
             from .config import Config, ConfigError
+
             config = Config.load(scanner.path)
             try:
-                refs = cls(config.data.get('refs'), config.path)
+                refs = cls(config.data.get("refs"), config.path)
             except ValueError as e:
                 raise ConfigError(str(e)) from e
             refs.scanner = scanner
@@ -113,9 +121,9 @@ class Refs:
 
     def sub(self, func, text):
         """Text with every ref func gives text for, as finditer finds them."""
-        res, pos = '', 0
+        res, pos = "", 0
         for m in self.finditer(text):
-            res += text[pos:m.start()] + func(m)
+            res += text[pos : m.start()] + func(m)
             pos = m.end()
         return res + text[pos:]
 
@@ -126,13 +134,13 @@ class Refs:
 
     @staticmethod
     def anchor(ref):
-        return 'ref-' + re.sub(r'[^0-9a-z]+', '-', ref.lower()).strip('-')
+        return "ref-" + re.sub(r"[^0-9a-z]+", "-", ref.lower()).strip("-")
 
     def url(self, ref):
         """URL a ref of an external prefix leads to, None for an internal one."""
         m = self.full.fullmatch(ref) if self.full else None
         template = m and self.urls.get(m[1])
-        return template.replace('{id}', m[2]) if template else None
+        return template.replace("{id}", m[2]) if template else None
 
     def external(self, ref):
         """Whether the ref's prefix has a url: the ref leads there, not to a definition in the vault."""
@@ -147,7 +155,7 @@ class Refs:
     @classmethod
     def base(cls, ref):
         """Ref a point is of, I:75 of I:75a, the ref itself if it is no point."""
-        return cls.POINT.sub('', ref)
+        return cls.POINT.sub("", ref)
 
     @property
     def definitions(self):
@@ -170,9 +178,9 @@ class Refs:
             return []
         res = []
         for n, line in enumerate(front.splitlines()):
-            if re.match(r'id:', line):
+            if re.match(r"id:", line):
                 for key, value in front_matter_items(front):
-                    if key == 'id':
+                    if key == "id":
                         for v in value if isinstance(value, list) else [value]:
                             if self.is_ref(v):
                                 res.append(Definition(v.strip(), node, n + 1, node.anchor, node.title))
@@ -189,27 +197,28 @@ class Refs:
             m = self.definition.match(line)
             if m and self.takes(m, 2, 3):
                 ref = m[2] + m[3]
-                rest = line[m.start(2):]
-                bold = rest.split('**')[0] if line[:m.start(2)].rstrip().endswith('**') else ''
+                rest = line[m.start(2) :]
+                bold = rest.split("**")[0] if line[: m.start(2)].rstrip().endswith("**") else ""
                 # what the bold says, `**P:24. Space types.**`, else the whole line
                 text = self.plain(bold if len(self.plain(bold)) > len(ref) + 2 else rest)
-                res.append(Definition(ref, node, n, self.anchor(ref), text, (m['x'] or ' ') in 'xX'))
+                res.append(Definition(ref, node, n, self.anchor(ref), text, (m["x"] or " ") in "xX"))
         return res
 
     @staticmethod
     def plain(text):
         """Line as plain text for a link title: markup dropped, links by their text, table cells joined."""
-        text = re.sub(r'!?\[\[([^\]|]*\|)?([^\]]*)\]\]', r'\2', text)
-        text = re.sub(r'!?\[([^\]]*)\]\([^)]*\)', r'\1', text)
-        text = re.sub(r'[*_`]+', '', text)
-        text = re.sub(r'\s*\|\s*', ' · ', text.strip().strip('|')).strip(' ·')
-        return text if len(text) <= 160 else text[:159].rstrip() + '…'
+        text = re.sub(r"!?\[\[([^\]|]*\|)?([^\]]*)\]\]", r"\2", text)
+        text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text)
+        text = re.sub(r"[*_`]+", "", text)
+        text = re.sub(r"\s*\|\s*", " · ", text.strip().strip("|")).strip(" ·")
+        return text if len(text) <= 160 else text[:159].rstrip() + "…"
 
     def front_refs(self, front):
         """(top level key, ref) for refs in front matter text values, nested ones too, `id` ones define."""
         if not self or not front or not self.quick.search(front):
             return []
         res = []
+
         def walk(key, value):
             if isinstance(value, dict):
                 for v in value.values():
@@ -219,8 +228,9 @@ class Refs:
                     walk(key, v)
             elif isinstance(value, str):
                 res.extend((key, m[0]) for m in self.finditer(value))
+
         for key, value in front_matter_tree(front).items():
-            if key != 'id':
+            if key != "id":
                 walk(key, value)
         return res
 
@@ -231,6 +241,6 @@ class Refs:
             for d in found[1:]:
                 if d.node is node:
                     first = found[0]
-                    where = os.path.relpath(first.node.file, self.scanner.path).replace(os.sep, '/')
-                    res.append((d.line, f'ref {ref} defined again, first at {where}:{first.line}'))
+                    where = os.path.relpath(first.node.file, self.scanner.path).replace(os.sep, "/")
+                    res.append((d.line, f"ref {ref} defined again, first at {where}:{first.line}"))
         return res

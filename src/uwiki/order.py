@@ -4,33 +4,34 @@ from .convert import Converter
 from .refs import Refs
 from .vault import read_front
 
+
 class LinkCollector(Converter):
     """Reads page like renderer does, notes its links, embeds and refs in order: target and heading."""
 
     def __init__(self, page, scanner):
         super().__init__(page, scanner)
-        self.mode = 'md'
+        self.mode = "md"
         self.found = []  # (target, heading, line, ref): ref as written for a ref, else ''
 
     def local_href(self, href, line=None):
         if self.is_local(href):
             target, heading = self.resolve_href(href)
-            fragment = href.partition('#')[2]
+            fragment = href.partition("#")[2]
             self.note(target, fragment if self.ITEM.fullmatch(fragment) else heading, line)
         return super().local_href(href, line)
 
     def link(self, text, checked=False):
         name, heading, item, _ = self.parse_target(text)
         target = self.scanner.resolve(name, self.source.path) if name else self.page
-        heading = '' if heading.startswith('^') else heading
+        heading = "" if heading.startswith("^") else heading
         if item and target is not None:
             heading = self.title_section(target, heading)
-        self.note(target, ' › '.join(filter(None, [heading, item])))
+        self.note(target, " › ".join(filter(None, [heading, item])))
         return super().link(text, checked)
 
     def embed_note(self, text):
         self.link(text)
-        return ''
+        return ""
 
     def front_refs(self):
         """Refs in front matter values link the pages defining them, at the key's line, external ones as
@@ -42,20 +43,21 @@ class LinkCollector(Converter):
         for key, ref in self.refs.front_refs(front):
             found = self.refs.resolve(ref)
             if found is not None:
-                line = next((n for n, text in enumerate(front.splitlines(), 1) if text.startswith(key + ':')), 1)
-                self.note(found.node, '' if found.anchor == found.node.anchor else ref, line, ref)
+                line = next((n for n, text in enumerate(front.splitlines(), 1) if text.startswith(key + ":")), 1)
+                self.note(found.node, "" if found.anchor == found.node.anchor else ref, line, ref)
 
     def ref(self, ref, line):
         """A ref links the page defining it, at the ref, unless it is that definition; an external one as a
         backref only, see Links.targets."""
         found = self.refs.resolve(ref)
         if found is not None and not self.defines(found, line):
-            self.note(found.node, '' if found.anchor == found.node.anchor else ref, line, ref)
+            self.note(found.node, "" if found.anchor == found.node.anchor else ref, line, ref)
         return super().ref(ref, line)
 
-    def note(self, target, heading='', line=None, ref=''):
+    def note(self, target, heading="", line=None, ref=""):
         if target is not None:
             self.found.append((target, heading, self.line if line is None else line, ref))
+
 
 class Links:
     """Links of vault pages, read once: folder page links are its folder's."""
@@ -108,9 +110,13 @@ class Links:
         pages = set(self.scanner.pages().values())
         linked = {target for page in pages for target in self.targets(page) if target is not page}
         reached = self.reach() if root.page else linked
-        name = root.page.name if root.page else ''
-        return {page: f'not reachable from {name}.md' if page in linked else 'no page links here'
-                for page in pages if page not in reached and page is not root}
+        name = root.page.name if root.page else ""
+        return {
+            page: f"not reachable from {name}.md" if page in linked else "no page links here"
+            for page in pages
+            if page not in reached and page is not root
+        }
+
 
 class Order:
     """Reading order of pages and folders in a folder.
