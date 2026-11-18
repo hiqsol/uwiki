@@ -1,8 +1,10 @@
-# Managed by devkit (github.com/hiqdev/devkit): `uvx copier update --trust` rewrites it, change the template instead.
-# mise merges it with mise.toml, which holds the project's own tools and tasks; `mise tasks` lists both.
+# Managed by devkit (github.com/hiqdev/devkit): `devkit update` rewrites it, change the template instead.
+# mise merges it with mise.toml, which holds the project's own tools and tasks, uwiki among them; a task
+# there overrides devkit's of the same name. `mise tasks` lists both, `mise tasks --hidden` the devkit:*
+# helpers in .config/mise/tasks/devkit, which these tasks run. Nothing here needs the devkit command.
 
 [tools]
-uv = "0.13.8"
+uv = "0.13.8"                             # runs the devkit:* Python helpers
 hk = "2.12.0"
 node = "24"                               # for markdownlint-cli2
 "npm:markdownlint-cli2" = "0.24.1"
@@ -11,29 +13,49 @@ lychee = "0.24.2"
 vale = "3.27.0"
 gitleaks = "8.30.1"
 shellcheck = "0.11.0"
+ruff = "0.17.4"
 
 [env]
 HK_MISE = "1"                             # git hooks run hk through mise, with the tools above
+# the answers the devkit:* scripts take: the folder uwiki reads pages from, which devkit:files lists;
+# the file of __version__ = "X.Y.Z" bump changes, the branch release pushes, the package up installs
+# and the command whose --version it checks
+DEVKIT_VAULT = "."
+DEVKIT_VERSION_FILE = "src/uwiki/__init__.py"
+DEVKIT_BRANCH = "master"
+DEVKIT_PACKAGE = "pipx:hiqsol/uwiki"
+DEVKIT_COMMAND = "uwiki"
 _.path = ["{{config_root}}/.venv/bin"]    # lint runs this checkout's uwiki, `mise run venv` installs it
 
 [tasks.venv]
 description = "install this checkout's uwiki into .venv, editable"
 run = "uv sync -q"
 
+# check gates: CI, patch and release run it. test is the project's: mise.toml defines it, devkit's below
+# only says there is none
+[tasks.check]
+description = "every check: lint and the project's tests, as CI runs them"
+depends = ["lint", "test"]
+
+[tasks.test]
+description = "the project's tests: mise.toml defines them, this one fails until it does"
+run = "echo 'No tests: define the test task in mise.toml' >&2; exit 1"
+
+# lint and fix take what git sees and the pages uwiki reads, gitignored ones too: devkit:files lists them
 [tasks.lint]
 depends = ["venv"]
 description = "pages: uwiki check, markdownlint, typos, Vale; repo: hygiene, shellcheck, gitleaks"
-run = "hk check --all"
+run = "mise run -q devkit:files | hk check --files0-from -"
 
 [tasks.fix]
 depends = ["venv"]
-description = "fix what markdownlint, typos and the hygiene steps can"
-run = "hk fix --all"
+description = "fix what markdownlint, the hygiene steps and the project's fixable steps can; typos only reports"
+run = "mise run -q devkit:files | hk fix --files0-from -"
 
 [tasks.links]
 depends = ["venv"]
 description = "external links alive, lychee over the pages uwiki reads; network, not a gate"
-run = "hk run links --all"
+run = "mise run -q devkit:files | hk run links --files0-from -"
 
 [tasks.secrets]
 description = "gitleaks over the whole git history, a leak stays there after its fix"
@@ -44,29 +66,25 @@ depends = ["venv"]
 description = "install the git pre-commit hook: checks staged files, rewrites nothing"
 run = "hk install --mise"
 
-[tasks.version]
-run = "sh .config/devkit/tasks.sh version"
-quiet = true
-
-# test (mise.toml has it), bump the version in src/uwiki/__init__.py, commit and tag it
+# releases of src/uwiki/__init__.py: devkit:bump runs check first
 [tasks.patch]
 description = "fixes: 0.2.1 -> 0.2.2, tagged"
-run = "sh .config/devkit/tasks.sh bump patch"
+run = "mise run -q devkit:bump patch"
 [tasks.minor]
 description = "features: 0.2.1 -> 0.3.0, tagged"
-run = "sh .config/devkit/tasks.sh bump minor"
+run = "mise run -q devkit:bump minor"
 [tasks.major]
 description = "0.2.1 -> 1.0.0, tagged"
-run = "sh .config/devkit/tasks.sh bump major"
+run = "mise run -q devkit:bump major"
 
 [tasks.release]
 description = "push master and the tag at once, CI publishes the release"
-run = "sh .config/devkit/tasks.sh release"
+run = "mise run -q devkit:release"
 
 [tasks.up]
 description = "install the tagged version with mise, it becomes latest locally"
-run = "sh .config/devkit/tasks.sh up"
+run = "mise run -q devkit:up"
 
 [tasks.clean]
-description = "remove dist, build and __pycache__"
-run = "sh .config/devkit/tasks.sh clean"
+description = "remove dist, build and __pycache__ folders, those of .venv and other dot folders left alone"
+run = "rm -rf dist build && find . -path './.*' -prune -o -name __pycache__ -type d -prune -exec rm -rf {} +"

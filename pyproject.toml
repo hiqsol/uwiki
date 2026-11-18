@@ -35,3 +35,6 @@ build-backend = "hatchling.build"
 
 [tool.uwiki]
 exclude = ["tests"]
+
+[tool.ruff]
+extend = ".config/devkit/ruff.toml"       # devkit's rules

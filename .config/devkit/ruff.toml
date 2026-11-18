@@ -1,0 +1,7 @@
+# Managed by devkit (github.com/hiqdev/devkit): `devkit update` rewrites it, change the template instead.
+# ruff rules of every project: pyproject.toml's [tool.ruff] extends it, extend = ".config/devkit/ruff.toml",
+# and adds its own on top. Without that ruff takes ~/.config/ruff here, its defaults in CI.
+line-length = 120
+
+[lint]
+extend-select = ["B", "I", "UP", "SIM"]

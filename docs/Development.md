@@ -2,12 +2,13 @@
 
 [mise](https://mise.jdx.dev) pins the tools and runs the tasks, `mise tasks` lists them:
 `mise.toml` has uwiki's own, [devkit](https://github.com/hiqdev/devkit) the lint and release ones,
-in `.config/mise/conf.d/devkit.toml` and `.config/devkit/`; `uvx copier update --trust` brings in devkit changes.
+in `.config/mise/conf.d/devkit.toml` and `.config/devkit/`; `devkit update` brings in devkit changes,
+`devkit doctor` says what keeps lint or the hook from running.
 
 ```
 mise run test                # run tests
 mise run lint                # pages: uwiki check, markdownlint, typos, Vale; repo: hygiene, shellcheck, gitleaks
-mise run fix                 # fix what markdownlint, typos and the hygiene steps can
+mise run fix                 # fix what markdownlint and the hygiene steps can; typos only reports
 mise run links               # external links alive, lychee, on demand
 mise run secrets             # gitleaks over the whole git history, on demand
 mise run hooks               # git pre-commit hook: lint staged files

@@ -1,9 +1,7 @@
 # uwiki's markdownlint rules on top of devkit's
 extends: .config/devkit/markdownlint.yaml
-MD029: false                              # ordered list numbers
 MD030: false                              # spaces after list markers
 MD031: false                              # blank lines around fences
 MD040: false                              # fence language
-MD060: false                              # table column style
 MD033:                                    # a centered logo in README
   allowed_elements: [p, img]

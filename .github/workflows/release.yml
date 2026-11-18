@@ -1,4 +1,5 @@
-# Tag push `v*` runs tests and creates GitHub release, mise resolves `latest` from releases
+# Managed by devkit (github.com/hiqdev/devkit): a pushed tag v* runs mise run check and creates the GitHub
+# release, which mise resolves versions and latest from. `mise run patch` tags, `mise run release` pushes.
 name: release
 
 on:
@@ -13,11 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - run: pip install markdown-it-py linkify-it-py
-      - run: python -m unittest discover tests
+      - uses: jdx/mise-action@v5
+      - run: mise run check
       - run: gh release create "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
