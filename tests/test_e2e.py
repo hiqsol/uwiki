@@ -9,8 +9,8 @@ import io
 import json
 import os
 import queue
-import shutil
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,28 +24,28 @@ import linkify_it  # noqa: F401 -- required, build tests must not be skipped
 import markdown_it  # noqa: F401 -- required, build tests must not be skipped
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, 'src')
-FIXTURES = os.path.join(ROOT, 'tests', 'fixtures')
-VAULT = os.path.join(FIXTURES, 'vault')
-BROKEN = os.path.join(FIXTURES, 'broken')
-MDLINKS = os.path.join(FIXTURES, 'mdlinks')
-PROJECT = os.path.join(FIXTURES, 'project')
-LINKCHECK = os.path.join(FIXTURES, 'linkcheck')
-EXTERNAL = os.path.join(FIXTURES, 'external')
-ORDER = os.path.join(FIXTURES, 'order')
-ITEMS = os.path.join(FIXTURES, 'items')
-REFS = os.path.join(FIXTURES, 'refs')
+SRC = os.path.join(ROOT, "src")
+FIXTURES = os.path.join(ROOT, "tests", "fixtures")
+VAULT = os.path.join(FIXTURES, "vault")
+BROKEN = os.path.join(FIXTURES, "broken")
+MDLINKS = os.path.join(FIXTURES, "mdlinks")
+PROJECT = os.path.join(FIXTURES, "project")
+LINKCHECK = os.path.join(FIXTURES, "linkcheck")
+EXTERNAL = os.path.join(FIXTURES, "external")
+ORDER = os.path.join(FIXTURES, "order")
+ITEMS = os.path.join(FIXTURES, "items")
+REFS = os.path.join(FIXTURES, "refs")
 
 
 sys.path.insert(0, SRC)
-from uwiki import cli  # noqa: E402
+from uwiki import cli
 
 
 def run(*args, cwd=None):
     """Runs uwiki command in this process, its exit code and output as of a subprocess."""
     out, err = io.StringIO(), io.StringIO()
     old = os.getcwd(), sys.argv
-    sys.argv = ['uwiki', *args]
+    sys.argv = ["uwiki", *args]
     try:
         if cwd:
             os.chdir(cwd)
@@ -56,7 +56,7 @@ def run(*args, cwd=None):
             except SystemExit as e:
                 code = e.code
         if isinstance(code, str):
-            err.write(code + '\n')
+            err.write(code + "\n")
             code = 1
     finally:
         os.chdir(old[0])
@@ -66,26 +66,30 @@ def run(*args, cwd=None):
 
 def run_process(*args, cwd=None):
     return subprocess.run(
-        [sys.executable, '-m', 'uwiki', *args],
-        cwd=cwd, capture_output=True, text=True, env={**os.environ, 'PYTHONPATH': SRC},
+        [sys.executable, "-m", "uwiki", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": SRC},
+        check=False,
     )
 
 
 def read(path):
-    with open(path, encoding='utf-8') as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 
 def page_data(html):
     """Data the page filters, counts and builds backlinks and front matter by."""
-    return json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.S)[1])
+    return json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.DOTALL)[1])
 
 
 def section(html, id):
     """Returns HTML from page header with given id till next page header."""
     start = html.index(f'id="{id}"')
-    end = html.find('class="page"', html.index('>', start))
-    return html[start:html.rfind('<', 0, end) if end > 0 else len(html)]
+    end = html.find('class="page"', html.index(">", start))
+    return html[start : html.rfind("<", 0, end) if end > 0 else len(html)]
 
 
 class RenderTest(unittest.TestCase):
@@ -93,11 +97,11 @@ class RenderTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.out = cls.tmp.name
-        res = run('build', VAULT, '-o', cls.out)
+        res = run("build", VAULT, "-o", cls.out)
         assert res.returncode == 0, res.stderr
-        cls.html = read(os.path.join(cls.out, 'vault.html'))
-        cls.md = read(os.path.join(cls.out, 'vault.md'))
-        cls.content = cls.html[cls.html.index('class="content"'):cls.html.index('</main>')]
+        cls.html = read(os.path.join(cls.out, "vault.html"))
+        cls.md = read(os.path.join(cls.out, "vault.md"))
+        cls.content = cls.html[cls.html.index('class="content"') : cls.html.index("</main>")]
         cls.data = page_data(cls.html)
 
     @classmethod
@@ -117,22 +121,25 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
 
     def test_page_anchors(self):
-        for id in ['root', 'my-page', 'my-notes', '2024-plans', 'projects', 'r-d-x']:
+        for id in ["root", "my-page", "my-notes", "2024-plans", "projects", "r-d-x"]:
             self.assertIn(f'id="{id}" class="page"', self.content)
 
     def test_every_page_is_a_section(self):
         self.assertTrue(self.content.startswith('class="content">\n        <section><h1 id="root" class="page"'))
-        self.assertEqual(self.content.count('<section>'), self.content.count('class="page"'))
-        self.assertEqual(self.content.count('<section>'), self.content.count('</section>'))
-        self.assertIn('content-visibility: auto', read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.css')))
+        self.assertEqual(self.content.count("<section>"), self.content.count('class="page"'))
+        self.assertEqual(self.content.count("<section>"), self.content.count("</section>"))
+        self.assertIn("content-visibility: auto", read(os.path.join(SRC, "uwiki", "assets", "uwiki.css")))
 
     def test_image_links_have_no_globe(self):
-        css = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.css'))
-        self.assertIn('.content a[href]:has(img)::before {\n    display: none;', css)  # beats a[href^="https:"]
+        css = read(os.path.join(SRC, "uwiki", "assets", "uwiki.css"))
+        self.assertIn(".content a[href]:has(img)::before {\n    display: none;", css)  # beats a[href^="https:"]
 
     def test_help_has_logo(self):
-        self.assertIn('<a class="logo" href="https://github.com/hiqsol/uwiki" target="_blank" rel="noopener" '
-                      'aria-label="uWiki"><svg xmlns="http://www.w3.org/2000/svg" viewBox=', self.html)
+        self.assertIn(
+            '<a class="logo" href="https://github.com/hiqsol/uwiki" target="_blank" rel="noopener" '
+            'aria-label="uWiki"><svg xmlns="http://www.w3.org/2000/svg" viewBox=',
+            self.html,
+        )
         self.assertIn('aria-hidden="true"><path class="a" d="', self.html)
 
     def test_favicon_is_inline(self):
@@ -141,66 +148,66 @@ class RenderTest(unittest.TestCase):
 
     def test_up_link_only_when_given(self):
         self.assertNotIn('id="up"', self.html)
-        self.assertNotIn('<kbd>u</kbd>', self.html)
+        self.assertNotIn("<kbd>u</kbd>", self.html)
         with tempfile.TemporaryDirectory() as out:
-            file = os.path.join(out, 'vault.html')
-            res = run('build', VAULT, '--up', './?a=1&b', '--title', 'My/Vault', '-o', file)
+            file = os.path.join(out, "vault.html")
+            res = run("build", VAULT, "--up", "./?a=1&b", "--title", "My/Vault", "-o", file)
             self.assertEqual(res.returncode, 0, res.stderr)
             html = read(file)
         self.assertIn('<a id="up" href="./?a=1&amp;b" title="Up (u)" aria-label="Up"><svg ', html)
-        self.assertIn('<dt><kbd>u</kbd></dt><dd>up, where the logo leads</dd>', html)
+        self.assertIn("<dt><kbd>u</kbd></dt><dd>up, where the logo leads</dd>", html)
         self.assertIn('</svg></a><a id="home" href="#root">My/<wbr>Vault</a>', html)  # wraps after the slash
-        self.assertIn('<title>My/Vault</title>', html)
+        self.assertIn("<title>My/Vault</title>", html)
 
     def test_titles(self):
-        self.assertIn('>My Notes</h2>', self.content)
-        self.assertIn('>2024 Plans</h2>', self.content)
-        self.assertIn('>R&amp;D &lt;x&gt;</h2>', self.content)
-        self.assertIn('<title>vault</title>', self.html)
+        self.assertIn(">My Notes</h2>", self.content)
+        self.assertIn(">2024 Plans</h2>", self.content)
+        self.assertIn(">R&amp;D &lt;x&gt;</h2>", self.content)
+        self.assertIn("<title>vault</title>", self.html)
 
     def test_template_placeholders_in_content_are_kept(self):
-        self.assertIn('Literal {style} and {script} stay.', self.content)
-        self.assertEqual(self.html.count('<style>'), 1)
-        self.assertEqual(self.html.count('<script>'), 1)
+        self.assertIn("Literal {style} and {script} stay.", self.content)
+        self.assertEqual(self.html.count("<style>"), 1)
+        self.assertEqual(self.html.count("<script>"), 1)
 
     def test_headings_are_shifted_below_page_header(self):
-        page = section(self.content, 'my-page')
+        page = section(self.content, "my-page")
         self.assertIn('<h2 id="my-page" class="page" data-title="My Page">', self.content)
         self.assertIn('<h3 id="my-page--second-section">Second Section</h3>', page)
         self.assertIn('<h4 id="my-page--deeper">Deeper</h4>', page)
 
     def test_only_page_headers_go_to_toc(self):
-        js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
-        self.assertIn('h2.page', js)
-        self.assertNotIn('console.log', js)
+        js = read(os.path.join(SRC, "uwiki", "assets", "uwiki.js"))
+        self.assertIn("h2.page", js)
+        self.assertNotIn("console.log", js)
 
     def test_code_is_highlighted_and_diagrams_drawn_near_window_by_pinned_cdn_libraries(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', EXTERNAL, '--html', '-o', out)
+            res = run("build", EXTERNAL, "--html", "-o", out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            html = read(os.path.join(out, 'external.html'))
+            html = read(os.path.join(out, "external.html"))
         self.assertIn('<pre><code class="language-sh">', html)
-        self.assertNotIn('<script src=', html)
-        js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
-        self.assertIn('new IntersectionObserver', js)
-        self.assertRegex(js, r'/prism/\d+\.\d+\.\d+/')
-        self.assertRegex(js, r'/mermaid@\d+\.\d+\.\d+/')
+        self.assertNotIn("<script src=", html)
+        js = read(os.path.join(SRC, "uwiki", "assets", "uwiki.js"))
+        self.assertIn("new IntersectionObserver", js)
+        self.assertRegex(js, r"/prism/\d+\.\d+\.\d+/")
+        self.assertRegex(js, r"/mermaid@\d+\.\d+\.\d+/")
 
     def test_previews_clone_page_for_mouse_only(self):
-        js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
-        self.assertIn('cloneNode(true)', js)
+        js = read(os.path.join(SRC, "uwiki", "assets", "uwiki.js"))
+        self.assertIn("cloneNode(true)", js)
         self.assertIn('e.pointerType !== "mouse"', js)
         self.assertIn('a.closest("main.content, .preview, #sidebar")', js)
-        self.assertNotIn('fetch(', js)
-        self.assertNotIn('XMLHttpRequest', js)
+        self.assertNotIn("fetch(", js)
+        self.assertNotIn("XMLHttpRequest", js)
 
     def test_code_is_left_alone(self):
-        self.assertIn('<pre><code># not a heading\n[[NotALink]]\n</code></pre>', self.content)
-        self.assertIn('<code>[[NotALink]]</code>', self.content)
-        self.assertNotIn('not-a-link', self.content)
+        self.assertIn("<pre><code># not a heading\n[[NotALink]]\n</code></pre>", self.content)
+        self.assertIn("<code>[[NotALink]]</code>", self.content)
+        self.assertNotIn("not-a-link", self.content)
 
     def test_links(self):
-        root = section(self.content, 'root')
+        root = section(self.content, "root")
         self.assertIn('<a href="#my-page">My Page</a>', root)
         self.assertIn('<a href="#my-notes">My Notes</a>', root)
         self.assertIn('<a href="#my-page">the page</a>', root)
@@ -210,176 +217,203 @@ class RenderTest(unittest.TestCase):
     def test_duplicate_names_get_path_anchors(self):
         self.assertIn('id="archive-notes" class="page"', self.content)
         self.assertIn('id="projects-alpha-notes" class="page"', self.content)
-        root = section(self.content, 'root')
+        root = section(self.content, "root")
         self.assertIn('<a href="#archive-notes">Notes</a>', root)
         self.assertIn('<a href="#projects-alpha-notes">alpha readme</a>', root)
 
     def test_ambiguous_link_resolves_to_nearest(self):
-        self.assertIn('<a href="#projects-alpha-notes">Notes</a>', section(self.content, 'projects'))
+        self.assertIn('<a href="#projects-alpha-notes">Notes</a>', section(self.content, "projects"))
 
     def test_folder_page_and_root_named_page(self):
-        self.assertIn('Projects folder page', section(self.content, 'projects'))
-        self.assertIn('Root named page.', section(self.content, 'root-2'))
-        self.assertNotIn('Root named page.', section(self.content, 'root'))
+        self.assertIn("Projects folder page", section(self.content, "projects"))
+        self.assertIn("Root named page.", section(self.content, "root-2"))
+        self.assertNotIn("Root named page.", section(self.content, "root"))
 
     def test_skipped_files_and_folders(self):
-        self.assertNotIn('Ghost', self.content)
-        self.assertNotIn('not really', self.content)
+        self.assertNotIn("Ghost", self.content)
+        self.assertNotIn("not really", self.content)
         self.assertNotIn('id="empty"', self.content)
         self.assertNotIn('id="attachments"', self.content)
 
     def test_front_matter_is_stripped(self):
-        self.assertNotIn('tags:', self.content)
-        self.assertIn('<p>First paragraph is <strong>bold</strong>.</p>', self.content)
+        self.assertNotIn("tags:", self.content)
+        self.assertIn("<p>First paragraph is <strong>bold</strong>.</p>", self.content)
 
     def test_embeds(self):
-        notes = section(self.content, 'my-notes')
+        notes = section(self.content, "my-notes")
         self.assertIn(f'<img src="{self.src("pic.png")}" alt="pic.png" />', notes)
         self.assertIn(f'<img src="{self.src("pic.png")}" alt="pic.png" width="100" />', notes)
         self.assertIn(f'<a href="{self.src("doc.pdf")}">doc.pdf</a>', notes)
         self.assertIn(f'<a href="{self.src("doc.pdf")}">the doc</a>', notes)
         embed = re.search(r'<div class="embed">(.*?)</div>', notes, re.DOTALL)[1]
-        self.assertIn('<h3>Second Section</h3>', embed)
-        self.assertIn('Literal {style}', embed)
-        self.assertNotIn('callout', embed.split('<h4>Deeper</h4>')[0])
+        self.assertIn("<h3>Second Section</h3>", embed)
+        self.assertIn("Literal {style}", embed)
+        self.assertNotIn("callout", embed.split("<h4>Deeper</h4>")[0])
 
     def test_self_embed_becomes_link(self):
-        plans = section(self.content, '2024-plans')
+        plans = section(self.content, "2024-plans")
         self.assertIn('<a href="#2024-plans">2024 Plans</a>', plans)
         self.assertNotIn('class="embed"', plans)
 
     def test_callouts(self):
-        page = section(self.content, 'my-page')
+        page = section(self.content, "my-page")
         self.assertIn('<div class="callout callout-note">\n<div class="callout-title">Custom title</div>', page)
-        self.assertIn('<details class="callout callout-warning">\n<summary class="callout-title">Warning</summary>', page)
+        self.assertIn(
+            '<details class="callout callout-warning">\n<summary class="callout-title">Warning</summary>', page
+        )
         self.assertIn('<details class="callout callout-tip" open>', page)
         self.assertIn('Open with <a href="#my-page--deeper">My Page &gt; Deeper</a></summary>', page)
         self.assertIn('<div class="callout callout-bug">', page)
-        self.assertNotIn('[!', page)
+        self.assertNotIn("[!", page)
 
     def test_markdown_output(self):
         self.assertIn('<a id="my-page"></a>\n\n## My Page', self.md)
         self.assertIn('<a id="my-page--second-section"></a>\n\n### Second Section', self.md)
-        self.assertIn('[My Page > Second Section](#my-page--second-section)', self.md)
-        self.assertIn('> [!note] Custom title', self.md)
-        self.assertNotIn('tags:', self.md)
-        for href in re.findall(r'\]\(#([^)]*)\)', self.md):
+        self.assertIn("[My Page > Second Section](#my-page--second-section)", self.md)
+        self.assertIn("> [!note] Custom title", self.md)
+        self.assertNotIn("tags:", self.md)
+        for href in re.findall(r"\]\(#([^)]*)\)", self.md):
             self.assertIn(f'<a id="{href}"></a>', self.md)
 
     def test_backlinks(self):
-        backlinks = self.data['backlinks']
-        self.assertEqual(backlinks['my-page'], ['root', ['root', 'Second Section'], ['my-notes', 'Second Section']])
-        self.assertEqual(backlinks['2024-plans'], ['root', 'my-notes'])
-        self.assertIn('Backlinks: [vault](#root), [My Notes](#my-notes)\n', self.md)
-        self.assertNotIn('root', backlinks)
-        self.assertNotIn('r-d-x', backlinks)
-        self.assertNotIn('backlinks', self.content)  # the page builds them from the data
+        backlinks = self.data["backlinks"]
+        self.assertEqual(backlinks["my-page"], ["root", ["root", "Second Section"], ["my-notes", "Second Section"]])
+        self.assertEqual(backlinks["2024-plans"], ["root", "my-notes"])
+        self.assertIn("Backlinks: [vault](#root), [My Notes](#my-notes)\n", self.md)
+        self.assertNotIn("root", backlinks)
+        self.assertNotIn("r-d-x", backlinks)
+        self.assertNotIn("backlinks", self.content)  # the page builds them from the data
 
     def test_front_matter_block(self):
-        self.assertEqual(self.data['pages']['my-page']['meta'], {'tags': ['a', 'b'], 'summary': 'ignored'})
-        self.assertNotIn('nested', self.data['pages']['my-page'])
-        self.assertNotIn('front-matter', self.content)  # the page builds it from the data
-        self.assertNotIn('frontMatter', self.data)
-        self.assertNotIn('front-matter', self.md)
+        self.assertEqual(self.data["pages"]["my-page"]["meta"], {"tags": ["a", "b"], "summary": "ignored"})
+        self.assertNotIn("nested", self.data["pages"]["my-page"])
+        self.assertNotIn("front-matter", self.content)  # the page builds it from the data
+        self.assertNotIn("frontMatter", self.data)
+        self.assertNotIn("front-matter", self.md)
 
     def test_front_matter_values(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', LINKCHECK, '--html', '-o', out)
+            res = run("build", LINKCHECK, "--html", "-o", out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            html = read(os.path.join(out, 'linkcheck.html'))
-            res = run('build', VAULT, '--no-front-matter', '-o', out)
+            html = read(os.path.join(out, "linkcheck.html"))
+            res = run("build", VAULT, "--no-front-matter", "-o", out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            self.assertIs(page_data(read(os.path.join(out, 'vault.html')))['frontMatter'], False)
-        self.assertEqual(page_data(html)['pages']['b']['meta'], {'title': 'Bee', 'description': 'Folded over lines.'})
+            self.assertIs(page_data(read(os.path.join(out, "vault.html")))["frontMatter"], False)
+        self.assertEqual(page_data(html)["pages"]["b"]["meta"], {"title": "Bee", "description": "Folded over lines."})
 
     def test_nested_front_matter_values_are_tables(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'wiki', 'index.md'), '# Wiki\n\nSee [page](page.md).\n')
-            write(os.path.join(tmp, 'wiki', 'page.md'), '---\nkind: note\ngenerated: { by: bot, at: 2026-01-02 }\n'
-                  'owner:\n  name: Ann\n  teams: [a, b]\nsources:\n  - id: repo\n    url: git\n  - id: doc\n---\nText.\n')
-            res = run('build', 'wiki', '--html', '-o', 'out/wiki.html', cwd=tmp)
+            write(os.path.join(tmp, "wiki", "index.md"), "# Wiki\n\nSee [page](page.md).\n")
+            write(
+                os.path.join(tmp, "wiki", "page.md"),
+                "---\nkind: note\ngenerated: { by: bot, at: 2026-01-02 }\n"
+                "owner:\n  name: Ann\n  teams: [a, b]\nsources:\n  - id: repo\n    url: git\n  - id: doc\n---\nText.\n",
+            )
+            res = run("build", "wiki", "--html", "-o", "out/wiki.html", cwd=tmp)
             self.assertEqual(res.returncode, 0, res.stderr)
-            html = read(os.path.join(tmp, 'out', 'wiki.html'))
-        page = page_data(html)['pages']['page']
-        self.assertEqual(list(page['meta']), ['kind', 'generated', 'owner', 'sources'])
-        self.assertEqual(page['nested'], {'generated': {'by': 'bot', 'at': '2026-01-02'},
-                                          'owner': {'name': 'Ann', 'teams': ['a', 'b']},
-                                          'sources': [{'id': 'repo', 'url': 'git'}, {'id': 'doc'}]})
+            html = read(os.path.join(tmp, "out", "wiki.html"))
+        page = page_data(html)["pages"]["page"]
+        self.assertEqual(list(page["meta"]), ["kind", "generated", "owner", "sources"])
+        self.assertEqual(
+            page["nested"],
+            {
+                "generated": {"by": "bot", "at": "2026-01-02"},
+                "owner": {"name": "Ann", "teams": ["a", "b"]},
+                "sources": [{"id": "repo", "url": "git"}, {"id": "doc"}],
+            },
+        )
 
     def test_no_backlinks(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', VAULT, '--no-backlinks', '-o', out)
+            res = run("build", VAULT, "--no-backlinks", "-o", out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            self.assertEqual(page_data(read(os.path.join(out, 'vault.html')))['backlinks'], {})
-            self.assertNotIn('Backlinks', read(os.path.join(out, 'vault.md')))
+            self.assertEqual(page_data(read(os.path.join(out, "vault.html")))["backlinks"], {})
+            self.assertNotIn("Backlinks", read(os.path.join(out, "vault.md")))
 
     def src(self, name):
         """Attachment path relative to output dir."""
-        return quote(os.path.relpath(os.path.join(VAULT, 'attachments', name), self.out).replace(os.sep, '/'))
+        return quote(os.path.relpath(os.path.join(VAULT, "attachments", name), self.out).replace(os.sep, "/"))
 
 
 class MarkdownLinksTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', MDLINKS, '--html', '-o', out)
+            res = run("build", MDLINKS, "--html", "-o", out)
             assert res.returncode == 0, res.stderr
-            cls.html = read(os.path.join(out, 'mdlinks.html'))
-            res = run('build', VAULT, '--html', '-o', out)
+            cls.html = read(os.path.join(out, "mdlinks.html"))
+            res = run("build", VAULT, "--html", "-o", out)
             assert res.returncode == 0, res.stderr
-            cls.vault = read(os.path.join(out, 'vault.html'))
+            cls.vault = read(os.path.join(out, "vault.html"))
 
     def test_relative_links_become_anchors(self):
-        root = section(self.html, 'root')
+        root = section(self.html, "root")
         self.assertIn('<a href="#guide">the guide</a>', root)
         self.assertIn('<a href="#guide--first-steps-hi-api">first steps</a>', root)
         self.assertIn('<a href="#docs">docs</a>', root)
         self.assertIn('<a href="#root--intro">intro</a>', root)
         self.assertIn('<a href="#guide"><code>code text</code></a>', root)
-        self.assertIn('<a href="#root--intro">home</a>', section(self.html, 'guide'))
+        self.assertIn('<a href="#root--intro">home</a>', section(self.html, "guide"))
 
     def test_title_heading_is_replaced_by_page_header(self):
-        setup = section(self.html, 'setup')
-        self.assertNotIn('<h3', setup)
+        setup = section(self.html, "setup")
+        self.assertNotIn("<h3", setup)
         self.assertIn('<h4 id="setup--setup-steps">Setup steps</h4>', setup)
-        root = section(self.html, 'root')
+        root = section(self.html, "root")
         self.assertIn('<a href="#setup">setup title</a>', root)
         self.assertIn('<a href="#setup">Setup &gt; Setup</a>', root)
 
     def test_title_is_leading_heading_else_name(self):
         self.assertIn('<h2 id="docs" class="page" data-title="Documentation">Documentation</h2>', self.html)
-        self.assertIn('class="page" data-title="Guide"><span class="crumb"><a href="#docs">Documentation</a></span>Guide</h3>', self.html)
+        self.assertIn(
+            'class="page" data-title="Guide"><span class="crumb"><a href="#docs">Documentation</a></span>Guide</h3>',
+            self.html,
+        )
         self.assertIn('<h4 id="guide--first-steps-hi-api">First steps: HiAPI</h4>', self.html)
-        self.assertIn('data-title="Broken"><span class="crumb"><a href="#docs">Documentation</a></span>Broken<details class="problems"><summary><b>Problems (', self.html)
-        self.assertIn('data-title="Use plain links"><span class="crumb"><a href="#docs">Documentation</a></span>Use plain links</h3>', self.html)
+        self.assertIn(
+            'data-title="Broken"><span class="crumb"><a href="#docs">Documentation</a></span>Broken<details class="problems"><summary><b>Problems (',
+            self.html,
+        )
+        self.assertIn(
+            'data-title="Use plain links"><span class="crumb"><a href="#docs">Documentation</a></span>Use plain links</h3>',
+            self.html,
+        )
         self.assertIn('<h4 id="decision--context">Context</h4>', self.html)
-        self.assertIn('<a href="#docs">Documentation</a>', section(self.html, 'docs'))
+        self.assertIn('<a href="#docs">Documentation</a>', section(self.html, "docs"))
 
     def test_file_and_folder_where_title_and_crumb_dont_tell_them(self):
-        pages = {p['path']: (p.get('file'), p.get('dir')) for p in page_data(self.html)['pages'].values()}
-        self.assertEqual(pages, {
-            'index.md': ('index.md', None),
-            'docs/index.md': ('index.md', 'docs/'),  # folder titled Documentation
-            'docs/Guide.md': (None, 'docs/'),
-            'docs/Setup.md': (None, 'docs/'),
-            'docs/Broken.md': (None, 'docs/'),
-            'docs/Decision.md': ('Decision.md', 'docs/'),
-        })
-        pages = {p['path']: (p.get('file'), p.get('dir')) for p in page_data(self.vault)['pages'].values()}
-        self.assertEqual(pages['MyPage.md'], (None, None))
-        self.assertEqual(pages['Projects/Alpha/Notes.md'], (None, None))
-        self.assertEqual(pages['Projects/Project.md'], ('Project.md', None))
+        pages = {p["path"]: (p.get("file"), p.get("dir")) for p in page_data(self.html)["pages"].values()}
+        self.assertEqual(
+            pages,
+            {
+                "index.md": ("index.md", None),
+                "docs/index.md": ("index.md", "docs/"),  # folder titled Documentation
+                "docs/Guide.md": (None, "docs/"),
+                "docs/Setup.md": (None, "docs/"),
+                "docs/Broken.md": (None, "docs/"),
+                "docs/Decision.md": ("Decision.md", "docs/"),
+            },
+        )
+        pages = {p["path"]: (p.get("file"), p.get("dir")) for p in page_data(self.vault)["pages"].values()}
+        self.assertEqual(pages["MyPage.md"], (None, None))
+        self.assertEqual(pages["Projects/Alpha/Notes.md"], (None, None))
+        self.assertEqual(pages["Projects/Project.md"], ("Project.md", None))
 
     def test_breadcrumbs_show_every_folder(self):
-        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>', self.vault)
+        self.assertIn(
+            'data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>',
+            self.vault,
+        )
 
     def test_markdown_links_are_backlinks(self):
-        self.assertEqual(page_data(self.html)['backlinks']['guide'],
-                         ['root', ['root', 'First steps: HiAPI'], 'docs', 'broken', ['broken', 'First steps: HiAPI']])
+        self.assertEqual(
+            page_data(self.html)["backlinks"]["guide"],
+            ["root", ["root", "First steps: HiAPI"], "docs", "broken", ["broken", "First steps: HiAPI"]],
+        )
 
     def test_external_code_and_unresolved_links_are_kept(self):
         self.assertIn('<a href="https://example.com/a.md">site</a>', self.html)
-        self.assertIn('<code>[x](docs/Guide.md)</code>', self.html)
+        self.assertIn("<code>[x](docs/Guide.md)</code>", self.html)
         self.assertIn('<a href="../../Outside.md">out</a>', self.html)
         self.assertIn('<a href="#guide">bad heading</a>', self.html)
 
@@ -388,24 +422,29 @@ class ProjectTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', PROJECT, '--html', '-o', out)
+            res = run("build", PROJECT, "--html", "-o", out)
             assert res.returncode == 0, res.stderr
-            cls.html, cls.stderr = read(os.path.join(out, 'project.html')), res.stderr
-            res = run('build', PROJECT, '--html', '-o', out, '--include', 'vendor/**', '--exclude', 'drafts')
+            cls.html, cls.stderr = read(os.path.join(out, "project.html")), res.stderr
+            res = run("build", PROJECT, "--html", "-o", out, "--include", "vendor/**", "--exclude", "drafts")
             assert res.returncode == 0, res.stderr
-            cls.filtered = read(os.path.join(out, 'project.html'))
+            cls.filtered = read(os.path.join(out, "project.html"))
 
     def test_readme_is_folder_page_before_index(self):
         self.assertIn('id="root" class="page" data-title="Project">', self.html)
         self.assertIn('id="docs" class="page" data-title="Docs readme">', self.html)
-        self.assertIn('data-title="Docs index"><span class="crumb"><a href="#docs">Docs readme</a></span>Docs index<details class="problems">', self.html)
-        self.assertEqual(self.stderr, f'warning: {PROJECT}/docs/index.md: '
-                                      'both index.md and README.md in folder, README.md is folder page\n')
+        self.assertIn(
+            'data-title="Docs index"><span class="crumb"><a href="#docs">Docs readme</a></span>Docs index<details class="problems">',
+            self.html,
+        )
+        self.assertEqual(
+            self.stderr,
+            f"warning: {PROJECT}/docs/index.md: both index.md and README.md in folder, README.md is folder page\n",
+        )
 
     def test_symlink_to_page_is_alias(self):
         self.assertNotIn('id="claude"', self.html)
-        self.assertEqual(self.html.count('Agent rules.'), 1)
-        root = section(self.html, 'root')
+        self.assertEqual(self.html.count("Agent rules."), 1)
+        root = section(self.html, "root")
         self.assertEqual(root.count('<a href="#agents">AGENTS.md</a>'), 2)
         self.assertIn('<a href="#agents">claude</a>', root)
 
@@ -415,11 +454,11 @@ class ProjectTest(unittest.TestCase):
         self.assertIn('<a href="#drafts">through symlink</a>', self.html)
 
     def test_skip_list_include_and_exclude(self):
-        self.assertNotIn('Package', self.html)
-        self.assertNotIn('Vendored', self.html)
+        self.assertNotIn("Package", self.html)
+        self.assertNotIn("Vendored", self.html)
         self.assertIn('data-title="Draft"', self.html)
         self.assertIn('data-title="Vendored"', self.filtered)
-        self.assertNotIn('Package', self.filtered)
+        self.assertNotIn("Package", self.filtered)
         self.assertNotIn('data-title="Draft"', self.filtered)
 
 
@@ -432,99 +471,108 @@ class CliTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_default_writes_both_to_current_dir(self):
-        res = run('build', VAULT, cwd=self.out)
+        res = run("build", VAULT, cwd=self.out)
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(sorted(os.listdir(self.out)), ['vault.html', 'vault.md'])
+        self.assertEqual(sorted(os.listdir(self.out)), ["vault.html", "vault.md"])
 
     def test_title_and_output_dir(self):
-        res = run('build', VAULT + '/', '--title', 'My Wiki', '-o', os.path.join(self.out, 'sub') + '/')
+        res = run("build", VAULT + "/", "--title", "My Wiki", "-o", os.path.join(self.out, "sub") + "/")
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(sorted(os.listdir(os.path.join(self.out, 'sub'))), ['My Wiki.html', 'My Wiki.md'])
-        self.assertIn('<title>My Wiki</title>', read(os.path.join(self.out, 'sub', 'My Wiki.html')))
+        self.assertEqual(sorted(os.listdir(os.path.join(self.out, "sub"))), ["My Wiki.html", "My Wiki.md"])
+        self.assertIn("<title>My Wiki</title>", read(os.path.join(self.out, "sub", "My Wiki.html")))
 
     def test_output_file_name(self):
-        res = run('build', VAULT, '-o', os.path.join(self.out, 'sub', 'Wiki'))
+        res = run("build", VAULT, "-o", os.path.join(self.out, "sub", "Wiki"))
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(sorted(os.listdir(os.path.join(self.out, 'sub'))), ['Wiki.html', 'Wiki.md'])
-        self.assertIn('<title>vault</title>', read(os.path.join(self.out, 'sub', 'Wiki.html')))
-        res = run('build', VAULT, '-o', os.path.join(self.out, 'one', 'Wiki.md'))
+        self.assertEqual(sorted(os.listdir(os.path.join(self.out, "sub"))), ["Wiki.html", "Wiki.md"])
+        self.assertIn("<title>vault</title>", read(os.path.join(self.out, "sub", "Wiki.html")))
+        res = run("build", VAULT, "-o", os.path.join(self.out, "one", "Wiki.md"))
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(os.listdir(os.path.join(self.out, 'one')), ['Wiki.md'])
-        res = run('build', VAULT, '--html', '-o', os.path.join(self.out, 'Wiki.md'))
+        self.assertEqual(os.listdir(os.path.join(self.out, "one")), ["Wiki.md"])
+        res = run("build", VAULT, "--html", "-o", os.path.join(self.out, "Wiki.md"))
         self.assertEqual(res.returncode, 2)
-        self.assertIn('--html and --md do not go with -o', res.stderr)
+        self.assertIn("--html and --md do not go with -o", res.stderr)
 
     def test_several_paths_into_one_output(self):
-        res = run('build', VAULT + '/Projects', VAULT + '/Archive', cwd=self.out)
+        res = run("build", VAULT + "/Projects", VAULT + "/Archive", cwd=self.out)
         self.assertEqual(res.returncode, 2)
-        self.assertIn('-o is required for several paths', res.stderr)
-        res = run('build', VAULT + '/Projects', VAULT + '/Archive', '-o', self.out)
+        self.assertIn("-o is required for several paths", res.stderr)
+        res = run("build", VAULT + "/Projects", VAULT + "/Archive", "-o", self.out)
         self.assertEqual(res.returncode, 2)
-        self.assertIn('--title is required', res.stderr)
-        res = run('build', VAULT + '/Projects', VAULT + '/Archive', '-o', os.path.join(self.out, 'Work'))
+        self.assertIn("--title is required", res.stderr)
+        res = run("build", VAULT + "/Projects", VAULT + "/Archive", "-o", os.path.join(self.out, "Work"))
         self.assertEqual(res.returncode, 0, res.stderr)
-        html = read(os.path.join(self.out, 'Work.html'))
+        html = read(os.path.join(self.out, "Work.html"))
         self.assertIn('<h1 id="root" class="page" data-title="Work">Work</h1>', html)
         self.assertIn('id="projects" class="page"', html)
-        self.assertIn('Projects folder page', html)
-        self.assertIn('Archive readme.', html)
-        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>', html)
-        self.assertNotIn('Root text.', html)
+        self.assertIn("Projects folder page", html)
+        self.assertIn("Archive readme.", html)
+        self.assertIn(
+            'data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>',
+            html,
+        )
+        self.assertNotIn("Root text.", html)
         self.assertNotIn('id="my-page"', html)
 
     def test_vault_root_keeps_folders(self):
-        res = run('build', VAULT + '/Projects/Alpha', '-o', self.out)
+        res = run("build", VAULT + "/Projects/Alpha", "-o", self.out)
         self.assertEqual(res.returncode, 0, res.stderr)
-        html = read(os.path.join(self.out, 'Alpha.html'))
+        html = read(os.path.join(self.out, "Alpha.html"))
         self.assertIn('<h2 id="projects" class="page" data-title="Projects">Projects</h2>', html)
-        self.assertNotIn('Projects folder page', html)
-        self.assertIn('data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>', html)
+        self.assertNotIn("Projects folder page", html)
+        self.assertIn(
+            'data-title="Notes"><span class="crumb"><a href="#projects">Projects</a> / <a href="#alpha">Alpha</a></span>Notes</h4>',
+            html,
+        )
 
     def test_links_outside_built_paths_fail(self):
-        res = run('build', 'vault/my notes.md', 'vault/root.md', '-o', os.path.join(self.out, 'Notes'), cwd=FIXTURES)
+        res = run("build", "vault/my notes.md", "vault/root.md", "-o", os.path.join(self.out, "Notes"), cwd=FIXTURES)
         self.assertEqual(res.returncode, 1)
-        self.assertEqual(res.stdout.splitlines(), [
-            'vault/my notes.md:3: embed outside built paths: ![[MyPage#Second Section]]',
-            'vault/my notes.md:5: embed outside built paths: ![[2024Plans]]',
-        ])
+        self.assertEqual(
+            res.stdout.splitlines(),
+            [
+                "vault/my notes.md:3: embed outside built paths: ![[MyPage#Second Section]]",
+                "vault/my notes.md:5: embed outside built paths: ![[2024Plans]]",
+            ],
+        )
         self.assertEqual(os.listdir(self.out), [])
-        res = run('build', 'vault/index.md', 'vault/Archive', '-o', os.path.join(self.out, 'Home'), cwd=FIXTURES)
+        res = run("build", "vault/index.md", "vault/Archive", "-o", os.path.join(self.out, "Home"), cwd=FIXTURES)
         self.assertEqual(res.returncode, 1)
         lines = res.stdout.splitlines()
-        self.assertEqual(lines[0], 'vault/index.md:1: link outside built paths: [[MyPage]]')
-        self.assertNotIn('Archive', res.stdout)
+        self.assertEqual(lines[0], "vault/index.md:1: link outside built paths: [[MyPage]]")
+        self.assertNotIn("Archive", res.stdout)
 
     def test_html_only(self):
-        run('build', VAULT, '--html', '-o', self.out)
-        self.assertEqual(os.listdir(self.out), ['vault.html'])
+        run("build", VAULT, "--html", "-o", self.out)
+        self.assertEqual(os.listdir(self.out), ["vault.html"])
 
     def test_md_only(self):
-        run('build', VAULT, '--md', '-o', self.out)
-        self.assertEqual(os.listdir(self.out), ['vault.md'])
+        run("build", VAULT, "--md", "-o", self.out)
+        self.assertEqual(os.listdir(self.out), ["vault.md"])
 
     def test_bad_arguments(self):
-        res = run('build', os.path.join(self.out, 'missing'))
+        res = run("build", os.path.join(self.out, "missing"))
         self.assertEqual(res.returncode, 2)
-        self.assertIn('uwiki build: error: no such file or folder', res.stderr)
-        res = run('build', VAULT, 'title')
+        self.assertIn("uwiki build: error: no such file or folder", res.stderr)
+        res = run("build", VAULT, "title")
         self.assertEqual(res.returncode, 2)
-        res = run('build')
+        res = run("build")
         self.assertEqual(res.returncode, 2)
-        res = run('build', VAULT, os.path.join(FIXTURES, 'broken'), '-o', os.path.join(self.out, 'x'))
+        res = run("build", VAULT, os.path.join(FIXTURES, "broken"), "-o", os.path.join(self.out, "x"))
         self.assertEqual(res.returncode, 2)
-        self.assertIn('paths are in different vaults', res.stderr)
+        self.assertIn("paths are in different vaults", res.stderr)
         res = run()
         self.assertEqual(res.returncode, 2)
 
     def test_version(self):
-        res = run('--version')
+        res = run("--version")
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertRegex(res.stdout, r'^uwiki \d+\.\d+\.\d+\n$')
+        self.assertRegex(res.stdout, r"^uwiki \d+\.\d+\.\d+\n$")
 
 
 class CheckTest(unittest.TestCase):
     def check(self, *paths):
-        res = run('check', *paths, cwd=FIXTURES)
+        res = run("check", *paths, cwd=FIXTURES)
         return res.returncode, res.stdout.splitlines(), res.stderr
 
     def test_runs_without_markdown_package(self):
@@ -534,905 +582,1171 @@ class CheckTest(unittest.TestCase):
             'sys.argv = ["uwiki", "check", "vault", "broken"]; '
             'runpy.run_module("uwiki", run_name="__main__")'
         )
-        res = subprocess.run([sys.executable, '-c', code], cwd=FIXTURES, capture_output=True, text=True)
+        res = subprocess.run([sys.executable, "-c", code], cwd=FIXTURES, capture_output=True, text=True, check=False)
         self.assertEqual(res.returncode, 1, res.stderr)
-        self.assertEqual(res.stdout.splitlines(), self.check('vault', 'broken')[1])
+        self.assertEqual(res.stdout.splitlines(), self.check("vault", "broken")[1])
 
     def test_vault(self):
-        code, lines, err = self.check('vault')
+        code, lines, err = self.check("vault")
         self.assertEqual((code, lines), (0, []), err)
 
     def test_checks_agree_with_renderer(self):
-        code, lines, err = self.check('subtle')
-        self.assertEqual(lines, [
-            'subtle/Dots.md:4: unresolved link: [[Nowhere]]',
-            'subtle/Links.md:1: unresolved link: [[Wrong/Page]]',
-            'subtle/Links.md:1: missing heading: [[Page#NoSuchHeading]]',
-            'subtle/Links.md:3: missing heading: [[Sub/Page#Nope]]',
-            'subtle/Lists.md:5: list number 3, expected 2',
-            'subtle/Lists.md:13: list number 21, expected 20',
-        ], err)
+        code, lines, err = self.check("subtle")
+        self.assertEqual(
+            lines,
+            [
+                "subtle/Dots.md:4: unresolved link: [[Nowhere]]",
+                "subtle/Links.md:1: unresolved link: [[Wrong/Page]]",
+                "subtle/Links.md:1: missing heading: [[Page#NoSuchHeading]]",
+                "subtle/Links.md:3: missing heading: [[Sub/Page#Nope]]",
+                "subtle/Lists.md:5: list number 3, expected 2",
+                "subtle/Lists.md:13: list number 21, expected 20",
+            ],
+            err,
+        )
         self.assertEqual(code, 1)
 
     def test_broken(self):
-        code, lines, err = self.check('broken')
-        self.assertEqual(lines, [
-            'broken/Bad.md:2: malformed frontmatter: bad line',
-            'broken/Bad.md:5: list number 3, expected 2',
-            'broken/Bad.md:7: unresolved link: [[Missing]]',
-            'broken/Bad.md:7: missing image: nope.png',
-        ], err)
+        code, lines, err = self.check("broken")
+        self.assertEqual(
+            lines,
+            [
+                "broken/Bad.md:2: malformed frontmatter: bad line",
+                "broken/Bad.md:5: list number 3, expected 2",
+                "broken/Bad.md:7: unresolved link: [[Missing]]",
+                "broken/Bad.md:7: missing image: nope.png",
+            ],
+            err,
+        )
         self.assertEqual(code, 1)
 
     def test_markdown_links(self):
-        code, lines, err = self.check('mdlinks')
-        self.assertEqual(lines, [
-            'mdlinks/docs/Broken.md:1: link leaves vault: ../../Outside.md',
-            'mdlinks/docs/Broken.md:1: unresolved link: Nope.md',
-            'mdlinks/docs/Broken.md:1: missing heading: Guide.md#nope',
-        ], err)
+        code, lines, err = self.check("mdlinks")
+        self.assertEqual(
+            lines,
+            [
+                "mdlinks/docs/Broken.md:1: link leaves vault: ../../Outside.md",
+                "mdlinks/docs/Broken.md:1: unresolved link: Nope.md",
+                "mdlinks/docs/Broken.md:1: missing heading: Guide.md#nope",
+            ],
+            err,
+        )
         self.assertEqual(code, 1)
 
     def test_index_next_to_readme(self):
-        code, lines, err = self.check('project')
-        self.assertEqual(lines, [
-            'project/docs/index.md:1: both index.md and README.md in folder, README.md is folder page',
-        ], err)
+        code, lines, err = self.check("project")
+        self.assertEqual(
+            lines,
+            [
+                "project/docs/index.md:1: both index.md and README.md in folder, README.md is folder page",
+            ],
+            err,
+        )
         self.assertEqual(code, 1)
-        code, lines, err = self.check('project', '--exclude', 'docs/index.md')
+        code, lines, err = self.check("project", "--exclude", "docs/index.md")
         self.assertEqual((code, lines), (0, []), err)
 
     def test_paths_share_vault(self):
-        code, lines, err = self.check('shared/docs', 'shared/ideas', 'shared/Review.md')
+        code, lines, err = self.check("shared/docs", "shared/ideas", "shared/Review.md")
         self.assertEqual((code, lines), (0, []), err)
 
     def test_page_next_to_same_named_folder(self):
-        code, lines, err = self.check('shared')
+        code, lines, err = self.check("shared")
         self.assertEqual((code, lines), (0, []), err)
 
     def test_relative_links(self):
-        code, lines, err = self.check('linkcheck')
-        self.assertEqual(lines, [
-            'linkcheck/index.md:9: unresolved link: nope.txt',
-            'linkcheck/index.md:9: link differs from file name: A.md',
-            'linkcheck/index.md:10: absolute link: /a.md',
-            'linkcheck/index.md:10: missing heading: a.md#dup-2',
-            'linkcheck/index.md:13: unresolved link: sub/nope.md',
-            'linkcheck/index.md:15: unresolved link: gone.md',
-        ], err)
+        code, lines, err = self.check("linkcheck")
+        self.assertEqual(
+            lines,
+            [
+                "linkcheck/index.md:9: unresolved link: nope.txt",
+                "linkcheck/index.md:9: link differs from file name: A.md",
+                "linkcheck/index.md:10: absolute link: /a.md",
+                "linkcheck/index.md:10: missing heading: a.md#dup-2",
+                "linkcheck/index.md:13: unresolved link: sub/nope.md",
+                "linkcheck/index.md:15: unresolved link: gone.md",
+            ],
+            err,
+        )
         self.assertEqual(code, 1)
 
     def test_page_wins_over_folder_without_page(self):
-        code, lines, err = self.check('folderclash', '--orphans')
+        code, lines, err = self.check("folderclash", "--orphans")
         self.assertEqual((code, lines), (0, []), err)
 
     def test_folder_links_and_orphans(self):
-        code, lines, err = self.check('linkcheck', '--no-folder-links', '--orphans')
-        self.assertIn('linkcheck/index.md:9: folder link: sub/', lines)
-        self.assertEqual([line for line in lines if 'orphan' in line],
-                         ['linkcheck/orphan.md:1: orphan page: no page links here'])
+        _code, lines, _err = self.check("linkcheck", "--no-folder-links", "--orphans")
+        self.assertIn("linkcheck/index.md:9: folder link: sub/", lines)
+        self.assertEqual(
+            [line for line in lines if "orphan" in line], ["linkcheck/orphan.md:1: orphan page: no page links here"]
+        )
 
     def test_scope_layers(self):
         with tempfile.TemporaryDirectory() as tmp:
             pages = {
-                'uwiki.toml': '[check]\nlayers.scope = ["core", "duel", "advanced"]\n',
-                'index.md': '---\nscope: meta\n---\n[[rules/index|Rules]] [[Lore]]\n',
-                'rules/index.md': '---\nscope: advanced\n---\n[[Core]] [[Duel]]\n',
-                'rules/Core.md': '---\nscope: core\n---\n[[Duel]] and [[Lore]] and [[Core]]\n\nSee [[Hub]].\n',
-                'rules/Duel.md': '---\nscope: [duel, advanced]\n---\n[[Core]] [[Hub]]\n',
-                'rules/Hub.md': '---\nscope: advanced\n---\n[[Core]]\n',
-                'Lore.md': '---\nscope: lore\n---\n[[Hub]]\n',
+                "uwiki.toml": '[check]\nlayers.scope = ["core", "duel", "advanced"]\n',
+                "index.md": "---\nscope: meta\n---\n[[rules/index|Rules]] [[Lore]]\n",
+                "rules/index.md": "---\nscope: advanced\n---\n[[Core]] [[Duel]]\n",
+                "rules/Core.md": "---\nscope: core\n---\n[[Duel]] and [[Lore]] and [[Core]]\n\nSee [[Hub]].\n",
+                "rules/Duel.md": "---\nscope: [duel, advanced]\n---\n[[Core]] [[Hub]]\n",
+                "rules/Hub.md": "---\nscope: advanced\n---\n[[Core]]\n",
+                "Lore.md": "---\nscope: lore\n---\n[[Hub]]\n",
             }
             for name, text in pages.items():
                 write(os.path.join(tmp, name), text)
-            res = run('check', '.', cwd=tmp)
-            self.assertEqual(res.stdout.splitlines(), [
-                './rules/Core.md:4: core page links duel page: rules/Duel.md',
-                './rules/Core.md:6: core page links advanced page: rules/Hub.md',
-                './rules/Duel.md:4: duel page links advanced page: rules/Hub.md',
-                './rules/index.md:2: advanced folder page of core page: rules/Core.md and 1 more',
-            ], res.stderr)
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nlayers = ["core"]\n')
-            res = run('check', '.', cwd=tmp)
-            self.assertIn('check.layers should be a table of keys with lists of values', res.stderr)
+            res = run("check", ".", cwd=tmp)
+            self.assertEqual(
+                res.stdout.splitlines(),
+                [
+                    "./rules/Core.md:4: core page links duel page: rules/Duel.md",
+                    "./rules/Core.md:6: core page links advanced page: rules/Hub.md",
+                    "./rules/Duel.md:4: duel page links advanced page: rules/Hub.md",
+                    "./rules/index.md:2: advanced folder page of core page: rules/Core.md and 1 more",
+                ],
+                res.stderr,
+            )
+            write(os.path.join(tmp, "uwiki.toml"), '[check]\nlayers = ["core"]\n')
+            res = run("check", ".", cwd=tmp)
+            self.assertIn("check.layers should be a table of keys with lists of values", res.stderr)
 
     def test_orphans_name_the_reason(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for name, text in {'index': '[[A]]', 'A': 'a', 'B': '[[C]]', 'C': '[[B]] [[C]]', 'D': '[[D]]'}.items():
-                write(os.path.join(tmp, f'{name}.md'), text + '\n')
-            res = run('check', '--orphans', '.', cwd=tmp)
-            self.assertEqual(res.stdout.splitlines(), [
-                './B.md:1: orphan page: not reachable from index.md',
-                './C.md:1: orphan page: not reachable from index.md',
-                './D.md:1: orphan page: no page links here',
-            ])
-            self.assertEqual(json.loads(run('stats', '--json', '.', cwd=tmp).stdout)['orphans'], 3)
+            for name, text in {"index": "[[A]]", "A": "a", "B": "[[C]]", "C": "[[B]] [[C]]", "D": "[[D]]"}.items():
+                write(os.path.join(tmp, f"{name}.md"), text + "\n")
+            res = run("check", "--orphans", ".", cwd=tmp)
+            self.assertEqual(
+                res.stdout.splitlines(),
+                [
+                    "./B.md:1: orphan page: not reachable from index.md",
+                    "./C.md:1: orphan page: not reachable from index.md",
+                    "./D.md:1: orphan page: no page links here",
+                ],
+            )
+            self.assertEqual(json.loads(run("stats", "--json", ".", cwd=tmp).stdout)["orphans"], 3)
 
     def test_orphans_of_checked_pages_by_whole_vault(self):
-        code, lines, err = self.check('linkcheck/sub', 'linkcheck/orphan.md', '--orphans')
-        self.assertEqual((code, lines), (1, ['linkcheck/orphan.md:1: orphan page: no page links here']), err)
-        code, lines, err = self.check('linkcheck/sub/c.md', '--orphans')
+        code, lines, err = self.check("linkcheck/sub", "linkcheck/orphan.md", "--orphans")
+        self.assertEqual((code, lines), (1, ["linkcheck/orphan.md:1: orphan page: no page links here"]), err)
+        code, lines, err = self.check("linkcheck/sub/c.md", "--orphans")
         self.assertEqual(lines, [], err)
 
     def test_clean(self):
-        code, lines, err = self.check('broken/Good.md', 'broken/Bad.md')
-        self.assertNotIn('broken/Good.md', '\n'.join(lines))
-        code, lines, err = self.check('vault/Archive')
+        code, lines, err = self.check("broken/Good.md", "broken/Bad.md")
+        self.assertNotIn("broken/Good.md", "\n".join(lines))
+        code, lines, err = self.check("vault/Archive")
         self.assertEqual((code, lines), (0, []), err)
 
 
 class ConfigTest(unittest.TestCase):
     def test_uwiki_toml_marks_vault_root(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '')
-            write(os.path.join(tmp, 'Labs.md'), 'Labs.\n')
-            write(os.path.join(tmp, 'wiki', 'guide.md'), 'Read the Labs page.\n')
-            run('link', 'wiki/guide.md', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'wiki', 'guide.md')), 'Read the [[Labs]] page.\n')
-            os.makedirs(os.path.join(tmp, 'sub', '.git'))  # a work tree of its own takes no config above it
-            write(os.path.join(tmp, 'sub', 'guide.md'), 'Read the Labs page.\n')
-            run('link', 'sub/guide.md', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'sub', 'guide.md')), 'Read the Labs page.\n')
+            write(os.path.join(tmp, "uwiki.toml"), "")
+            write(os.path.join(tmp, "Labs.md"), "Labs.\n")
+            write(os.path.join(tmp, "wiki", "guide.md"), "Read the Labs page.\n")
+            run("link", "wiki/guide.md", cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, "wiki", "guide.md")), "Read the [[Labs]] page.\n")
+            os.makedirs(os.path.join(tmp, "sub", ".git"))  # a work tree of its own takes no config above it
+            write(os.path.join(tmp, "sub", "guide.md"), "Read the Labs page.\n")
+            run("link", "sub/guide.md", cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, "sub", "guide.md")), "Read the Labs page.\n")
 
     def test_excludes_match_from_config_folder_and_drop_files_named(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), 'exclude = ["data"]\n')
-            write(os.path.join(tmp, 'Labs.md'), 'Labs.\n')
-            raw = 'Labs raw, a long line of words to rewrap at forty columns.\n'
-            write(os.path.join(tmp, 'data', 'raw.md'), raw)
-            write(os.path.join(tmp, 'data', 'inbox', 'new.md'), raw)
-            for cwd, args in [(tmp, ['data']), (tmp, ['data/raw.md']), (os.path.join(tmp, 'data'), ['.']),
-                              (os.path.join(tmp, 'data', 'inbox'), ['new.md'])]:
-                res = run('link', *args, cwd=cwd)
-                self.assertEqual((res.returncode, res.stdout), (0, ''), (cwd, args, res.stderr))
-                run('wrap', '-w', '40', *args, cwd=cwd)
-                self.assertEqual(run('ls', *args, cwd=cwd).stdout, '', (cwd, args))
-            self.assertEqual(read(os.path.join(tmp, 'data', 'raw.md')), raw)
-            self.assertEqual(read(os.path.join(tmp, 'data', 'inbox', 'new.md')), raw)
-            self.assertEqual(run('ls', 'data/raw.md', '--include', 'data/raw.md', cwd=tmp).stdout, 'data/raw.md\n')
+            write(os.path.join(tmp, "uwiki.toml"), 'exclude = ["data"]\n')
+            write(os.path.join(tmp, "Labs.md"), "Labs.\n")
+            raw = "Labs raw, a long line of words to rewrap at forty columns.\n"
+            write(os.path.join(tmp, "data", "raw.md"), raw)
+            write(os.path.join(tmp, "data", "inbox", "new.md"), raw)
+            for cwd, args in [
+                (tmp, ["data"]),
+                (tmp, ["data/raw.md"]),
+                (os.path.join(tmp, "data"), ["."]),
+                (os.path.join(tmp, "data", "inbox"), ["new.md"]),
+            ]:
+                res = run("link", *args, cwd=cwd)
+                self.assertEqual((res.returncode, res.stdout), (0, ""), (cwd, args, res.stderr))
+                run("wrap", "-w", "40", *args, cwd=cwd)
+                self.assertEqual(run("ls", *args, cwd=cwd).stdout, "", (cwd, args))
+            self.assertEqual(read(os.path.join(tmp, "data", "raw.md")), raw)
+            self.assertEqual(read(os.path.join(tmp, "data", "inbox", "new.md")), raw)
+            self.assertEqual(run("ls", "data/raw.md", "--include", "data/raw.md", cwd=tmp).stdout, "data/raw.md\n")
         with tempfile.TemporaryDirectory() as tmp:  # vault in a project: globs from the project folder
-            write(os.path.join(tmp, 'pyproject.toml'), '[tool.uwiki]\nexclude = ["docs/drafts"]\ninclude = ["docs/drafts/keep.md"]\n')
-            for name in ('index.md', 'drafts/wip.md', 'drafts/keep.md'):
-                write(os.path.join(tmp, 'docs', name), 'Page.\n')
-            res = run('ls', 'docs', cwd=tmp)
-            self.assertEqual(res.stdout.splitlines(), ['docs/drafts/keep.md', 'docs/index.md'], res.stderr)
-            res = run('ls', '.', '--exclude', 'index.md', cwd=os.path.join(tmp, 'docs'))
-            self.assertEqual(res.stdout.splitlines(), ['./drafts/keep.md'], res.stderr)
+            write(
+                os.path.join(tmp, "pyproject.toml"),
+                '[tool.uwiki]\nexclude = ["docs/drafts"]\ninclude = ["docs/drafts/keep.md"]\n',
+            )
+            for name in ("index.md", "drafts/wip.md", "drafts/keep.md"):
+                write(os.path.join(tmp, "docs", name), "Page.\n")
+            res = run("ls", "docs", cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), ["docs/drafts/keep.md", "docs/index.md"], res.stderr)
+            res = run("ls", ".", "--exclude", "index.md", cwd=os.path.join(tmp, "docs"))
+            self.assertEqual(res.stdout.splitlines(), ["./drafts/keep.md"], res.stderr)
 
     def test_config_required(self):
         with tempfile.TemporaryDirectory() as tmp:
-            os.makedirs(os.path.join(tmp, '.git'))
-            write(os.path.join(tmp, 'a.md'), 'A.\n')
-            res = run('link', '.', '--require-config', cwd=tmp)
+            os.makedirs(os.path.join(tmp, ".git"))
+            write(os.path.join(tmp, "a.md"), "A.\n")
+            res = run("link", ".", "--require-config", cwd=tmp)
             self.assertEqual(res.returncode, 2)
-            self.assertIn('config required, none for the vault .', res.stderr)
-            old = os.environ.get('UWIKI_REQUIRE_CONFIG')
-            os.environ['UWIKI_REQUIRE_CONFIG'] = '1'
+            self.assertIn("config required, none for the vault .", res.stderr)
+            old = os.environ.get("UWIKI_REQUIRE_CONFIG")
+            os.environ["UWIKI_REQUIRE_CONFIG"] = "1"
             try:
-                self.assertEqual(run('wrap', 'a.md', cwd=tmp).returncode, 2)
-                res = run('mv', 'a.md', 'b.md', cwd=tmp)
+                self.assertEqual(run("wrap", "a.md", cwd=tmp).returncode, 2)
+                res = run("mv", "a.md", "b.md", cwd=tmp)
                 self.assertEqual(res.returncode, 2)
-                self.assertIn('config required', res.stderr)
-                write(os.path.join(tmp, 'uwiki.toml'), '')
-                self.assertEqual(run('wrap', 'a.md', cwd=tmp).returncode, 0)
+                self.assertIn("config required", res.stderr)
+                write(os.path.join(tmp, "uwiki.toml"), "")
+                self.assertEqual(run("wrap", "a.md", cwd=tmp).returncode, 0)
             finally:
                 if old is None:
-                    del os.environ['UWIKI_REQUIRE_CONFIG']
+                    del os.environ["UWIKI_REQUIRE_CONFIG"]
                 else:
-                    os.environ['UWIKI_REQUIRE_CONFIG'] = old
+                    os.environ["UWIKI_REQUIRE_CONFIG"] = old
 
     def check(self, *args, cwd=FIXTURES):
-        res = run('check', *args, cwd=cwd)
+        res = run("check", *args, cwd=cwd)
         return res.returncode, res.stdout.splitlines(), res.stderr
 
     def test_schema(self):
-        code, lines, err = self.check('schema')
-        self.assertEqual(lines, [
-            'schema/Bad.md:2: front matter status: wip, expected one of stub, draft, stable',
-            'schema/Bad.md:3: front matter date: soon, expected date',
-            'schema/Bad.md:4: front matter tags: x, expected list',
-            'schema/Bad.md:5: unknown front matter key: color',
-            'schema/None.md:1: missing front matter key: status',
-            'schema/docs/Guide.md:1: missing front matter key: owner',
-        ], err)
+        code, lines, err = self.check("schema")
+        self.assertEqual(
+            lines,
+            [
+                "schema/Bad.md:2: front matter status: wip, expected one of stub, draft, stable",
+                "schema/Bad.md:3: front matter date: soon, expected date",
+                "schema/Bad.md:4: front matter tags: x, expected list",
+                "schema/Bad.md:5: unknown front matter key: color",
+                "schema/None.md:1: missing front matter key: status",
+                "schema/docs/Guide.md:1: missing front matter key: owner",
+            ],
+            err,
+        )
         self.assertEqual(code, 1)
 
     def test_schema_order(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', os.path.join(FIXTURES, 'schema'), '--html', '-o', out)
+            res = run("build", os.path.join(FIXTURES, "schema"), "--html", "-o", out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            html = read(os.path.join(out, 'schema.html'))
-        self.assertEqual(list(page_data(html)['pages']['good']['meta'].items()),
-                         [('status', 'draft'), ('date', '2024-01-02'), ('tags', ['a', 'b']), ('title', 'Good: one')])
+            html = read(os.path.join(out, "schema.html"))
+        self.assertEqual(
+            list(page_data(html)["pages"]["good"]["meta"].items()),
+            [("status", "draft"), ("date", "2024-01-02"), ("tags", ["a", "b"]), ("title", "Good: one")],
+        )
 
     def test_check_results_in_html(self):
         with tempfile.TemporaryDirectory() as tmp:
-            vault = os.path.join(tmp, 'wiki')
-            write(os.path.join(vault, 'uwiki.toml'), '[check]\nunlisted = true\n[schema]\nstatus = ["draft"]\n')
-            write(os.path.join(vault, 'index.md'), '---\nstatus: x\n---\nSee [[Gone]].\n\n1. one\n3. three\n'
-                                                   '\n```\n[[InCode]]\n```\n')
-            write(os.path.join(vault, 'A.md'), 'Page A.\n')
-            res = run('build', vault, '-o', os.path.join(tmp, 'Wiki'))
+            vault = os.path.join(tmp, "wiki")
+            write(os.path.join(vault, "uwiki.toml"), '[check]\nunlisted = true\n[schema]\nstatus = ["draft"]\n')
+            write(
+                os.path.join(vault, "index.md"),
+                "---\nstatus: x\n---\nSee [[Gone]].\n\n1. one\n3. three\n\n```\n[[InCode]]\n```\n",
+            )
+            write(os.path.join(vault, "A.md"), "Page A.\n")
+            res = run("build", vault, "-o", os.path.join(tmp, "Wiki"))
             self.assertEqual(res.returncode, 0, res.stderr)
-            html = read(os.path.join(tmp, 'Wiki.html'))
-            self.assertNotIn('problem', read(os.path.join(tmp, 'Wiki.md')))
-        root = section(html, 'root')
-        self.assertIn('<details class="problems"><summary><b>Problems (3):</b><span>front matter status: x, expected '
-                      'one of draft, unresolved link: [[Gone]], list number 3, expected 2</span></summary><div>'
-                      '<a class="problem" href="#root">2: front matter status: x, expected one of draft</a>'
-                      '<a class="problem" href="#problem-root-4">4: unresolved link: [[Gone]]</a>'
-                      '<a class="problem" href="#problem-root-7">7: list number 3, expected 2</a></div></details>', root)
-        self.assertIs(page_data(html)['pages']['root']['frontProblem'], True)
-        self.assertIn('<p><span class="problem-at problem" id="problem-root-4" title="4: unresolved link: [[Gone]]">'
-                      '</span>See', root)
-        self.assertIn('<li><span class="problem-at problem" id="problem-root-7" title="7: list number 3, expected 2">'
-                      '</span><a class="item-anchor"', root)
-        self.assertIn('<details class="problems"><summary><b>Warnings (1):</b><span>not listed in index.md</span>',
-                      section(html, 'a'))
+            html = read(os.path.join(tmp, "Wiki.html"))
+            self.assertNotIn("problem", read(os.path.join(tmp, "Wiki.md")))
+        root = section(html, "root")
+        self.assertIn(
+            '<details class="problems"><summary><b>Problems (3):</b><span>front matter status: x, expected '
+            "one of draft, unresolved link: [[Gone]], list number 3, expected 2</span></summary><div>"
+            '<a class="problem" href="#root">2: front matter status: x, expected one of draft</a>'
+            '<a class="problem" href="#problem-root-4">4: unresolved link: [[Gone]]</a>'
+            '<a class="problem" href="#problem-root-7">7: list number 3, expected 2</a></div></details>',
+            root,
+        )
+        self.assertIs(page_data(html)["pages"]["root"]["frontProblem"], True)
+        self.assertIn(
+            '<p><span class="problem-at problem" id="problem-root-4" title="4: unresolved link: [[Gone]]"></span>See',
+            root,
+        )
+        self.assertIn(
+            '<li><span class="problem-at problem" id="problem-root-7" title="7: list number 3, expected 2">'
+            '</span><a class="item-anchor"',
+            root,
+        )
+        self.assertIn(
+            '<details class="problems"><summary><b>Warnings (1):</b><span>not listed in index.md</span>',
+            section(html, "a"),
+        )
         data = page_data(html)
-        self.assertEqual({p['path']: p['problems'] for p in data['pages'].values()}, {'index.md': 3, 'A.md': 1})
+        self.assertEqual({p["path"]: p["problems"] for p in data["pages"].values()}, {"index.md": 3, "A.md": 1})
 
     def test_page_data_for_filter_and_stats(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', os.path.join(FIXTURES, 'schema'), '--html', '-o', out)
+            res = run("build", os.path.join(FIXTURES, "schema"), "--html", "-o", out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            html = read(os.path.join(out, 'schema.html'))
-        data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.S)[1])
-        self.assertEqual(data['facets'], [['status', ['stub', 'draft', 'stable']]])
-        pages = {p['path']: p for p in data['pages'].values()}
-        self.assertEqual(sorted(pages), ['Bad.md', 'Good.md', 'None.md', 'docs/Guide.md', 'docs/Unlisted.md', 'index.md'])
-        self.assertEqual(pages['Good.md']['meta'], {'status': 'draft', 'date': '2024-01-02', 'tags': ['a', 'b'],
-                                                    'title': 'Good: one'})
-        stats = json.loads(run('stats', '--json', os.path.join(FIXTURES, 'schema')).stdout)['total']
-        self.assertEqual((len(pages), sum(p['words'] for p in pages.values())), (stats['pages'], stats['words']))
-        self.assertTrue(all(p['tokens'] > 0 for p in pages.values()))
+            html = read(os.path.join(out, "schema.html"))
+        data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.DOTALL)[1])
+        self.assertEqual(data["facets"], [["status", ["stub", "draft", "stable"]]])
+        pages = {p["path"]: p for p in data["pages"].values()}
+        self.assertEqual(
+            sorted(pages), ["Bad.md", "Good.md", "None.md", "docs/Guide.md", "docs/Unlisted.md", "index.md"]
+        )
+        self.assertEqual(
+            pages["Good.md"]["meta"],
+            {"status": "draft", "date": "2024-01-02", "tags": ["a", "b"], "title": "Good: one"},
+        )
+        stats = json.loads(run("stats", "--json", os.path.join(FIXTURES, "schema")).stdout)["total"]
+        self.assertEqual((len(pages), sum(p["words"] for p in pages.values())), (stats["pages"], stats["words"]))
+        self.assertTrue(all(p["tokens"] > 0 for p in pages.values()))
 
     def test_option_defaults(self):
-        code, lines, err = self.check('schema', '--include', 'drafts')
-        self.assertEqual(lines[-2:], [
-            'schema/drafts/Draft.md:1: missing front matter key: status',
-            'schema/drafts/Draft.md:1: warning: not listed in index.md',
-        ], err)
-        code, lines, err = self.check('schema/docs/Unlisted.md')
+        code, lines, err = self.check("schema", "--include", "drafts")
+        self.assertEqual(
+            lines[-2:],
+            [
+                "schema/drafts/Draft.md:1: missing front matter key: status",
+                "schema/drafts/Draft.md:1: warning: not listed in index.md",
+            ],
+            err,
+        )
+        code, lines, err = self.check("schema/docs/Unlisted.md")
         self.assertEqual((code, lines), (0, []), err)
 
     def test_nested_keys_inherit_and_config_above_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\n_required = ["made"]\n'
-                  'made.by = "string"\nmade.at = "datetime"\nsources.id = ["repo", "doc"]\n'
-                  '[schema."wiki/**/index.md"]\n_inherit = false\nokf = ["1"]\n')
-            write(os.path.join(tmp, 'wiki', 'index.md'), '---\nokf: 1\n---\nSee [[Flow]], [[Block]] and [[Bad]].\n')
-            write(os.path.join(tmp, 'wiki', 'Flow.md'), '---\nmade: { by: me, at: 2026-01-02T03:04:05Z }\n---\nFlow.\n')
-            write(os.path.join(tmp, 'wiki', 'Block.md'), '---\nmade:\n  by: me\n  at: 2026-01-02T03:04Z\n'
-                  'sources:\n  - id: repo\n  - id: doc\n---\nBlock.\n')
-            write(os.path.join(tmp, 'wiki', 'Bad.md'), '---\nmade: { by: me, at: 2026-01-02, how: x }\n'
-                  'sources:\n  - id: web\n---\nBad.\n')
-            write(os.path.join(tmp, 'wiki', 'None.md'), 'None.\n')
-            code, lines, err = self.check('wiki', cwd=tmp)
-            self.assertEqual(lines, [
-                'wiki/Bad.md:2: front matter made.at: 2026-01-02, expected datetime',
-                'wiki/Bad.md:2: unknown front matter key: made.how',
-                'wiki/Bad.md:3: front matter sources.id: web, expected one of repo, doc',
-                'wiki/None.md:1: missing front matter key: made.by',
-                'wiki/None.md:1: missing front matter key: made.at',
-            ], err)
+            write(
+                os.path.join(tmp, "uwiki.toml"),
+                '[schema]\n_required = ["made"]\n'
+                'made.by = "string"\nmade.at = "datetime"\nsources.id = ["repo", "doc"]\n'
+                '[schema."wiki/**/index.md"]\n_inherit = false\nokf = ["1"]\n',
+            )
+            write(os.path.join(tmp, "wiki", "index.md"), "---\nokf: 1\n---\nSee [[Flow]], [[Block]] and [[Bad]].\n")
+            write(os.path.join(tmp, "wiki", "Flow.md"), "---\nmade: { by: me, at: 2026-01-02T03:04:05Z }\n---\nFlow.\n")
+            write(
+                os.path.join(tmp, "wiki", "Block.md"),
+                "---\nmade:\n  by: me\n  at: 2026-01-02T03:04Z\nsources:\n  - id: repo\n  - id: doc\n---\nBlock.\n",
+            )
+            write(
+                os.path.join(tmp, "wiki", "Bad.md"),
+                "---\nmade: { by: me, at: 2026-01-02, how: x }\nsources:\n  - id: web\n---\nBad.\n",
+            )
+            write(os.path.join(tmp, "wiki", "None.md"), "None.\n")
+            code, lines, err = self.check("wiki", cwd=tmp)
+            self.assertEqual(
+                lines,
+                [
+                    "wiki/Bad.md:2: front matter made.at: 2026-01-02, expected datetime",
+                    "wiki/Bad.md:2: unknown front matter key: made.how",
+                    "wiki/Bad.md:3: front matter sources.id: web, expected one of repo, doc",
+                    "wiki/None.md:1: missing front matter key: made.by",
+                    "wiki/None.md:1: missing front matter key: made.at",
+                ],
+                err,
+            )
             self.assertEqual(code, 1)
 
     def test_glob_alternatives(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'wiki', 'uwiki.toml'), 'exclude = ["{drafts,old}"]\n'
-                  '[schema]\n_required = ["status"]\nstatus = ["ok"]\n'
-                  '[schema."{AGENTS.md,docs/{adr,notes}/*.md}"]\n_inherit = false\n')
-            write(os.path.join(tmp, 'wiki', 'index.md'), '---\nstatus: ok\n---\nIndex.\n')
-            for page in ('sub/AGENTS.md', 'docs/adr/A.md', 'docs/notes/N.md', 'docs/other/O.md',
-                         'drafts/D.md', 'old/X.md'):
-                write(os.path.join(tmp, 'wiki', page), 'Page.\n')
-            code, lines, err = self.check('wiki', cwd=tmp)
-            self.assertEqual(lines, ['wiki/docs/other/O.md:1: missing front matter key: status'], err)
+            write(
+                os.path.join(tmp, "wiki", "uwiki.toml"),
+                'exclude = ["{drafts,old}"]\n'
+                '[schema]\n_required = ["status"]\nstatus = ["ok"]\n'
+                '[schema."{AGENTS.md,docs/{adr,notes}/*.md}"]\n_inherit = false\n',
+            )
+            write(os.path.join(tmp, "wiki", "index.md"), "---\nstatus: ok\n---\nIndex.\n")
+            for page in (
+                "sub/AGENTS.md",
+                "docs/adr/A.md",
+                "docs/notes/N.md",
+                "docs/other/O.md",
+                "drafts/D.md",
+                "old/X.md",
+            ):
+                write(os.path.join(tmp, "wiki", page), "Page.\n")
+            code, lines, err = self.check("wiki", cwd=tmp)
+            self.assertEqual(lines, ["wiki/docs/other/O.md:1: missing front matter key: status"], err)
             self.assertEqual(code, 1)
 
     def test_page_type(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\nsupersedes = "page"\n')
-            write(os.path.join(tmp, 'index.md'), 'See [[Old]], [[New]], [[Bad]] and [[sub/Deep]].\n')
-            write(os.path.join(tmp, 'Old.md'), 'Old.\n')
-            write(os.path.join(tmp, 'sub', 'Deep.md'), '---\nsupersedes: ../Old.md\n---\nDeep.\n')
-            write(os.path.join(tmp, 'New.md'), '---\nsupersedes: [Old, "[[sub/Deep]]"]\n---\nNew.\n')
-            write(os.path.join(tmp, 'Bad.md'), '---\nsupersedes: [Gone, Bad, ../Old.md]\n---\nBad.\n')
-            code, lines, err = self.check('.', cwd=tmp)
-            self.assertEqual(lines, ['./Bad.md:2: front matter supersedes: Gone, Bad, ../Old.md, expected page'], err)
+            write(os.path.join(tmp, "uwiki.toml"), '[schema]\nsupersedes = "page"\n')
+            write(os.path.join(tmp, "index.md"), "See [[Old]], [[New]], [[Bad]] and [[sub/Deep]].\n")
+            write(os.path.join(tmp, "Old.md"), "Old.\n")
+            write(os.path.join(tmp, "sub", "Deep.md"), "---\nsupersedes: ../Old.md\n---\nDeep.\n")
+            write(os.path.join(tmp, "New.md"), '---\nsupersedes: [Old, "[[sub/Deep]]"]\n---\nNew.\n')
+            write(os.path.join(tmp, "Bad.md"), "---\nsupersedes: [Gone, Bad, ../Old.md]\n---\nBad.\n")
+            code, lines, err = self.check(".", cwd=tmp)
+            self.assertEqual(lines, ["./Bad.md:2: front matter supersedes: Gone, Bad, ../Old.md, expected page"], err)
             self.assertEqual(code, 1)
 
     def test_acyclic(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nacyclic = ["supersedes"]\n'
-                  '[schema]\nsupersedes = "page"\nrefines = "page"\n')
-            write(os.path.join(tmp, 'index.md'), 'See [[A]], [[B]], [[C]], [[D]] and [[E]].\n')
-            write(os.path.join(tmp, 'A.md'), '---\nsupersedes: B\n---\nA.\n')
-            write(os.path.join(tmp, 'B.md'), '---\nsupersedes: [D, "[[C]]"]\n---\nB.\n')
-            write(os.path.join(tmp, 'C.md'), '---\nrefines: E\nsupersedes: ./A.md\n---\nC.\n')
-            write(os.path.join(tmp, 'D.md'), '---\nsupersedes: E\n---\nD.\n')
-            write(os.path.join(tmp, 'E.md'), '---\nrefines: C\n---\nE.\n')
-            code, lines, err = self.check('.', cwd=tmp)
-            self.assertEqual(lines, [
-                './A.md:2: supersedes chain leads back to it: A.md -> B.md -> C.md -> A.md',
-                './B.md:2: supersedes chain leads back to it: B.md -> C.md -> A.md -> B.md',
-                './C.md:3: supersedes chain leads back to it: C.md -> A.md -> B.md -> C.md',
-            ], err)
+            write(
+                os.path.join(tmp, "uwiki.toml"),
+                '[check]\nacyclic = ["supersedes"]\n[schema]\nsupersedes = "page"\nrefines = "page"\n',
+            )
+            write(os.path.join(tmp, "index.md"), "See [[A]], [[B]], [[C]], [[D]] and [[E]].\n")
+            write(os.path.join(tmp, "A.md"), "---\nsupersedes: B\n---\nA.\n")
+            write(os.path.join(tmp, "B.md"), '---\nsupersedes: [D, "[[C]]"]\n---\nB.\n')
+            write(os.path.join(tmp, "C.md"), "---\nrefines: E\nsupersedes: ./A.md\n---\nC.\n")
+            write(os.path.join(tmp, "D.md"), "---\nsupersedes: E\n---\nD.\n")
+            write(os.path.join(tmp, "E.md"), "---\nrefines: C\n---\nE.\n")
+            code, lines, err = self.check(".", cwd=tmp)
+            self.assertEqual(
+                lines,
+                [
+                    "./A.md:2: supersedes chain leads back to it: A.md -> B.md -> C.md -> A.md",
+                    "./B.md:2: supersedes chain leads back to it: B.md -> C.md -> A.md -> B.md",
+                    "./C.md:3: supersedes chain leads back to it: C.md -> A.md -> B.md -> C.md",
+                ],
+                err,
+            )
             self.assertEqual(code, 1)
-            code, lines, err = self.check('.', '--acyclic', 'refines', cwd=tmp)
-            self.assertIn('./E.md:2: refines chain leads back to it: E.md -> C.md -> E.md', lines)
+            code, lines, err = self.check(".", "--acyclic", "refines", cwd=tmp)
+            self.assertIn("./E.md:2: refines chain leads back to it: E.md -> C.md -> E.md", lines)
 
     def test_inverse(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\ninverse.supersedes = "superseded_by"\n'
-                  '[schema]\nsupersedes = "page"\nsuperseded_by = "page"\nstatus = "string"\n')
-            write(os.path.join(tmp, 'index.md'), 'See [[A]], [[B]], [[C]], [[D]] and [[E]].\n')
-            write(os.path.join(tmp, 'A.md'), '---\nsuperseded_by: B\n---\nA.\n')
-            write(os.path.join(tmp, 'B.md'), '---\nstatus: x\nsupersedes: [A, "[[C]]"]\n---\nB.\n')
-            write(os.path.join(tmp, 'C.md'), 'C.\n')
-            write(os.path.join(tmp, 'D.md'), '---\nsuperseded_by: ./E.md\n---\nD.\n')
-            write(os.path.join(tmp, 'E.md'), 'E.\n')
-            code, lines, err = self.check('.', cwd=tmp)
-            self.assertEqual(lines, [
-                './B.md:3: supersedes C.md, whose superseded_by does not name it',
-                './D.md:2: superseded_by E.md, whose supersedes does not name it',
-            ], err)
+            write(
+                os.path.join(tmp, "uwiki.toml"),
+                '[check]\ninverse.supersedes = "superseded_by"\n'
+                '[schema]\nsupersedes = "page"\nsuperseded_by = "page"\nstatus = "string"\n',
+            )
+            write(os.path.join(tmp, "index.md"), "See [[A]], [[B]], [[C]], [[D]] and [[E]].\n")
+            write(os.path.join(tmp, "A.md"), "---\nsuperseded_by: B\n---\nA.\n")
+            write(os.path.join(tmp, "B.md"), '---\nstatus: x\nsupersedes: [A, "[[C]]"]\n---\nB.\n')
+            write(os.path.join(tmp, "C.md"), "C.\n")
+            write(os.path.join(tmp, "D.md"), "---\nsuperseded_by: ./E.md\n---\nD.\n")
+            write(os.path.join(tmp, "E.md"), "E.\n")
+            code, lines, err = self.check(".", cwd=tmp)
+            self.assertEqual(
+                lines,
+                [
+                    "./B.md:3: supersedes C.md, whose superseded_by does not name it",
+                    "./D.md:2: superseded_by E.md, whose supersedes does not name it",
+                ],
+                err,
+            )
             self.assertEqual(code, 1)
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\ninverse = ["supersedes"]\n')
-            self.assertIn('check.inverse should be a table of keys with the key naming back',
-                          self.check('.', cwd=tmp)[2])
+            write(os.path.join(tmp, "uwiki.toml"), '[check]\ninverse = ["supersedes"]\n')
+            self.assertIn(
+                "check.inverse should be a table of keys with the key naming back", self.check(".", cwd=tmp)[2]
+            )
 
     def test_stale(self):
         today = datetime.date.today()
         day = lambda days: (today - datetime.timedelta(days=days)).isoformat()
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nstale-days = 10\n'
-                  'stale-date = ["verified.at", "made.at"]\nstale-until = "stale_after"\n')
-            write(os.path.join(tmp, 'index.md'), 'See [[Old]], [[Checked]], [[Snapshot]] and [[Fresh]].\n')
-            write(os.path.join(tmp, 'Old.md'), f'---\nmade: {{ by: me, at: {day(11)}T01:02:03Z }}\n---\nOld.\n')
-            write(os.path.join(tmp, 'Checked.md'), f'---\nmade: {{ by: me, at: {day(30)}T01:02:03Z }}\n'
-                  f'verified:\n  - by: a\n    at: {day(20)}\n  - by: b\n    at: {day(3)}\n---\nChecked.\n')
-            write(os.path.join(tmp, 'Snapshot.md'), f'---\nmade: {{ by: me, at: {day(1)} }}\n'
-                  f'stale_after: {day(0)}\n---\nSnapshot.\n')
-            write(os.path.join(tmp, 'Fresh.md'), f'---\nmade: {{ by: me, at: {day(10)} }}\n'
-                  f'stale_after: {day(-1)}\n---\nFresh.\n')
-            code, lines, err = self.check('.', cwd=tmp)
-            self.assertEqual(lines, [
-                f'./Old.md:2: warning: stale: made.at {day(11)}, 11 days ago, more than 10',
-                f'./Snapshot.md:3: warning: stale: stale_after {day(0)} passed',
-            ], err)
+            write(
+                os.path.join(tmp, "uwiki.toml"),
+                '[check]\nstale-days = 10\nstale-date = ["verified.at", "made.at"]\nstale-until = "stale_after"\n',
+            )
+            write(os.path.join(tmp, "index.md"), "See [[Old]], [[Checked]], [[Snapshot]] and [[Fresh]].\n")
+            write(os.path.join(tmp, "Old.md"), f"---\nmade: {{ by: me, at: {day(11)}T01:02:03Z }}\n---\nOld.\n")
+            write(
+                os.path.join(tmp, "Checked.md"),
+                f"---\nmade: {{ by: me, at: {day(30)}T01:02:03Z }}\n"
+                f"verified:\n  - by: a\n    at: {day(20)}\n  - by: b\n    at: {day(3)}\n---\nChecked.\n",
+            )
+            write(
+                os.path.join(tmp, "Snapshot.md"),
+                f"---\nmade: {{ by: me, at: {day(1)} }}\nstale_after: {day(0)}\n---\nSnapshot.\n",
+            )
+            write(
+                os.path.join(tmp, "Fresh.md"),
+                f"---\nmade: {{ by: me, at: {day(10)} }}\nstale_after: {day(-1)}\n---\nFresh.\n",
+            )
+            code, lines, err = self.check(".", cwd=tmp)
+            self.assertEqual(
+                lines,
+                [
+                    f"./Old.md:2: warning: stale: made.at {day(11)}, 11 days ago, more than 10",
+                    f"./Snapshot.md:3: warning: stale: stale_after {day(0)} passed",
+                ],
+                err,
+            )
             self.assertEqual(code, 0)
-            self.assertEqual(self.check('.', '--stale-days', '0', '--stale-until', '', cwd=tmp)[:2], (0, []))
+            self.assertEqual(self.check(".", "--stale-days", "0", "--stale-until", "", cwd=tmp)[:2], (0, []))
 
     def test_code_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[check.code-paths]\n"skills/**/map.md" = "wiki"\n')
-            write(os.path.join(tmp, 'wiki', 'index.md'), 'See [[Guide]].\n')
-            write(os.path.join(tmp, 'wiki', 'Guide.md'), '`gone.md` here is not checked.\n')
-            write(os.path.join(tmp, 'wiki', 'sub', 'index.md'), 'Sub.\n')
-            write(os.path.join(tmp, 'skills', 'one', 'map.md'),
-                  '---\nname: map\n---\nRead `Guide.md`, `sub/index.md`, `sub/` and ``gone.md``,\n'
-                  'not `example.com`, `sed -n`, `/abs:x` or `<x>/y/`.\n\n```\n`old/page.md`\n```\n'
-                  'Then `sub/Nope.md`.\n')
-            code, lines, err = self.check('skills', cwd=tmp)
-            self.assertEqual(lines, [
-                'skills/one/map.md:4: missing path: gone.md in wiki',
-                'skills/one/map.md:10: missing path: sub/Nope.md in wiki',
-            ], err)
+            write(os.path.join(tmp, "uwiki.toml"), '[check.code-paths]\n"skills/**/map.md" = "wiki"\n')
+            write(os.path.join(tmp, "wiki", "index.md"), "See [[Guide]].\n")
+            write(os.path.join(tmp, "wiki", "Guide.md"), "`gone.md` here is not checked.\n")
+            write(os.path.join(tmp, "wiki", "sub", "index.md"), "Sub.\n")
+            write(
+                os.path.join(tmp, "skills", "one", "map.md"),
+                "---\nname: map\n---\nRead `Guide.md`, `sub/index.md`, `sub/` and ``gone.md``,\n"
+                "not `example.com`, `sed -n`, `/abs:x` or `<x>/y/`.\n\n```\n`old/page.md`\n```\n"
+                "Then `sub/Nope.md`.\n",
+            )
+            code, lines, err = self.check("skills", cwd=tmp)
+            self.assertEqual(
+                lines,
+                [
+                    "skills/one/map.md:4: missing path: gone.md in wiki",
+                    "skills/one/map.md:10: missing path: sub/Nope.md in wiki",
+                ],
+                err,
+            )
             self.assertEqual(code, 1)
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\ncode-paths = ["wiki"]\n')
-            self.assertIn('check.code-paths should be a table of page globs with folders',
-                          self.check('skills', cwd=tmp)[2])
+            write(os.path.join(tmp, "uwiki.toml"), '[check]\ncode-paths = ["wiki"]\n')
+            self.assertIn(
+                "check.code-paths should be a table of page globs with folders", self.check("skills", cwd=tmp)[2]
+            )
 
     def test_max_lines(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nmax-lines = 3\nmax-lines-ignore = ["wiki/log.md"]\n')
-            write(os.path.join(tmp, 'wiki', 'index.md'), 'See [[Long]] and [[log]].\n')
-            write(os.path.join(tmp, 'wiki', 'Long.md'), 'one\ntwo\nthree\nfour')
-            write(os.path.join(tmp, 'wiki', 'Short.md'), 'one\ntwo\nthree\n')
-            write(os.path.join(tmp, 'wiki', 'log.md'), 'one\ntwo\nthree\nfour\n')
-            code, lines, err = self.check('wiki', cwd=tmp)
-            self.assertEqual(lines, ['wiki/Long.md:4: 4 lines, more than 3'], err)
+            write(os.path.join(tmp, "uwiki.toml"), '[check]\nmax-lines = 3\nmax-lines-ignore = ["wiki/log.md"]\n')
+            write(os.path.join(tmp, "wiki", "index.md"), "See [[Long]] and [[log]].\n")
+            write(os.path.join(tmp, "wiki", "Long.md"), "one\ntwo\nthree\nfour")
+            write(os.path.join(tmp, "wiki", "Short.md"), "one\ntwo\nthree\n")
+            write(os.path.join(tmp, "wiki", "log.md"), "one\ntwo\nthree\nfour\n")
+            code, lines, err = self.check("wiki", cwd=tmp)
+            self.assertEqual(lines, ["wiki/Long.md:4: 4 lines, more than 3"], err)
             self.assertEqual(code, 1)
-            self.assertEqual(self.check('wiki', '--max-lines', '0', cwd=tmp)[:2], (0, []))
+            self.assertEqual(self.check("wiki", "--max-lines", "0", cwd=tmp)[:2], (0, []))
 
     def test_string_length(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\ndescription = "string(10)"\ntitle = "string"\n'
-                  '[schema."wiki/Skill.md"]\ndescription = "string"\n')
-            write(os.path.join(tmp, 'wiki', 'index.md'), 'See [[Long]], [[Short]] and [[Skill]].\n')
-            write(os.path.join(tmp, 'wiki', 'Long.md'), '---\ntitle: Long\ndescription: eleven char\n---\nLong.\n')
-            write(os.path.join(tmp, 'wiki', 'Short.md'), '---\ndescription: ten chars.\n---\nShort.\n')
-            write(os.path.join(tmp, 'wiki', 'Skill.md'), '---\ndescription: eleven char\n---\nSkill.\n')
-            code, lines, err = self.check('wiki', cwd=tmp)
-            self.assertEqual(lines, ['wiki/Long.md:3: front matter description: 11 characters, more than 10'], err)
+            write(
+                os.path.join(tmp, "uwiki.toml"),
+                '[schema]\ndescription = "string(10)"\ntitle = "string"\n'
+                '[schema."wiki/Skill.md"]\ndescription = "string"\n',
+            )
+            write(os.path.join(tmp, "wiki", "index.md"), "See [[Long]], [[Short]] and [[Skill]].\n")
+            write(os.path.join(tmp, "wiki", "Long.md"), "---\ntitle: Long\ndescription: eleven char\n---\nLong.\n")
+            write(os.path.join(tmp, "wiki", "Short.md"), "---\ndescription: ten chars.\n---\nShort.\n")
+            write(os.path.join(tmp, "wiki", "Skill.md"), "---\ndescription: eleven char\n---\nSkill.\n")
+            code, lines, err = self.check("wiki", cwd=tmp)
+            self.assertEqual(lines, ["wiki/Long.md:3: front matter description: 11 characters, more than 10"], err)
             self.assertEqual(code, 1)
-            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\ndescription = "string(ten)"\n')
-            code, lines, err = self.check('wiki', cwd=tmp)
+            write(os.path.join(tmp, "uwiki.toml"), '[schema]\ndescription = "string(ten)"\n')
+            code, lines, err = self.check("wiki", cwd=tmp)
             self.assertIn("'string(ten)' is no list of values nor type", err)
 
     def test_index(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'),
-                  '[index.pages]\nline = "* [{stem}]({path}) - {description}"\nexclude = ["wiki/log.md"]\n'
-                  '[index.adrs]\nline = "* [{stem}]({path}) — {date}, {status}. {description}"\n'
-                  'sort = "-date"\nempty = "None yet."\n')
-            write(os.path.join(tmp, 'wiki', 'index.md'), '# Wiki\n\n<!-- generated: pages -->\n'
-                  '* [b](b.md) - old\n* [gone](gone.md) - deleted\n* [sub/](sub/index.md) - by hand\n'
-                  '<!-- /generated -->\n\nProse.\n')
-            write(os.path.join(tmp, 'wiki', 'b.md'), '---\ndescription: >\n  Bee\n  page.\n---\nB.\n')
-            write(os.path.join(tmp, 'wiki', 'a.md'), '---\ndescription: Ay.\n---\nA.\n')
-            write(os.path.join(tmp, 'wiki', 'log.md'), 'Log.\n')
-            write(os.path.join(tmp, 'wiki', 'sub', 'index.md'), '<!-- generated: pages -->\n<!-- /generated -->\n')
-            write(os.path.join(tmp, 'wiki', 'adr', 'index.md'), '<!-- generated: adrs -->\n<!-- /generated -->\n')
-            res = run('index', 'wiki', '--check', cwd=tmp)
+            write(
+                os.path.join(tmp, "uwiki.toml"),
+                '[index.pages]\nline = "* [{stem}]({path}) - {description}"\nexclude = ["wiki/log.md"]\n'
+                '[index.adrs]\nline = "* [{stem}]({path}) — {date}, {status}. {description}"\n'
+                'sort = "-date"\nempty = "None yet."\n',
+            )
+            write(
+                os.path.join(tmp, "wiki", "index.md"),
+                "# Wiki\n\n<!-- generated: pages -->\n"
+                "* [b](b.md) - old\n* [gone](gone.md) - deleted\n* [sub/](sub/index.md) - by hand\n"
+                "<!-- /generated -->\n\nProse.\n",
+            )
+            write(os.path.join(tmp, "wiki", "b.md"), "---\ndescription: >\n  Bee\n  page.\n---\nB.\n")
+            write(os.path.join(tmp, "wiki", "a.md"), "---\ndescription: Ay.\n---\nA.\n")
+            write(os.path.join(tmp, "wiki", "log.md"), "Log.\n")
+            write(os.path.join(tmp, "wiki", "sub", "index.md"), "<!-- generated: pages -->\n<!-- /generated -->\n")
+            write(os.path.join(tmp, "wiki", "adr", "index.md"), "<!-- generated: adrs -->\n<!-- /generated -->\n")
+            res = run("index", "wiki", "--check", cwd=tmp)
             self.assertEqual(res.returncode, 1)
-            self.assertEqual(res.stdout.splitlines(), [
-                'wiki/adr/index.md:2: index out of date, rerun without --check', '  +None yet.',
-                'wiki/index.md:4: index out of date, rerun without --check',
-                '  -* [b](b.md) - old', '  -* [gone](gone.md) - deleted',
-                '  +* [b](b.md) - Bee page.', '  +* [a](a.md) - Ay.'], res.stderr)
-            res = run('index', 'wiki', cwd=tmp)
-            self.assertEqual(res.stdout.splitlines(), ['updated wiki/adr/index.md', 'updated wiki/index.md'])
-            self.assertEqual(read(os.path.join(tmp, 'wiki', 'index.md')), '# Wiki\n\n<!-- generated: pages -->\n'
-                             '* [b](b.md) - Bee page.\n* [a](a.md) - Ay.\n* [sub/](sub/index.md) - by hand\n'
-                             '<!-- /generated -->\n\nProse.\n')
-            write(os.path.join(tmp, 'wiki', 'adr', 'x.md'), '---\ndate: 2026-01-01\nstatus: draft\ndescription: X.\n---\n')
-            write(os.path.join(tmp, 'wiki', 'adr', 'y.md'), '---\ndate: 2026-02-01\nstatus: stable\ndescription: Y.\n---\n')
-            write(os.path.join(tmp, 'wiki', 'adr', 'z.md'), '---\ndate: 2026-02-01\ndescription: Z.\n---\n')
-            res = run('index', 'wiki', cwd=tmp)
-            self.assertEqual((res.returncode, res.stdout), (1, 'wiki/adr/index.md: z.md: no front matter status for '
-                                                               'its index line\n'))
-            write(os.path.join(tmp, 'wiki', 'adr', 'z.md'), '---\ndate: 2026-02-01\nstatus: draft\ndescription: Z.\n---\n')
-            self.assertEqual(run('index', 'wiki', cwd=tmp).returncode, 0)
-            self.assertEqual(read(os.path.join(tmp, 'wiki', 'adr', 'index.md')), '<!-- generated: adrs -->\n'
-                             '* [y](y.md) — 2026-02-01, stable. Y.\n* [z](z.md) — 2026-02-01, draft. Z.\n'
-                             '* [x](x.md) — 2026-01-01, draft. X.\n<!-- /generated -->\n')
-            self.assertEqual(run('index', 'wiki', '--check', cwd=tmp).returncode, 0)
+            self.assertEqual(
+                res.stdout.splitlines(),
+                [
+                    "wiki/adr/index.md:2: index out of date, rerun without --check",
+                    "  +None yet.",
+                    "wiki/index.md:4: index out of date, rerun without --check",
+                    "  -* [b](b.md) - old",
+                    "  -* [gone](gone.md) - deleted",
+                    "  +* [b](b.md) - Bee page.",
+                    "  +* [a](a.md) - Ay.",
+                ],
+                res.stderr,
+            )
+            res = run("index", "wiki", cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), ["updated wiki/adr/index.md", "updated wiki/index.md"])
+            self.assertEqual(
+                read(os.path.join(tmp, "wiki", "index.md")),
+                "# Wiki\n\n<!-- generated: pages -->\n"
+                "* [b](b.md) - Bee page.\n* [a](a.md) - Ay.\n* [sub/](sub/index.md) - by hand\n"
+                "<!-- /generated -->\n\nProse.\n",
+            )
+            write(
+                os.path.join(tmp, "wiki", "adr", "x.md"), "---\ndate: 2026-01-01\nstatus: draft\ndescription: X.\n---\n"
+            )
+            write(
+                os.path.join(tmp, "wiki", "adr", "y.md"),
+                "---\ndate: 2026-02-01\nstatus: stable\ndescription: Y.\n---\n",
+            )
+            write(os.path.join(tmp, "wiki", "adr", "z.md"), "---\ndate: 2026-02-01\ndescription: Z.\n---\n")
+            res = run("index", "wiki", cwd=tmp)
+            self.assertEqual(
+                (res.returncode, res.stdout),
+                (1, "wiki/adr/index.md: z.md: no front matter status for its index line\n"),
+            )
+            write(
+                os.path.join(tmp, "wiki", "adr", "z.md"), "---\ndate: 2026-02-01\nstatus: draft\ndescription: Z.\n---\n"
+            )
+            self.assertEqual(run("index", "wiki", cwd=tmp).returncode, 0)
+            self.assertEqual(
+                read(os.path.join(tmp, "wiki", "adr", "index.md")),
+                "<!-- generated: adrs -->\n"
+                "* [y](y.md) — 2026-02-01, stable. Y.\n* [z](z.md) — 2026-02-01, draft. Z.\n"
+                "* [x](x.md) — 2026-01-01, draft. X.\n<!-- /generated -->\n",
+            )
+            self.assertEqual(run("index", "wiki", "--check", cwd=tmp).returncode, 0)
 
     def test_pyproject_and_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'Page.md'), '---\ntitle: x\n---\nText.\n')
-            write(os.path.join(tmp, 'pyproject.toml'),
-                  '[project]\nname = "x"\n[tool.uwiki.schema]\n_required = ["owner"]\nowner = "string"\n')
-            code, lines, err = self.check('.', cwd=tmp)
-            self.assertEqual(lines, ['./Page.md:2: unknown front matter key: title',
-                                     './Page.md:1: missing front matter key: owner'], err)
-            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\nowner = "person"\n')
-            code, lines, err = self.check('.', cwd=tmp)
+            write(os.path.join(tmp, "Page.md"), "---\ntitle: x\n---\nText.\n")
+            write(
+                os.path.join(tmp, "pyproject.toml"),
+                '[project]\nname = "x"\n[tool.uwiki.schema]\n_required = ["owner"]\nowner = "string"\n',
+            )
+            code, lines, err = self.check(".", cwd=tmp)
+            self.assertEqual(
+                lines,
+                ["./Page.md:2: unknown front matter key: title", "./Page.md:1: missing front matter key: owner"],
+                err,
+            )
+            write(os.path.join(tmp, "uwiki.toml"), '[schema]\nowner = "person"\n')
+            code, lines, err = self.check(".", cwd=tmp)
             self.assertEqual(code, 2)
             self.assertIn("schema.owner: 'person' is no list of values nor type", err)
-            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\n"owner!" = "string"\n')
-            code, lines, err = self.check('.', cwd=tmp)
+            write(os.path.join(tmp, "uwiki.toml"), '[schema]\n"owner!" = "string"\n')
+            code, lines, err = self.check(".", cwd=tmp)
             self.assertEqual(code, 2)
             self.assertIn('schema."owner!": list required keys in _required instead of !', err)
-            write(os.path.join(tmp, 'uwiki.toml'), '[schema]\n_required = ["owner"]\n[schema."docs/**"]\nowner = "string"\n')
-            code, lines, err = self.check('.', cwd=tmp)
+            write(
+                os.path.join(tmp, "uwiki.toml"),
+                '[schema]\n_required = ["owner"]\n[schema."docs/**"]\nowner = "string"\n',
+            )
+            code, lines, err = self.check(".", cwd=tmp)
             self.assertEqual(code, 2)
-            self.assertIn('schema._required: owner is not in schema', err)
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nnope = true\n')
-            code, lines, err = self.check('.', cwd=tmp)
+            self.assertIn("schema._required: owner is not in schema", err)
+            write(os.path.join(tmp, "uwiki.toml"), "[check]\nnope = true\n")
+            code, lines, err = self.check(".", cwd=tmp)
             self.assertEqual(code, 2)
-            self.assertIn('unknown option nope of check', err)
-            write(os.path.join(tmp, 'uwiki.toml'), 'title = "Mine"\n[build]\nbacklinks = false\n')
-            write(os.path.join(tmp, 'Other.md'), 'See [[Page]].\n')
-            self.assertEqual(self.check('.', cwd=tmp)[:2], (0, []))
-            res = run('build', '.', '-o', 'out/', cwd=tmp)
+            self.assertIn("unknown option nope of check", err)
+            write(os.path.join(tmp, "uwiki.toml"), 'title = "Mine"\n[build]\nbacklinks = false\n')
+            write(os.path.join(tmp, "Other.md"), "See [[Page]].\n")
+            self.assertEqual(self.check(".", cwd=tmp)[:2], (0, []))
+            res = run("build", ".", "-o", "out/", cwd=tmp)
             self.assertEqual(res.returncode, 0, res.stderr)
-            self.assertEqual(sorted(os.listdir(os.path.join(tmp, 'out'))), ['Mine.html', 'Mine.md'])
-            self.assertIn('<title>Mine</title>', read(os.path.join(tmp, 'out', 'Mine.html')))
-            self.assertNotIn('Backlinks', read(os.path.join(tmp, 'out', 'Mine.md')))
+            self.assertEqual(sorted(os.listdir(os.path.join(tmp, "out"))), ["Mine.html", "Mine.md"])
+            self.assertIn("<title>Mine</title>", read(os.path.join(tmp, "out", "Mine.html")))
+            self.assertNotIn("Backlinks", read(os.path.join(tmp, "out", "Mine.md")))
 
 
 class AliasTest(unittest.TestCase):
     def test_check_reports_clashes_and_shared_aliases(self):
-        res = run('check', 'aliases', cwd=FIXTURES)
-        self.assertEqual(res.stdout.splitlines(), [
-            'aliases/Clash.md:2: alias Star: Star.md has this name, links lead there',
-            'aliases/Clash.md:2: alias Shared: also alias of Sub/Other.md',
-            'aliases/Sub/Other.md:2: alias Shared: also alias of Clash.md',
-        ], res.stderr)
+        res = run("check", "aliases", cwd=FIXTURES)
+        self.assertEqual(
+            res.stdout.splitlines(),
+            [
+                "aliases/Clash.md:2: alias Star: Star.md has this name, links lead there",
+                "aliases/Clash.md:2: alias Shared: also alias of Sub/Other.md",
+                "aliases/Sub/Other.md:2: alias Shared: also alias of Clash.md",
+            ],
+            res.stderr,
+        )
         self.assertEqual(res.returncode, 1)
 
     def test_aliases_resolve_and_keep_text(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', 'aliases', '-o', out, cwd=FIXTURES)
+            res = run("build", "aliases", "-o", out, cwd=FIXTURES)
             self.assertEqual(res.returncode, 0, res.stderr)
-            html, md = read(os.path.join(out, 'aliases.html')), read(os.path.join(out, 'aliases.md'))
-        self.assertIn('Links [VP](#vice-president), [the VPs](#vice-president), [VP > Vice President](#vice-president), '
-                      '[Star](#star), [vp](#vice-president).', md)
+            html, md = read(os.path.join(out, "aliases.html")), read(os.path.join(out, "aliases.md"))
+        self.assertIn(
+            "Links [VP](#vice-president), [the VPs](#vice-president), [VP > Vice President](#vice-president), "
+            "[Star](#star), [vp](#vice-president).",
+            md,
+        )
         self.assertIn('<h2 id="vice-president" class="page" data-title="Vice President" data-aliases="VP, VPs">', html)
-        self.assertIn('<a href="#star">Star</a>', section(html, 'root'))
-        self.assertIn('Backlinks: [aliases](#root)', md)
-        js = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.js'))
-        self.assertIn('h.dataset.aliases', js)
+        self.assertIn('<a href="#star">Star</a>', section(html, "root"))
+        self.assertIn("Backlinks: [aliases](#root)", md)
+        js = read(os.path.join(SRC, "uwiki", "assets", "uwiki.js"))
+        self.assertIn("h.dataset.aliases", js)
 
 
 class ItemTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', ITEMS, '-o', out)
+            res = run("build", ITEMS, "-o", out)
             assert res.returncode == 0, res.stderr
-            cls.html, cls.md = read(os.path.join(out, 'items.html')), read(os.path.join(out, 'items.md'))
+            cls.html, cls.md = read(os.path.join(out, "items.html")), read(os.path.join(out, "items.md"))
 
     def test_links_to_items(self):
-        self.assertIn('Items [Star#2](#star--2), [Star#2.2](#star--2.2), [Star#Light#2](#star--light--2), '
-                      '[third](#star--3), [md](#star--3), [#1](#root--1).', self.md)
+        self.assertIn(
+            "Items [Star#2](#star--2), [Star#2.2](#star--2.2), [Star#Light#2](#star--light--2), "
+            "[third](#star--3), [md](#star--3), [#1](#root--1).",
+            self.md,
+        )
 
     def test_anchors_of_first_lists(self):
         self.assertIn('2. <a id="star--2"></a>Second\n\t1. <a id="star--2.1"></a>Nested one', self.md)
-        self.assertIn('1. Other list, no anchors', self.md)
+        self.assertIn("1. Other list, no anchors", self.md)
         self.assertIn('2. <a id="star--light--2"></a>Light two', self.md)
-        self.assertIn('1. code', self.md)
-        self.assertIn('<li><a class="item-anchor" id="star--2.2"></a>Nested two</li>',
-                      self.html)
-        self.assertIn('Backlinks: [items › 3](#root), [items › 2](#root), [items › 2.2](#root), '
-                      '[items › Light › 2](#root), [items › 9](#root)', self.md)
+        self.assertIn("1. code", self.md)
+        self.assertIn('<li><a class="item-anchor" id="star--2.2"></a>Nested two</li>', self.html)
+        self.assertIn(
+            "Backlinks: [items › 3](#root), [items › 2](#root), [items › 2.2](#root), "
+            "[items › Light › 2](#root), [items › 9](#root)",
+            self.md,
+        )
 
     def test_check_reports_missing_items(self):
-        res = run('check', 'items', cwd=FIXTURES)
-        self.assertEqual(res.stdout.splitlines(), [
-            'items/index.md:2: missing item: Star.md#9',
-            'items/index.md:2: missing item: [[Star#4]]',
-            'items/index.md:2: missing item: [[Star#Light#3]]',
-        ], res.stderr)
+        res = run("check", "items", cwd=FIXTURES)
+        self.assertEqual(
+            res.stdout.splitlines(),
+            [
+                "items/index.md:2: missing item: Star.md#9",
+                "items/index.md:2: missing item: [[Star#4]]",
+                "items/index.md:2: missing item: [[Star#Light#3]]",
+            ],
+            res.stderr,
+        )
 
 
 class MentionTest(unittest.TestCase):
     def test_first_plain_mentions_are_warnings(self):
-        res = run('check', 'mentions', '--mentions', cwd=FIXTURES)
-        self.assertEqual((res.returncode, res.stdout.splitlines()), (0, [
-            'mentions/Space.md:1: warning: unlinked mention: Star',
-            'mentions/Space.md:1: warning: unlinked mention: Vice President',
-            'mentions/Star.md:1: warning: unlinked mention: Space',
-            'mentions/Vice President.md:4: warning: unlinked mention: Star',
-        ]), res.stderr)
+        res = run("check", "mentions", "--mentions", cwd=FIXTURES)
+        self.assertEqual(
+            (res.returncode, res.stdout.splitlines()),
+            (
+                0,
+                [
+                    "mentions/Space.md:1: warning: unlinked mention: Star",
+                    "mentions/Space.md:1: warning: unlinked mention: Vice President",
+                    "mentions/Star.md:1: warning: unlinked mention: Space",
+                    "mentions/Vice President.md:4: warning: unlinked mention: Star",
+                ],
+            ),
+            res.stderr,
+        )
 
     def test_case_and_config(self):
-        res = run('check', 'mentions', '--mentions', '--mentions-ignore-case', '--mentions-min-length', '2',
-                  '--mentions-ignore', 'star', cwd=FIXTURES)
-        self.assertEqual(res.stdout.splitlines(), [
-            'mentions/Space.md:1: warning: unlinked mention: Vice President',
-            'mentions/Star.md:1: warning: unlinked mention: Space',
-            'mentions/Star.md:5: warning: unlinked mention: Go',
-        ], res.stderr)
+        res = run(
+            "check",
+            "mentions",
+            "--mentions",
+            "--mentions-ignore-case",
+            "--mentions-min-length",
+            "2",
+            "--mentions-ignore",
+            "star",
+            cwd=FIXTURES,
+        )
+        self.assertEqual(
+            res.stdout.splitlines(),
+            [
+                "mentions/Space.md:1: warning: unlinked mention: Vice President",
+                "mentions/Star.md:1: warning: unlinked mention: Space",
+                "mentions/Star.md:5: warning: unlinked mention: Go",
+            ],
+            res.stderr,
+        )
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'Star.md'), 'Star.\n')
-            write(os.path.join(tmp, 'Space.md'), 'Space has a Star and the Moon.\n')
-            write(os.path.join(tmp, 'Moon.md'), 'Moon.\n')
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nmentions = true\nmentions-ignore = ["Moon"]\n')
-            res = run('check', '.', cwd=tmp)
-        self.assertEqual(res.stdout.splitlines(), ['./Space.md:1: warning: unlinked mention: Star'], res.stderr)
+            write(os.path.join(tmp, "Star.md"), "Star.\n")
+            write(os.path.join(tmp, "Space.md"), "Space has a Star and the Moon.\n")
+            write(os.path.join(tmp, "Moon.md"), "Moon.\n")
+            write(os.path.join(tmp, "uwiki.toml"), '[check]\nmentions = true\nmentions-ignore = ["Moon"]\n')
+            res = run("check", ".", cwd=tmp)
+        self.assertEqual(res.stdout.splitlines(), ["./Space.md:1: warning: unlinked mention: Star"], res.stderr)
 
     def test_every_mention_plurals_and_first_letter(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'Class.md'), 'Class.\n')
-            write(os.path.join(tmp, 'ForceDiscard.md'), 'Force Discard.\n')
-            write(os.path.join(tmp, 'Action.md'), '1. Of the [[Class]], or of several Classes: a class of\n'
-                                                   '   **Class**, Force discard\n')
-            res = run('check', '.', '--mentions', '--mentions-every', cwd=tmp)
-        self.assertEqual(res.stdout.splitlines(), [
-            './Action.md:1: warning: unlinked mention: Classes',
-            './Action.md:2: warning: unlinked mention: Force discard',
-        ], res.stderr)
+            write(os.path.join(tmp, "Class.md"), "Class.\n")
+            write(os.path.join(tmp, "ForceDiscard.md"), "Force Discard.\n")
+            write(
+                os.path.join(tmp, "Action.md"),
+                "1. Of the [[Class]], or of several Classes: a class of\n   **Class**, Force discard\n",
+            )
+            res = run("check", ".", "--mentions", "--mentions-every", cwd=tmp)
+        self.assertEqual(
+            res.stdout.splitlines(),
+            [
+                "./Action.md:1: warning: unlinked mention: Classes",
+                "./Action.md:2: warning: unlinked mention: Force discard",
+            ],
+            res.stderr,
+        )
 
     def test_generated_blocks_have_no_mentions(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'Star.md'), 'Star.\n')
-            write(os.path.join(tmp, 'Space.md'), 'Space.\n')
-            index = ('<!-- generated: pages -->\n* [Space](Space.md) - holds a Star\n<!-- /generated -->\n\n'
-                     '[[Space]]: a Star too\n')
-            write(os.path.join(tmp, 'index.md'), index)
-            res = run('check', '.', '--mentions', cwd=tmp)
-            self.assertEqual(res.stdout.splitlines(), ['./index.md:5: warning: unlinked mention: Star'], res.stderr)
-            run('link', '.', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'index.md')), index.replace('a Star too', 'a [[Star]] too'))
+            write(os.path.join(tmp, "Star.md"), "Star.\n")
+            write(os.path.join(tmp, "Space.md"), "Space.\n")
+            index = (
+                "<!-- generated: pages -->\n* [Space](Space.md) - holds a Star\n<!-- /generated -->\n\n"
+                "[[Space]]: a Star too\n"
+            )
+            write(os.path.join(tmp, "index.md"), index)
+            res = run("check", ".", "--mentions", cwd=tmp)
+            self.assertEqual(res.stdout.splitlines(), ["./index.md:5: warning: unlinked mention: Star"], res.stderr)
+            run("link", ".", cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, "index.md")), index.replace("a Star too", "a [[Star]] too"))
 
     def test_excluded_pages_have_no_mentions(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '[check]\nmentions = true\nmentions-exclude = ["wiki/prompts/**"]\n')
-            write(os.path.join(tmp, 'wiki', 'Star.md'), 'Star.\n')
-            write(os.path.join(tmp, 'wiki', 'Space.md'), 'Space has a Star.\n')
-            write(os.path.join(tmp, 'wiki', 'prompts', 'ask.md'), 'Ask about a Star.\n')
-            res = run('check', 'wiki', cwd=tmp)
-            self.assertEqual([line for line in res.stdout.splitlines() if 'mention' in line],
-                             ['wiki/Space.md:1: warning: unlinked mention: Star'], res.stderr)
-            run('link', 'wiki', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'wiki', 'Space.md')), 'Space has a [[Star]].\n')
-            self.assertEqual(read(os.path.join(tmp, 'wiki', 'prompts', 'ask.md')), 'Ask about a Star.\n')
+            write(os.path.join(tmp, "uwiki.toml"), '[check]\nmentions = true\nmentions-exclude = ["wiki/prompts/**"]\n')
+            write(os.path.join(tmp, "wiki", "Star.md"), "Star.\n")
+            write(os.path.join(tmp, "wiki", "Space.md"), "Space has a Star.\n")
+            write(os.path.join(tmp, "wiki", "prompts", "ask.md"), "Ask about a Star.\n")
+            res = run("check", "wiki", cwd=tmp)
+            self.assertEqual(
+                [line for line in res.stdout.splitlines() if "mention" in line],
+                ["wiki/Space.md:1: warning: unlinked mention: Star"],
+                res.stderr,
+            )
+            run("link", "wiki", cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, "wiki", "Space.md")), "Space has a [[Star]].\n")
+            self.assertEqual(read(os.path.join(tmp, "wiki", "prompts", "ask.md")), "Ask about a Star.\n")
 
 
 class LinkMentionTest(unittest.TestCase):
     def test_links_every_mention_and_rewraps(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'Class.md'), 'Class.\n')
-            write(os.path.join(tmp, 'ForceDiscard.md'), 'Force Discard.\n')
-            write(os.path.join(tmp, 'Component.md'), '---\naliases: [Tile]\n---\n1. **Tile** is a piece\n')
-            action = ('1. Of the [[Class]], or of several Classes and their Tiles, `Class` stays, a class too,\n'
-                      '   Force discard is a Class\n\n| Class | Force Discard |\n| - | - |\n\n'
-                      'A **wrapped\nClass** stays bold.\n')
-            write(os.path.join(tmp, 'Action.md'), action)
-            res = run('link', '.', '--dry-run', '--mentions-every', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'Action.md')), action)
-            self.assertIn('./Action.md:2: [[ForceDiscard|Force discard]] is a [[Class]]', res.stdout)
-            res = run('link', '.', '--mentions-every', cwd=tmp)
-            self.assertEqual(res.stdout, 'linked 3 lines in ./Action.md\n', res.stderr)
-            self.assertEqual(read(os.path.join(tmp, 'Action.md')),
-                             '1. Of the [[Class]], or of several [[Class]]es and their [[Tile]]s,\n'
-                             '   `Class` stays, a class too, [[ForceDiscard|Force discard]] is a\n'
-                             '   [[Class]]\n\n'
-                             '| [[Class]] | [[ForceDiscard\\|Force Discard]] |\n| - | - |\n\nA **wrapped\nClass** stays bold.\n')
-            self.assertEqual(run('check', '.', cwd=tmp).stdout, '')
+            write(os.path.join(tmp, "Class.md"), "Class.\n")
+            write(os.path.join(tmp, "ForceDiscard.md"), "Force Discard.\n")
+            write(os.path.join(tmp, "Component.md"), "---\naliases: [Tile]\n---\n1. **Tile** is a piece\n")
+            action = (
+                "1. Of the [[Class]], or of several Classes and their Tiles, `Class` stays, a class too,\n"
+                "   Force discard is a Class\n\n| Class | Force Discard |\n| - | - |\n\n"
+                "A **wrapped\nClass** stays bold.\n"
+            )
+            write(os.path.join(tmp, "Action.md"), action)
+            res = run("link", ".", "--dry-run", "--mentions-every", cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, "Action.md")), action)
+            self.assertIn("./Action.md:2: [[ForceDiscard|Force discard]] is a [[Class]]", res.stdout)
+            res = run("link", ".", "--mentions-every", cwd=tmp)
+            self.assertEqual(res.stdout, "linked 3 lines in ./Action.md\n", res.stderr)
+            self.assertEqual(
+                read(os.path.join(tmp, "Action.md")),
+                "1. Of the [[Class]], or of several [[Class]]es and their [[Tile]]s,\n"
+                "   `Class` stays, a class too, [[ForceDiscard|Force discard]] is a\n"
+                "   [[Class]]\n\n"
+                "| [[Class]] | [[ForceDiscard\\|Force Discard]] |\n| - | - |\n\nA **wrapped\nClass** stays bold.\n",
+            )
+            self.assertEqual(run("check", ".", cwd=tmp).stdout, "")
             with tempfile.TemporaryDirectory() as out:
-                res = run('build', tmp, '-o', out, '--md', '--title', 'wiki')
-                self.assertIn('| [Class](#class) | [Force Discard](#force-discard) |',
-                              read(os.path.join(out, 'wiki.md')), res.stderr)
-
+                res = run("build", tmp, "-o", out, "--md", "--title", "wiki")
+                self.assertIn(
+                    "| [Class](#class) | [Force Discard](#force-discard) |",
+                    read(os.path.join(out, "wiki.md")),
+                    res.stderr,
+                )
 
     def test_links_first_mention_of_a_page_not_linked_yet(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'generated', 'labs.md'), '# Labs\n')
-            write(os.path.join(tmp, 'Star.md'), 'Star.\n')
-            write(os.path.join(tmp, 'index.md'), 'See [[generated/labs]] for Labs, a Star, two Stars.\n')
-            res = run('link', '.', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'index.md')),
-                             'See [[generated/labs]] for Labs, a [[Star]], two Stars.\n', res.stderr)
-            self.assertEqual(run('check', '.', '--mentions', cwd=tmp).stdout, '')
+            write(os.path.join(tmp, "generated", "labs.md"), "# Labs\n")
+            write(os.path.join(tmp, "Star.md"), "Star.\n")
+            write(os.path.join(tmp, "index.md"), "See [[generated/labs]] for Labs, a Star, two Stars.\n")
+            res = run("link", ".", cwd=tmp)
+            self.assertEqual(
+                read(os.path.join(tmp, "index.md")),
+                "See [[generated/labs]] for Labs, a [[Star]], two Stars.\n",
+                res.stderr,
+            )
+            self.assertEqual(run("check", ".", "--mentions", cwd=tmp).stdout, "")
 
     def test_ignored_terms_match_in_any_case(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'CLAUDE.md'), '# CLAUDE\n')
-            write(os.path.join(tmp, 'index.md'), 'Ask Claude.\n')
-            res = run('check', '.', '--mentions', '--mentions-ignore', 'Claude', cwd=tmp)
-            self.assertEqual(res.stdout, '', res.stderr)
-            run('link', '.', '--mentions-ignore', 'Claude', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'index.md')), 'Ask Claude.\n')
+            write(os.path.join(tmp, "CLAUDE.md"), "# CLAUDE\n")
+            write(os.path.join(tmp, "index.md"), "Ask Claude.\n")
+            res = run("check", ".", "--mentions", "--mentions-ignore", "Claude", cwd=tmp)
+            self.assertEqual(res.stdout, "", res.stderr)
+            run("link", ".", "--mentions-ignore", "Claude", cwd=tmp)
+            self.assertEqual(read(os.path.join(tmp, "index.md")), "Ask Claude.\n")
 
     def test_own_terms_get_bold(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'Class.md'), '---\naliases: [Kind]\n---\n1. **Class** of a class: Classes, Kinds\n')
-            res = run('check', '.', '--mentions', '--mentions-every', '--mentions-self-bold', cwd=tmp)
-            self.assertEqual(res.stdout.splitlines(), ['./Class.md:4: warning: own term not bold: Classes',
-                                                       './Class.md:4: warning: own term not bold: Kinds'])
-            run('link', '.', '--mentions-self-bold', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'Class.md')),
-                             '---\naliases: [Kind]\n---\n1. **Class** of a class: **Classes**, **Kinds**\n')
+            write(os.path.join(tmp, "Class.md"), "---\naliases: [Kind]\n---\n1. **Class** of a class: Classes, Kinds\n")
+            res = run("check", ".", "--mentions", "--mentions-every", "--mentions-self-bold", cwd=tmp)
+            self.assertEqual(
+                res.stdout.splitlines(),
+                [
+                    "./Class.md:4: warning: own term not bold: Classes",
+                    "./Class.md:4: warning: own term not bold: Kinds",
+                ],
+            )
+            run("link", ".", "--mentions-self-bold", cwd=tmp)
+            self.assertEqual(
+                read(os.path.join(tmp, "Class.md")),
+                "---\naliases: [Kind]\n---\n1. **Class** of a class: **Classes**, **Kinds**\n",
+            )
 
     def test_ignored_name_keeps_its_terms_unlinked(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'Star.md'), 'Star.\n')
-            write(os.path.join(tmp, 'Realm.md'), 'Realm.\n')
-            write(os.path.join(tmp, 'index.md'), '[[Star]] [[Realm]]: a Star, like in Star Realms, in Star\n'
-                                                 '   Realms too, a Realm\n')
-            run('link', '.', '--mentions-every', '--mentions-ignore', 'Star Realms', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'index.md')), '[[Star]] [[Realm]]: a [[Star]], like in Star Realms, '
-                                                                   'in Star\n   Realms too, a [[Realm]]\n')
+            write(os.path.join(tmp, "Star.md"), "Star.\n")
+            write(os.path.join(tmp, "Realm.md"), "Realm.\n")
+            write(
+                os.path.join(tmp, "index.md"),
+                "[[Star]] [[Realm]]: a Star, like in Star Realms, in Star\n   Realms too, a Realm\n",
+            )
+            run("link", ".", "--mentions-every", "--mentions-ignore", "Star Realms", cwd=tmp)
+            self.assertEqual(
+                read(os.path.join(tmp, "index.md")),
+                "[[Star]] [[Realm]]: a [[Star]], like in Star Realms, in Star\n   Realms too, a [[Realm]]\n",
+            )
 
     def test_folder_page_goes_by_its_own_title(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'Cards', 'Card.md'), 'Card.\n')
-            write(os.path.join(tmp, 'Cards', 'Ship.md'), 'Ship.\n')
-            write(os.path.join(tmp, 'index.md'), '[[Card]], [[Ship]]: a Card, two Cards.\n')
-            res = run('link', '.', '--mentions-every', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'index.md')), '[[Card]], [[Ship]]: a [[Card]], two [[Card]]s.\n',
-                             res.stderr)
+            write(os.path.join(tmp, "Cards", "Card.md"), "Card.\n")
+            write(os.path.join(tmp, "Cards", "Ship.md"), "Ship.\n")
+            write(os.path.join(tmp, "index.md"), "[[Card]], [[Ship]]: a Card, two Cards.\n")
+            res = run("link", ".", "--mentions-every", cwd=tmp)
+            self.assertEqual(
+                read(os.path.join(tmp, "index.md")), "[[Card]], [[Ship]]: a [[Card]], two [[Card]]s.\n", res.stderr
+            )
+
 
 class FolderPageLinkTest(unittest.TestCase):
     """[[Card]] to folder page Card.md of Cards/ goes by the page's title, [[Cards]] by the folder's."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        write(os.path.join(self.tmp.name, 'Cards', 'Card.md'), 'A card.\n')
-        write(os.path.join(self.tmp.name, 'index.md'), 'Two [[Card]]s in [[Cards]], [[Card|one]].\n')
+        write(os.path.join(self.tmp.name, "Cards", "Card.md"), "A card.\n")
+        write(os.path.join(self.tmp.name, "index.md"), "Two [[Card]]s in [[Cards]], [[Card|one]].\n")
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def test_link_shows_name_it_takes(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', self.tmp.name, '-o', out, '--md', '--title', 'wiki')
-            md = read(os.path.join(out, 'wiki.md'))
+            res = run("build", self.tmp.name, "-o", out, "--md", "--title", "wiki")
+            md = read(os.path.join(out, "wiki.md"))
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn('Two [Card](#cards)s in [Cards](#cards), [one](#cards).', md)
+        self.assertIn("Two [Card](#cards)s in [Cards](#cards), [one](#cards).", md)
 
     def test_lsp_definition_and_hover_on_word_ending(self):
         lsp = Lsp(self.tmp.name)
         try:
-            lsp.open('index.md')
+            lsp.open("index.md")
             for col in (6, 12):  # in [[Card]], on its s
-                res = lsp.at('textDocument/definition', 'index.md', 0, col)
-                self.assertEqual(res and res['uri'].rsplit('/', 1)[-1], 'Card.md', col)
-            res = lsp.at('textDocument/hover', 'index.md', 0, 12)
-            self.assertEqual(res['contents']['value'], '**Card**\n\nA card.')
-            self.assertEqual((res['range']['start']['character'], res['range']['end']['character']), (4, 13))
-            self.assertIsNone(lsp.at('textDocument/definition', 'index.md', 0, 13))
+                res = lsp.at("textDocument/definition", "index.md", 0, col)
+                self.assertEqual(res and res["uri"].rsplit("/", 1)[-1], "Card.md", col)
+            res = lsp.at("textDocument/hover", "index.md", 0, 12)
+            self.assertEqual(res["contents"]["value"], "**Card**\n\nA card.")
+            self.assertEqual((res["range"]["start"]["character"], res["range"]["end"]["character"]), (4, 13))
+            self.assertIsNone(lsp.at("textDocument/definition", "index.md", 0, 13))
         finally:
             lsp.close()
+
 
 class TemplateIdTest(unittest.TestCase):
     def test_page_named_like_template_id_gets_path_anchor(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
-            write(os.path.join(tmp, 'index.md'), 'See [[Home]].\n')
-            write(os.path.join(tmp, 'rules', 'Home.md'), 'Home.\n')
-            res = run('build', tmp, '-o', out, '--title', 'wiki')
-            html = read(os.path.join(out, 'wiki.html'))
+            write(os.path.join(tmp, "index.md"), "See [[Home]].\n")
+            write(os.path.join(tmp, "rules", "Home.md"), "Home.\n")
+            res = run("build", tmp, "-o", out, "--title", "wiki")
+            html = read(os.path.join(out, "wiki.html"))
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertIn('href="#rules-home">Home</a>', html)
         self.assertEqual(html.count('id="home"'), 1)
 
     def test_help_tells_version_and_build_time(self):
         from uwiki import __version__
+
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
-            write(os.path.join(tmp, 'Help.md'), 'Help page.\n')
-            res = run('build', tmp, '-o', out, '--title', 'wiki')
-            html = read(os.path.join(out, 'wiki.html'))
+            write(os.path.join(tmp, "Help.md"), "Help page.\n")
+            res = run("build", tmp, "-o", out, "--title", "wiki")
+            html = read(os.path.join(out, "wiki.html"))
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertIn('<button id="_help"', html)
-        self.assertIn(f'</a> {__version__}.', html)
+        self.assertIn(f"</a> {__version__}.", html)
         built = re.search(r'<time datetime="([^"]+)">', html)[1]
         age = datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(built)
         self.assertLess(abs(age.total_seconds()), 60)
-        self.assertIn('id="help"', html, 'page Help keeps its anchor')
-        self.assertNotIn('Live:', html, 'built, not served')
+        self.assertIn('id="help"', html, "page Help keeps its anchor")
+        self.assertNotIn("Live:", html, "built, not served")
 
     def test_agents_md_is_titled_by_its_name(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
-            write(os.path.join(tmp, 'index.md'), 'See [[AGENTS]].\n')
-            write(os.path.join(tmp, 'AGENTS.md'), '---\ntitle: Agents Guide\n---\n# How to write\n\nRules.\n')
-            write(os.path.join(tmp, 'sub', 'agents.md'), '# Lower Case\n')
-            res = run('build', tmp, '-o', out, '--title', 'wiki')
-            html = read(os.path.join(out, 'wiki.html'))
+            write(os.path.join(tmp, "index.md"), "See [[AGENTS]].\n")
+            write(os.path.join(tmp, "AGENTS.md"), "---\ntitle: Agents Guide\n---\n# How to write\n\nRules.\n")
+            write(os.path.join(tmp, "sub", "agents.md"), "# Lower Case\n")
+            res = run("build", tmp, "-o", out, "--title", "wiki")
+            html = read(os.path.join(out, "wiki.html"))
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertIn('data-title="AGENTS.md">AGENTS.md</h2>', html)
-        self.assertIn('>How to write</h3>', html, 'its heading stays, under the title')
+        self.assertIn(">How to write</h3>", html, "its heading stays, under the title")
         self.assertIn('<a href="#agents">AGENTS.md</a>', html)
-        self.assertIn('>Lower Case</h', html, 'only the name tools look for')
+        self.assertIn(">Lower Case</h", html, "only the name tools look for")
 
     def test_title_is_of_index_page_file_name_of_folder(self):
         with tempfile.TemporaryDirectory() as parent:
-            tmp = os.path.join(parent, 'mywiki')
-            write(os.path.join(tmp, 'README.md'), '# My Wiki\n\nHome.\n')
-            write(os.path.join(tmp, 'notes', 'index.md'), '---\ntitle: Notes Front\n---\n# Notes Heading\n')
-            res = run('build', tmp, '-o', parent + os.sep)
-            html = read(os.path.join(parent, 'mywiki.html'))
+            tmp = os.path.join(parent, "mywiki")
+            write(os.path.join(tmp, "README.md"), "# My Wiki\n\nHome.\n")
+            write(os.path.join(tmp, "notes", "index.md"), "---\ntitle: Notes Front\n---\n# Notes Heading\n")
+            res = run("build", tmp, "-o", parent + os.sep)
+            html = read(os.path.join(parent, "mywiki.html"))
             self.assertEqual(res.returncode, 0, res.stderr)
-            self.assertIn('<title>My Wiki</title>', html)
+            self.assertIn("<title>My Wiki</title>", html)
             self.assertIn('<a id="home" href="#root">My Wiki</a>', html)
-            run('build', os.path.join(tmp, 'notes'), '-o', parent + os.sep)
-            self.assertIn('<title>Notes Front</title>', read(os.path.join(parent, 'notes.html')))
-            run('build', tmp, '-o', parent + os.sep, '--title', 'Given')
-            self.assertIn('<title>Given</title>', read(os.path.join(parent, 'Given.html')))
-            os.remove(os.path.join(tmp, 'README.md'))
-            run('build', tmp, '-o', os.path.join(parent, 'out.html'))
-            self.assertIn('<title>mywiki</title>', read(os.path.join(parent, 'out.html')), 'no index page: folder name')
+            run("build", os.path.join(tmp, "notes"), "-o", parent + os.sep)
+            self.assertIn("<title>Notes Front</title>", read(os.path.join(parent, "notes.html")))
+            run("build", tmp, "-o", parent + os.sep, "--title", "Given")
+            self.assertIn("<title>Given</title>", read(os.path.join(parent, "Given.html")))
+            os.remove(os.path.join(tmp, "README.md"))
+            run("build", tmp, "-o", os.path.join(parent, "out.html"))
+            self.assertIn("<title>mywiki</title>", read(os.path.join(parent, "out.html")), "no index page: folder name")
 
     def test_help_tells_git_commit_built_from(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
-            git = lambda *args: subprocess.run(['git', '-C', tmp, '-c', 'user.name=t', '-c', 'user.email=t@t',
-                                                '-c', 'commit.gpgsign=false', *args],
-                                               check=True, capture_output=True, text=True).stdout.strip()
-            git('init', '-q', '-b', 'trunk')
-            git('remote', 'add', 'origin', 'git@github.com:me/wiki.git')
-            write(os.path.join(tmp, 'index.md'), 'Home.\n')
-            git('add', '.')
-            git('commit', '-q', '-m', 'first')
-            sha = git('rev-parse', '--short', 'HEAD')
-            run('build', tmp, '-o', out, '--title', 'wiki')
-            clean = read(os.path.join(out, 'wiki.html'))
-            write(os.path.join(tmp, 'new.md'), 'New.\n')
-            run('build', tmp, '-o', out, '--title', 'wiki')
-            dirty = read(os.path.join(out, 'wiki.html'))
-        self.assertIn(' from <a href="https://github.com/me/wiki" target="_blank" rel="noopener">me/wiki</a> at '
-                      f'<a href="https://github.com/me/wiki/commit/{sha}" target="_blank" rel="noopener">'
-                      f'<code>{sha}</code></a> on trunk branch.', clean)
-        self.assertIn(f'</a> on trunk branch, with uncommitted changes.', dirty)
+            git = lambda *args: subprocess.run(
+                ["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            git("init", "-q", "-b", "trunk")
+            git("remote", "add", "origin", "git@github.com:me/wiki.git")
+            write(os.path.join(tmp, "index.md"), "Home.\n")
+            git("add", ".")
+            git("commit", "-q", "-m", "first")
+            sha = git("rev-parse", "--short", "HEAD")
+            run("build", tmp, "-o", out, "--title", "wiki")
+            clean = read(os.path.join(out, "wiki.html"))
+            write(os.path.join(tmp, "new.md"), "New.\n")
+            run("build", tmp, "-o", out, "--title", "wiki")
+            dirty = read(os.path.join(out, "wiki.html"))
+        self.assertIn(
+            ' from <a href="https://github.com/me/wiki" target="_blank" rel="noopener">me/wiki</a> at '
+            f'<a href="https://github.com/me/wiki/commit/{sha}" target="_blank" rel="noopener">'
+            f"<code>{sha}</code></a> on trunk branch.",
+            clean,
+        )
+        self.assertIn("</a> on trunk branch, with uncommitted changes.", dirty)
 
     def test_help_out_of_git_tells_no_commit(self):
         from unittest import mock
-        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out, \
-                mock.patch.dict(os.environ, {'GIT_CEILING_DIRECTORIES': os.path.dirname(tmp)}):
-            write(os.path.join(tmp, 'index.md'), 'Home.\n')
-            run('build', tmp, '-o', out, '--title', 'wiki')
-            html = read(os.path.join(out, 'wiki.html'))
-        self.assertRegex(html, r'</time>\.\s*<button')
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            tempfile.TemporaryDirectory() as out,
+            mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": os.path.dirname(tmp)}),
+        ):
+            write(os.path.join(tmp, "index.md"), "Home.\n")
+            run("build", tmp, "-o", out, "--title", "wiki")
+            html = read(os.path.join(out, "wiki.html"))
+        self.assertRegex(html, r"</time>\.\s*<button")
 
     def test_config_window_shows_build_options_and_config_file(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
-            write(os.path.join(tmp, 'uwiki.toml'), '# drafts stay out\nexclude = ["drafts"]\n[schema]\nstatus = ["a<b"]\n')
-            write(os.path.join(tmp, 'index.md'), 'Home.\n')
-            res = run('build', tmp, '-o', out, '--title', 'wiki', '--no-backlinks')
-            html = read(os.path.join(out, 'wiki.html'))
+            write(
+                os.path.join(tmp, "uwiki.toml"), '# drafts stay out\nexclude = ["drafts"]\n[schema]\nstatus = ["a<b"]\n'
+            )
+            write(os.path.join(tmp, "index.md"), "Home.\n")
+            res = run("build", tmp, "-o", out, "--title", "wiki", "--no-backlinks")
+            html = read(os.path.join(out, "wiki.html"))
         self.assertEqual(res.returncode, 0, res.stderr)
-        box = html[html.index('<dialog id="_config_box"'):]
-        self.assertIn('<pre><code class="language-toml">paths = [&quot;.&quot;]\ntitle = &quot;wiki&quot;\ninclude = []\nexclude = [&quot;drafts&quot;]\n'
-                      'backlinks = false\nfront-matter = true\n</code></pre>', box)
-        self.assertIn('<h2>uwiki.toml</h2><pre><code class="language-toml"># drafts stay out\nexclude = [&quot;drafts&quot;]\n[schema]\n'
-                      'status = [&quot;a&lt;b&quot;]\n</code></pre>', box)
+        box = html[html.index('<dialog id="_config_box"') :]
+        self.assertIn(
+            '<pre><code class="language-toml">paths = [&quot;.&quot;]\ntitle = &quot;wiki&quot;\ninclude = []\nexclude = [&quot;drafts&quot;]\n'
+            "backlinks = false\nfront-matter = true\n</code></pre>",
+            box,
+        )
+        self.assertIn(
+            '<h2>uwiki.toml</h2><pre><code class="language-toml"># drafts stay out\nexclude = [&quot;drafts&quot;]\n[schema]\n'
+            "status = [&quot;a&lt;b&quot;]\n</code></pre>",
+            box,
+        )
 
     def test_config_window_shows_pyproject_table_as_toml(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
-            write(os.path.join(tmp, 'pyproject.toml'), '[project]\nname = "x"\n[tool.uwiki]\nexclude = ["d"]\n'
-                                                       '[tool.uwiki.build]\ntitle = "T"\n')
-            write(os.path.join(tmp, 'index.md'), 'Home.\n')
-            run('build', tmp, '-o', out + os.sep)
-            html = read(os.path.join(out, 'T.html'))
-        self.assertIn('<h2>pyproject.toml</h2><pre><code class="language-toml">[tool.uwiki]\nexclude = [&quot;d&quot;]\n\n'
-                      '[tool.uwiki.build]\ntitle = &quot;T&quot;\n</code></pre>', html)
+            write(
+                os.path.join(tmp, "pyproject.toml"),
+                '[project]\nname = "x"\n[tool.uwiki]\nexclude = ["d"]\n[tool.uwiki.build]\ntitle = "T"\n',
+            )
+            write(os.path.join(tmp, "index.md"), "Home.\n")
+            run("build", tmp, "-o", out + os.sep)
+            html = read(os.path.join(out, "T.html"))
+        self.assertIn(
+            '<h2>pyproject.toml</h2><pre><code class="language-toml">[tool.uwiki]\nexclude = [&quot;d&quot;]\n\n'
+            "[tool.uwiki.build]\ntitle = &quot;T&quot;\n</code></pre>",
+            html,
+        )
 
     def test_config_without_file_says_none(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
-            write(os.path.join(tmp, 'index.md'), 'Home.\n')
-            run('build', tmp, '-o', out, '--title', 'wiki')
-            html = read(os.path.join(out, 'wiki.html'))
-        self.assertIn('<h2>Config</h2><p>none:', html)
+            write(os.path.join(tmp, "index.md"), "Home.\n")
+            run("build", tmp, "-o", out, "--title", "wiki")
+            html = read(os.path.join(out, "wiki.html"))
+        self.assertIn("<h2>Config</h2><p>none:", html)
 
     def test_every_template_id_is_reserved(self):
         from uwiki.vault import TEMPLATE_IDS, cebabize
-        template = read(os.path.join(SRC, 'uwiki', 'assets', 'uwiki.html'))
+
+        template = read(os.path.join(SRC, "uwiki", "assets", "uwiki.html"))
         ids = set(re.findall(r'\bid="([^"]+)"', template))
-        self.assertEqual({i for i in ids if not i.startswith('_')}, set(TEMPLATE_IDS))
+        self.assertEqual({i for i in ids if not i.startswith("_")}, set(TEMPLATE_IDS))
         for i in ids - set(TEMPLATE_IDS):
-            self.assertNotIn('_', cebabize(i), 'no anchor takes an id with _')
+            self.assertNotIn("_", cebabize(i), "no anchor takes an id with _")
+
 
 class SourceTest(unittest.TestCase):
     """Remote URLs as the help links them, credentials dropped, local ones not linked."""
 
     def test_web_of_remotes(self):
         from uwiki.source import web
+
         for remote, expected in [
-            ('git@github.com:hiqsol/uwiki.git', ('hiqsol/uwiki', 'https://github.com/hiqsol/uwiki')),
-            ('ssh://git@gitlab.com:2222/a/b/c.git', ('a/b/c', 'https://gitlab.com/a/b/c')),
-            ('https://user:token@github.com/hiqsol/uwiki.git', ('hiqsol/uwiki', 'https://github.com/hiqsol/uwiki')),
-            ('https://git.example.org/x/y/', ('x/y', 'https://git.example.org/x/y')),
-            ('/srv/git/wiki.git', ('', '')),
-            ('', ('', '')),
+            ("git@github.com:hiqsol/uwiki.git", ("hiqsol/uwiki", "https://github.com/hiqsol/uwiki")),
+            ("ssh://git@gitlab.com:2222/a/b/c.git", ("a/b/c", "https://gitlab.com/a/b/c")),
+            ("https://user:token@github.com/hiqsol/uwiki.git", ("hiqsol/uwiki", "https://github.com/hiqsol/uwiki")),
+            ("https://git.example.org/x/y/", ("x/y", "https://git.example.org/x/y")),
+            ("/srv/git/wiki.git", ("", "")),
+            ("", ("", "")),
         ]:
             self.assertEqual(web(remote), expected, remote)
+
 
 class TomlDumpTest(unittest.TestCase):
     """Config data written back as TOML reads as the same data."""
 
     def test_round_trip(self):
         import tomllib
+
         from uwiki.config import dumps
-        data = {'exclude': ['build'], 'q': 'a"b\\c\nd', 'n': 1.5, 'on': True, 'when': datetime.date(2024, 1, 2),
-                'build': {'title': 'x'}, 'schema': {'_required': ['status'], 'status': ['a', 'b'],
-                                                   'docs/**': {'owner': 'string'}}, 'maps': [{'a': 1}]}
+
+        data = {
+            "exclude": ["build"],
+            "q": 'a"b\\c\nd',
+            "n": 1.5,
+            "on": True,
+            "when": datetime.date(2024, 1, 2),
+            "build": {"title": "x"},
+            "schema": {"_required": ["status"], "status": ["a", "b"], "docs/**": {"owner": "string"}},
+            "maps": [{"a": 1}],
+        }
         self.assertEqual(tomllib.loads(dumps(data)), data)
-        self.assertEqual(tomllib.loads(dumps(data, ('tool', 'uwiki')))['tool']['uwiki'], data)
+        self.assertEqual(tomllib.loads(dumps(data, ("tool", "uwiki")))["tool"]["uwiki"], data)
+
 
 class AliasItemTest(unittest.TestCase):
     """An alias bold in a list item leads to that item."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        write(os.path.join(self.tmp.name, 'Component.md'),
-              '---\naliases: [Tile, Token, Piece]\n---\n1. **Component** is a piece\n2. Components are:\n'
-              '\t1. **Card**\n\t2. **Tile**: a piece of the Field\n\t3. **Tokens**: counted\n')
-        write(os.path.join(self.tmp.name, 'index.md'), 'See [[Tile]], [[Token]], [[Piece]] and [[Component]].\n')
+        write(
+            os.path.join(self.tmp.name, "Component.md"),
+            "---\naliases: [Tile, Token, Piece]\n---\n1. **Component** is a piece\n2. Components are:\n"
+            "\t1. **Card**\n\t2. **Tile**: a piece of the Field\n\t3. **Tokens**: counted\n",
+        )
+        write(os.path.join(self.tmp.name, "index.md"), "See [[Tile]], [[Token]], [[Piece]] and [[Component]].\n")
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def test_link_leads_to_item_with_alias_anchor(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', self.tmp.name, '-o', out, '--md', '--title', 'wiki')
-            md = read(os.path.join(out, 'wiki.md'))
+            res = run("build", self.tmp.name, "-o", out, "--md", "--title", "wiki")
+            md = read(os.path.join(out, "wiki.md"))
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn('See [Tile](#component--2.2), [Token](#component--2.3), [Piece](#component) and '
-                      '[Component](#component).', md)
+        self.assertIn(
+            "See [Tile](#component--2.2), [Token](#component--2.3), [Piece](#component) and [Component](#component).",
+            md,
+        )
         self.assertIn('2. <a id="component--2.2"></a><a id="component--tile"></a>**Tile**', md)
 
     def test_lsp_definition_and_hover(self):
         lsp = Lsp(self.tmp.name)
         try:
-            lsp.open('index.md')
-            res = lsp.at('textDocument/definition', 'index.md', 0, 6)
-            self.assertEqual((res['uri'].rsplit('/', 1)[-1], res['range']['start']['line']), ('Component.md', 6))
-            res = lsp.at('textDocument/hover', 'index.md', 0, 6)
-            self.assertEqual(res['contents']['value'], '**Component#2.2**\n\n2. **Tile**: a piece of the Field')
+            lsp.open("index.md")
+            res = lsp.at("textDocument/definition", "index.md", 0, 6)
+            self.assertEqual((res["uri"].rsplit("/", 1)[-1], res["range"]["start"]["line"]), ("Component.md", 6))
+            res = lsp.at("textDocument/hover", "index.md", 0, 6)
+            self.assertEqual(res["contents"]["value"], "**Component#2.2**\n\n2. **Tile**: a piece of the Field")
         finally:
             lsp.close()
 
@@ -1441,98 +1755,154 @@ class LinkBuildTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', LINKCHECK, '--md', '-o', out)
+            res = run("build", LINKCHECK, "--md", "-o", out)
             assert res.returncode == 0, res.stderr
-            cls.md = read(os.path.join(out, 'linkcheck.md'))
+            cls.md = read(os.path.join(out, "linkcheck.md"))
 
     def test_wrapped_reference_folder_and_titled_links(self):
-        self.assertIn('[wrapped\npage](#b) and [ref page][r] and [titled](#a).', self.md)
-        self.assertIn('[r]: #b--section\n[bad]: sub/nope.md\n', self.md)
-        self.assertIn('[folder](#sub) [file](notes.txt)', self.md)
+        self.assertIn("[wrapped\npage](#b) and [ref page][r] and [titled](#a).", self.md)
+        self.assertIn("[r]: #b--section\n[bad]: sub/nope.md\n", self.md)
+        self.assertIn("[folder](#sub) [file](notes.txt)", self.md)
 
     def test_heading_anchors_as_hosts_make_them(self):
-        self.assertIn('[heading](#a) [repeated](#a--dup) [none](#a) [em](#a--em-u)', self.md)
+        self.assertIn("[heading](#a) [repeated](#a--dup) [none](#a) [em](#a--em-u)", self.md)
 
 
 class LlmsTest(unittest.TestCase):
     def test_pages_with_descriptions_by_folder(self):
         with tempfile.TemporaryDirectory() as out:
-            output = os.path.join(out, 'llms.txt')
-            res = run('llms', LINKCHECK, '--title', 'Links', '-o', output)
+            output = os.path.join(out, "llms.txt")
+            res = run("llms", LINKCHECK, "--title", "Links", "-o", output)
             self.assertEqual(res.returncode, 0, res.stderr)
             rel = os.path.relpath(LINKCHECK, out)
-            self.assertEqual(read(output), '\n'.join([
-                '# Links', '',
-                '> Every kind of relative link.', '',
-                '## Home', '',
-                f'- [Home]({rel}/index.md): Every kind of relative link.',
-                f'- [One -- Two]({rel}/a.md): Quoted: with colon',
-                f'- [Orphan]({rel}/orphan.md)', '',
-                '## sub/', '',
-                f'- [Sub]({rel}/sub/index.md)',
-                f'- [C]({rel}/sub/c.md)',
-                f'- [Bee]({rel}/sub/b.md): Folded over lines.', '',
-            ]))
+            self.assertEqual(
+                read(output),
+                "\n".join(
+                    [
+                        "# Links",
+                        "",
+                        "> Every kind of relative link.",
+                        "",
+                        "## Home",
+                        "",
+                        f"- [Home]({rel}/index.md): Every kind of relative link.",
+                        f"- [One -- Two]({rel}/a.md): Quoted: with colon",
+                        f"- [Orphan]({rel}/orphan.md)",
+                        "",
+                        "## sub/",
+                        "",
+                        f"- [Sub]({rel}/sub/index.md)",
+                        f"- [C]({rel}/sub/c.md)",
+                        f"- [Bee]({rel}/sub/b.md): Folded over lines.",
+                        "",
+                    ]
+                ),
+            )
 
     def test_folder_of_a_bigger_vault_reads_as_the_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), '')
-            write(os.path.join(tmp, 'README.md'), '# Repo\n')
-            write(os.path.join(tmp, 'knowledge', 'index.md'), '# AH knowledge\n\n[[x]]\n')
-            write(os.path.join(tmp, 'knowledge', 'sub', 'x.md'), '# X\n')
-            res = run('llms', 'knowledge', cwd=tmp)
+            write(os.path.join(tmp, "uwiki.toml"), "")
+            write(os.path.join(tmp, "README.md"), "# Repo\n")
+            write(os.path.join(tmp, "knowledge", "index.md"), "# AH knowledge\n\n[[x]]\n")
+            write(os.path.join(tmp, "knowledge", "sub", "x.md"), "# X\n")
+            res = run("llms", "knowledge", cwd=tmp)
             self.assertEqual(res.returncode, 0, res.stderr)
-            self.assertEqual(read(os.path.join(tmp, 'knowledge', 'llms.txt')),
-                             '# AH knowledge\n\n## AH knowledge\n\n- [AH knowledge](index.md)\n\n'
-                             '## sub/\n\n- [X](sub/x.md)\n')
-            os.remove(os.path.join(tmp, 'knowledge', 'index.md'))
-            run('llms', 'knowledge', '--title', 'Bundle', cwd=tmp)
-            self.assertEqual(read(os.path.join(tmp, 'knowledge', 'llms.txt')), '# Bundle\n\n## sub/\n\n- [X](sub/x.md)\n')
+            self.assertEqual(
+                read(os.path.join(tmp, "knowledge", "llms.txt")),
+                "# AH knowledge\n\n## AH knowledge\n\n- [AH knowledge](index.md)\n\n## sub/\n\n- [X](sub/x.md)\n",
+            )
+            os.remove(os.path.join(tmp, "knowledge", "index.md"))
+            run("llms", "knowledge", "--title", "Bundle", cwd=tmp)
+            self.assertEqual(
+                read(os.path.join(tmp, "knowledge", "llms.txt")), "# Bundle\n\n## sub/\n\n- [X](sub/x.md)\n"
+            )
 
     def test_check(self):
         with tempfile.TemporaryDirectory() as out:
-            output = os.path.join(out, 'llms.txt')
-            res = run('llms', LINKCHECK, '-o', output, '--check')
-            self.assertEqual((res.returncode, res.stdout), (1, f'{output}: out of date, rerun without --check\n'))
-            run('llms', LINKCHECK, '-o', output, '--summary', 'Line one.\nLine two.')
-            self.assertIn('# Home\n\n> Line one.\n> Line two.\n\n## Home', read(output))  # title of index.md
-            res = run('llms', LINKCHECK, '-o', output, '--summary', 'Line one.\nLine two.', '--check')
-            self.assertEqual((res.returncode, res.stdout), (0, ''))
+            output = os.path.join(out, "llms.txt")
+            res = run("llms", LINKCHECK, "-o", output, "--check")
+            self.assertEqual((res.returncode, res.stdout), (1, f"{output}: out of date, rerun without --check\n"))
+            run("llms", LINKCHECK, "-o", output, "--summary", "Line one.\nLine two.")
+            self.assertIn("# Home\n\n> Line one.\n> Line two.\n\n## Home", read(output))  # title of index.md
+            res = run("llms", LINKCHECK, "-o", output, "--summary", "Line one.\nLine two.", "--check")
+            self.assertEqual((res.returncode, res.stdout), (0, ""))
 
 
 class OrderTest(unittest.TestCase):
-    ORDER = ['root', 'star', 'ips', 'slot', 'space', 'asteroids', 'moons', 'titan', 'europa',
-             'nova', 'comet', 'alone', 'beta']
+    ORDER = (
+        "root",
+        "star",
+        "ips",
+        "slot",
+        "space",
+        "asteroids",
+        "moons",
+        "titan",
+        "europa",
+        "nova",
+        "comet",
+        "alone",
+        "beta",
+    )
 
     def test_build_and_sidebar_follow_links(self):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', ORDER, '-o', out)
+            res = run("build", ORDER, "-o", out)
             self.assertEqual(res.returncode, 0, res.stderr)
-            html, md = read(os.path.join(out, 'order.html')), read(os.path.join(out, 'order.md'))
-        self.assertEqual(re.findall(r'id="([^"]+)" class="page"', html), self.ORDER)
-        self.assertEqual(re.findall(r'^<a id="([^"-]+)"></a>\n\n#', md, re.MULTILINE), self.ORDER)
+            html, md = read(os.path.join(out, "order.html")), read(os.path.join(out, "order.md"))
+        self.assertEqual(re.findall(r'id="([^"]+)" class="page"', html), list(self.ORDER))
+        self.assertEqual(re.findall(r'^<a id="([^"-]+)"></a>\n\n#', md, re.MULTILINE), list(self.ORDER))
 
     def test_llms_follows_links(self):
         with tempfile.TemporaryDirectory() as out:
-            output = os.path.join(out, 'llms.txt')
-            res = run('llms', ORDER, '-o', output)
+            output = os.path.join(out, "llms.txt")
+            res = run("llms", ORDER, "-o", output)
             self.assertEqual(res.returncode, 0, res.stderr)
-            titles = re.findall(r'^- \[([^\]]+)\]', read(output), re.MULTILINE)
-        self.assertEqual(titles, ['order', 'Star', 'IPS', 'Slot', 'Space', 'Asteroids', 'Nova', 'Comet',
-                                  'Alone', 'Beta', 'Moons', 'Titan', 'Europa'])
+            titles = re.findall(r"^- \[([^\]]+)\]", read(output), re.MULTILINE)
+        self.assertEqual(
+            titles,
+            [
+                "order",
+                "Star",
+                "IPS",
+                "Slot",
+                "Space",
+                "Asteroids",
+                "Nova",
+                "Comet",
+                "Alone",
+                "Beta",
+                "Moons",
+                "Titan",
+                "Europa",
+            ],
+        )
 
     def test_unlisted_pages_are_warnings(self):
-        res = run('check', 'order', '--unlisted', cwd=FIXTURES)
+        res = run("check", "order", "--unlisted", cwd=FIXTURES)
         self.assertEqual(res.returncode, 0, res.stdout)
-        self.assertEqual(res.stdout.splitlines(), [
-            f'order/{name}.md:1: warning: not listed in index.md'
-            for name in ['Alone', 'Asteroids', 'Beta', 'Comet', 'IPS', 'Moons/Europa', 'Moons/index', 'Nova', 'Slot']
-        ])
+        self.assertEqual(
+            res.stdout.splitlines(),
+            [
+                f"order/{name}.md:1: warning: not listed in index.md"
+                for name in [
+                    "Alone",
+                    "Asteroids",
+                    "Beta",
+                    "Comet",
+                    "IPS",
+                    "Moons/Europa",
+                    "Moons/index",
+                    "Nova",
+                    "Slot",
+                ]
+            ],
+        )
 
 
-def write(path, text, mode='w'):
+def write(path, text, mode="w"):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, mode, encoding=None if 'b' in mode else 'utf-8') as f:
+    with open(path, mode, encoding=None if "b" in mode else "utf-8") as f:
         f.write(text)
 
 
@@ -1540,7 +1910,7 @@ def wait_for(condition, timeout=5):
     end = time.monotonic() + timeout
     while not condition():
         if time.monotonic() > end:
-            raise AssertionError('timed out waiting')
+            raise AssertionError("timed out waiting")
         time.sleep(0.02)
 
 
@@ -1548,13 +1918,18 @@ class Background:
     """uwiki command running in background, its output lines read with a timeout."""
 
     def __init__(self, *args, src=SRC):
-        self.proc = subprocess.Popen([sys.executable, '-m', 'uwiki', *args], stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT, text=True, env={**os.environ, 'PYTHONPATH': src})
+        self.proc = subprocess.Popen(
+            [sys.executable, "-m", "uwiki", *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env={**os.environ, "PYTHONPATH": src},
+        )
         self.lines = queue.Queue()
         threading.Thread(target=lambda: [self.lines.put(line) for line in self.proc.stdout], daemon=True).start()
 
     def line(self, timeout=5):
-        return self.lines.get(timeout=timeout).rstrip('\n')
+        return self.lines.get(timeout=timeout).rstrip("\n")
 
     def stop(self):
         self.proc.terminate()
@@ -1565,87 +1940,86 @@ class Background:
 class WatchTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.vault = os.path.join(self.tmp.name, 'wiki')
-        self.out = os.path.join(self.tmp.name, 'out', 'Wiki.html')
-        write(os.path.join(self.vault, 'index.md'), 'See [[A]].\n')
-        write(os.path.join(self.vault, 'A.md'), 'Page A.\n')
+        self.vault = os.path.join(self.tmp.name, "wiki")
+        self.out = os.path.join(self.tmp.name, "out", "Wiki.html")
+        write(os.path.join(self.vault, "index.md"), "See [[A]].\n")
+        write(os.path.join(self.vault, "A.md"), "Page A.\n")
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def test_rebuilds_on_change(self):
-        watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1')
+        watch = Background("watch", self.vault, "-o", self.out, "--interval", "0.1")
         try:
-            self.assertRegex(watch.line(), rf'^\d\d:\d\d:\d\d built 2 pages: {re.escape(self.out)} \(\d+\.\d\ds\)$')
-            write(os.path.join(self.vault, 'B.md'), 'Page B.\n')
-            write(os.path.join(self.vault, 'attachments', 'pic.png'), 'png')
-            self.assertIn('built 3 pages', watch.line())
-            write(os.path.join(self.vault, 'A.md'), b'\xff\xfe broken', 'wb')
-            self.assertIn('error: Error reading', watch.line())  # no second build of changes close together
-            self.assertIn('build failed, last good output stays', watch.line())
-            self.assertIn('Page A.', read(self.out))
-            os.rename(os.path.join(self.vault, 'A.md'), os.path.join(self.vault, 'C.md'))
-            write(os.path.join(self.vault, 'C.md'), 'Page C.\n')
-            self.assertIn('built 3 pages', watch.line())
-            self.assertIn('Page C.', read(self.out))
+            self.assertRegex(watch.line(), rf"^\d\d:\d\d:\d\d built 2 pages: {re.escape(self.out)} \(\d+\.\d\ds\)$")
+            write(os.path.join(self.vault, "B.md"), "Page B.\n")
+            write(os.path.join(self.vault, "attachments", "pic.png"), "png")
+            self.assertIn("built 3 pages", watch.line())
+            write(os.path.join(self.vault, "A.md"), b"\xff\xfe broken", "wb")
+            self.assertIn("error: Error reading", watch.line())  # no second build of changes close together
+            self.assertIn("build failed, last good output stays", watch.line())
+            self.assertIn("Page A.", read(self.out))
+            os.rename(os.path.join(self.vault, "A.md"), os.path.join(self.vault, "C.md"))
+            write(os.path.join(self.vault, "C.md"), "Page C.\n")
+            self.assertIn("built 3 pages", watch.line())
+            self.assertIn("Page C.", read(self.out))
         finally:
             watch.stop()
 
     def test_quiet_prints_errors_only(self):
-        watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1', '-q')
+        watch = Background("watch", self.vault, "-o", self.out, "--interval", "0.1", "-q")
         try:
             wait_for(lambda: os.path.exists(self.out))
-            write(os.path.join(self.vault, 'A.md'), b'\xff', 'wb')
-            self.assertIn('error: Error reading', watch.line())
-            write(os.path.join(self.vault, 'A.md'), 'Page A again.\n')
-            wait_for(lambda: 'Page A again.' in read(self.out))
-            write(os.path.join(self.vault, 'A.md'), b'\xfe', 'wb')
-            self.assertIn('error: Error reading', watch.line())  # neither "build failed" nor "built" before it
+            write(os.path.join(self.vault, "A.md"), b"\xff", "wb")
+            self.assertIn("error: Error reading", watch.line())
+            write(os.path.join(self.vault, "A.md"), "Page A again.\n")
+            wait_for(lambda: "Page A again." in read(self.out))
+            write(os.path.join(self.vault, "A.md"), b"\xfe", "wb")
+            self.assertIn("error: Error reading", watch.line())  # neither "build failed" nor "built" before it
         finally:
             watch.stop()
 
-
     def test_takes_config_changes(self):
-        write(os.path.join(self.vault, 'B.md'), 'Page B.\n')
-        pyproject = os.path.join(self.tmp.name, 'pyproject.toml')  # above the vault
-        config = os.path.join(self.vault, 'uwiki.toml')
+        write(os.path.join(self.vault, "B.md"), "Page B.\n")
+        pyproject = os.path.join(self.tmp.name, "pyproject.toml")  # above the vault
+        config = os.path.join(self.vault, "uwiki.toml")
         write(pyproject, '[project]\nversion = "1"\n[tool.uwiki]\nexclude = ["B.md"]\n')
-        watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1')
+        watch = Background("watch", self.vault, "-o", self.out, "--interval", "0.1")
         try:
-            self.assertIn('built 2 pages', watch.line())
+            self.assertIn("built 2 pages", watch.line())
             write(pyproject, '[project]\nversion = "2"\n[tool.uwiki]\nexclude = ["B.md"]\n')
-            self.assertIn('built 2 pages', watch.line())  # same options: built again, no restart
-            write(config, 'exclude = []\n')  # nearer config not there before
-            self.assertIn('config options changed, restarting', watch.line())
-            self.assertIn('built 3 pages', watch.line())
-            write(config, 'exclude = [\n')
-            self.assertRegex(watch.line(), r'^error: .*uwiki.toml: ')
-            self.assertIn('config fails to load, last good output stays', watch.line())
+            self.assertIn("built 2 pages", watch.line())  # same options: built again, no restart
+            write(config, "exclude = []\n")  # nearer config not there before
+            self.assertIn("config options changed, restarting", watch.line())
+            self.assertIn("built 3 pages", watch.line())
+            write(config, "exclude = [\n")
+            self.assertRegex(watch.line(), r"^error: .*uwiki.toml: ")
+            self.assertIn("config fails to load, last good output stays", watch.line())
             write(config, 'exclude = []\n[schema]\ntitle = "string"\n')
-            self.assertIn('built 3 pages', watch.line())  # schema is read on every build
+            self.assertIn("built 3 pages", watch.line())  # schema is read on every build
             os.remove(config)
-            self.assertIn('config options changed, restarting', watch.line())
-            self.assertIn('built 2 pages', watch.line())
+            self.assertIn("config options changed, restarting", watch.line())
+            self.assertIn("built 2 pages", watch.line())
         finally:
             watch.stop()
 
     def test_restarts_on_change_of_uwiki_code(self):
-        src = os.path.join(self.tmp.name, 'src')
-        shutil.copytree(os.path.join(SRC, 'uwiki'), os.path.join(src, 'uwiki'))
-        code = os.path.join(src, 'uwiki', 'ls.py')
-        watch = Background('watch', self.vault, '-o', self.out, '--interval', '0.1', src=src)
+        src = os.path.join(self.tmp.name, "src")
+        shutil.copytree(os.path.join(SRC, "uwiki"), os.path.join(src, "uwiki"))
+        code = os.path.join(src, "uwiki", "ls.py")
+        watch = Background("watch", self.vault, "-o", self.out, "--interval", "0.1", src=src)
         try:
-            self.assertIn('built 2 pages', watch.line())
-            write(code, '# changed\n', 'a')
-            self.assertIn('uwiki code changed, restarting', watch.line())
-            self.assertIn('built 2 pages', watch.line())  # built by the new process
-            write(code, 'def (\n', 'a')
-            self.assertRegex(watch.line(), r'uwiki code fails to import, not restarting: SyntaxError')
-            write(os.path.join(self.vault, 'B.md'), 'Page B.\n')
-            self.assertIn('built 3 pages', watch.line())  # still watching with the code it runs
-            write(code, read(code).replace('def (\n', ''))
-            self.assertIn('uwiki code changed, restarting', watch.line())
-            self.assertIn('built 3 pages', watch.line())
+            self.assertIn("built 2 pages", watch.line())
+            write(code, "# changed\n", "a")
+            self.assertIn("uwiki code changed, restarting", watch.line())
+            self.assertIn("built 2 pages", watch.line())  # built by the new process
+            write(code, "def (\n", "a")
+            self.assertRegex(watch.line(), r"uwiki code fails to import, not restarting: SyntaxError")
+            write(os.path.join(self.vault, "B.md"), "Page B.\n")
+            self.assertIn("built 3 pages", watch.line())  # still watching with the code it runs
+            write(code, read(code).replace("def (\n", ""))
+            self.assertIn("uwiki code changed, restarting", watch.line())
+            self.assertIn("built 3 pages", watch.line())
         finally:
             watch.stop()
 
@@ -1653,78 +2027,80 @@ class WatchTest(unittest.TestCase):
 class ServeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.vault = os.path.join(self.tmp.name, 'wiki')
-        write(os.path.join(self.vault, 'index.md'), 'See [[A]] ![[pic.png]].\n')
-        write(os.path.join(self.vault, 'A.md'), 'Page A.\n')
-        write(os.path.join(self.vault, 'pic.png'), 'png')
+        self.vault = os.path.join(self.tmp.name, "wiki")
+        write(os.path.join(self.vault, "index.md"), "See [[A]] ![[pic.png]].\n")
+        write(os.path.join(self.vault, "A.md"), "Page A.\n")
+        write(os.path.join(self.vault, "pic.png"), "png")
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def get(self, url):
         from urllib.request import urlopen
+
         with urlopen(url, timeout=5) as res:
             return res.status, res.geturl(), res.read().decode()
 
     def test_serves_rebuilds_and_cleans_up(self):
         from urllib.error import HTTPError
-        serve = Background('serve', self.vault, '-p', '0', '--interval', '0.1')
+
+        serve = Background("serve", self.vault, "-p", "0", "--interval", "0.1")
         try:
-            url = re.fullmatch(r'serving (http://127\.0\.0\.1:\d+/wiki\.html)', serve.line())[1]
-            built = re.search(r'built 2 pages: (\S+)/wiki\.html \(', serve.line())
+            url = re.fullmatch(r"serving (http://127\.0\.0\.1:\d+/wiki\.html)", serve.line())[1]
+            built = re.search(r"built 2 pages: (\S+)/wiki\.html \(", serve.line())
             outdir = built[1]
             self.assertTrue(outdir.startswith(tempfile.gettempdir()))
-            status, _, html = self.get(url)
-            build_id = self.get(url.replace('wiki.html', '__uwiki/build'))[2]
+            _status, _, html = self.get(url)
+            build_id = self.get(url.replace("wiki.html", "__uwiki/build"))[2]
             self.assertIn(f'var BUILD = "{build_id}";', html)
             self.assertIn('<p data-line="1">See', html)
             self.assertIn('<img src="/__uwiki/files/pic.png" alt="pic.png" />', html)
-            self.assertEqual(self.get(url.replace('wiki.html', '__uwiki/files/pic.png'))[2], 'png')
+            self.assertEqual(self.get(url.replace("wiki.html", "__uwiki/files/pic.png"))[2], "png")
             with self.assertRaises(HTTPError):
-                self.get(url.replace('wiki.html', '__uwiki/files/A.md'))
-            self.assertEqual(self.get(url.replace('wiki.html', ''))[1], url)
-            write(os.path.join(self.vault, 'A.md'), 'Page A changed.\n')
-            self.assertIn('built 2 pages', serve.line())
-            self.assertNotEqual(self.get(url.replace('wiki.html', '__uwiki/build'))[2], build_id)
-            self.assertIn('Page A changed.', self.get(url)[2])
+                self.get(url.replace("wiki.html", "__uwiki/files/A.md"))
+            self.assertEqual(self.get(url.replace("wiki.html", ""))[1], url)
+            write(os.path.join(self.vault, "A.md"), "Page A changed.\n")
+            self.assertIn("built 2 pages", serve.line())
+            self.assertNotEqual(self.get(url.replace("wiki.html", "__uwiki/build"))[2], build_id)
+            self.assertIn("Page A changed.", self.get(url)[2])
         finally:
             serve.stop()
         self.assertFalse(os.path.exists(outdir))
 
     def test_restart_serves_the_same_port(self):
-        src = os.path.join(self.tmp.name, 'src')
-        shutil.copytree(os.path.join(SRC, 'uwiki'), os.path.join(src, 'uwiki'))
-        serve = Background('serve', self.vault, '-p', '0', '--interval', '0.1', src=src)
+        src = os.path.join(self.tmp.name, "src")
+        shutil.copytree(os.path.join(SRC, "uwiki"), os.path.join(src, "uwiki"))
+        serve = Background("serve", self.vault, "-p", "0", "--interval", "0.1", src=src)
         try:
             serving = serve.line()
-            outdir = re.search(r'built 2 pages: (\S+)/wiki\.html \(', serve.line())[1]
-            write(os.path.join(src, 'uwiki', 'ls.py'), '# changed\n', 'a')
-            self.assertIn('uwiki code changed, restarting', serve.line())
+            outdir = re.search(r"built 2 pages: (\S+)/wiki\.html \(", serve.line())[1]
+            write(os.path.join(src, "uwiki", "ls.py"), "# changed\n", "a")
+            self.assertIn("uwiki code changed, restarting", serve.line())
             self.assertEqual(serve.line(), serving)
-            self.assertIn('built 2 pages', serve.line())
+            self.assertIn("built 2 pages", serve.line())
             self.assertFalse(os.path.exists(outdir))  # the temporary output of the old one is gone
-            self.assertIn('Page', self.get(serving.split()[1].replace('wiki.html', ''))[2])
+            self.assertIn("Page", self.get(serving.split()[1].replace("wiki.html", ""))[2])
         finally:
             serve.stop()
 
     def test_build_output_has_no_reload(self):
         with tempfile.TemporaryDirectory() as out:
-            run('build', self.vault, '-o', out)
-            html = read(os.path.join(out, 'wiki.html'))
-        self.assertNotIn('__uwiki', html)
-        self.assertNotIn('uwiki-reload', html)
-        self.assertNotIn('data-line', html)
+            run("build", self.vault, "-o", out)
+            html = read(os.path.join(out, "wiki.html"))
+        self.assertNotIn("__uwiki", html)
+        self.assertNotIn("uwiki-reload", html)
+        self.assertNotIn("data-line", html)
 
     def test_live_build_reloads_on_last_modified(self):
         with tempfile.TemporaryDirectory() as out:
-            run('build', self.vault, '-o', out, '--live')
-            html = read(os.path.join(out, 'wiki.html'))
-        self.assertIn('uwiki-reload', html)
+            run("build", self.vault, "-o", out, "--live")
+            html = read(os.path.join(out, "wiki.html"))
+        self.assertIn("uwiki-reload", html)
         self.assertIn('var SERVE = "page" === "serve";', html)
-        self.assertNotIn('{mode}', html)
+        self.assertNotIn("{mode}", html)
 
     def test_serve_reloads_by_build_id_with_live_too(self):
-        serve = Background('serve', self.vault, '-p', '0', '--interval', '0.1', '--live')
+        serve = Background("serve", self.vault, "-p", "0", "--interval", "0.1", "--live")
         try:
             url = serve.line().split()[1]
             serve.line()
@@ -1738,56 +2114,67 @@ class WriteTest(unittest.TestCase):
 
     def test_replaces_keeping_mode_and_symlink(self):
         from uwiki.build import write_atomic
+
         with tempfile.TemporaryDirectory() as tmp:
-            real = os.path.join(tmp, 'real', 'Wiki.html')
-            write(real, 'old')
+            real = os.path.join(tmp, "real", "Wiki.html")
+            write(real, "old")
             os.chmod(real, 0o640)
-            link = os.path.join(tmp, 'Wiki.html')
+            link = os.path.join(tmp, "Wiki.html")
             os.symlink(real, link)
-            write_atomic(link, 'new')
+            write_atomic(link, "new")
             self.assertTrue(os.path.islink(link))
-            self.assertEqual(read(real), 'new')
+            self.assertEqual(read(real), "new")
             self.assertEqual(os.stat(real).st_mode & 0o777, 0o640)
-            write_atomic(os.path.join(tmp, 'new', 'x.md'), 'x')
-            self.assertEqual(read(os.path.join(tmp, 'new', 'x.md')), 'x')
-            self.assertEqual(sorted(os.listdir(os.path.join(tmp, 'real'))), ['Wiki.html'])
+            write_atomic(os.path.join(tmp, "new", "x.md"), "x")
+            self.assertEqual(read(os.path.join(tmp, "new", "x.md")), "x")
+            self.assertEqual(sorted(os.listdir(os.path.join(tmp, "real"))), ["Wiki.html"])
 
 
 class CommonMarkTest(unittest.TestCase):
     """Pages render as GitHub and Obsidian show them, served ones with source lines of blocks."""
 
-    PAGE = ('---\nstatus: x\n---\n# Page\n\nPara one\ncontinues.\n\n- [ ] task\n- [x] done\n\nText:\n- item\n\n'
-            '> [!note] Title with **bold**\n> body line\n\n3. three\n4. four\n\n~~gone~~\n\n| a |\n|---|\n| 1 |\n'
-            '\nSee https://example.com/a_(b). or me@x.org, not README.md or `https://code.x`\n')
+    PAGE = (
+        "---\nstatus: x\n---\n# Page\n\nPara one\ncontinues.\n\n- [ ] task\n- [x] done\n\nText:\n- item\n\n"
+        "> [!note] Title with **bold**\n> body line\n\n3. three\n4. four\n\n~~gone~~\n\n| a |\n|---|\n| 1 |\n"
+        "\nSee https://example.com/a_(b). or me@x.org, not README.md or `https://code.x`\n"
+    )
 
     @classmethod
     def setUpClass(cls):
         from uwiki.build import Build, BuildOptions
+
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'wiki', 'index.md'), 'See [[Page]].\n')
-            write(os.path.join(tmp, 'wiki', 'Page.md'), cls.PAGE)
-            res = run('build', 'wiki', '--html', '-o', 'out/wiki.html', cwd=tmp)
+            write(os.path.join(tmp, "wiki", "index.md"), "See [[Page]].\n")
+            write(os.path.join(tmp, "wiki", "Page.md"), cls.PAGE)
+            res = run("build", "wiki", "--html", "-o", "out/wiki.html", cwd=tmp)
             assert res.returncode == 0, res.stderr
-            cls.html = section(read(os.path.join(tmp, 'out', 'wiki.html')), 'page')
-            build = Build([os.path.join(tmp, 'wiki')], os.path.join(tmp, 'out', 'lines.html'),
-                          options=BuildOptions(source_lines=True))
+            cls.html = section(read(os.path.join(tmp, "out", "wiki.html")), "page")
+            build = Build(
+                [os.path.join(tmp, "wiki")],
+                os.path.join(tmp, "out", "lines.html"),
+                options=BuildOptions(source_lines=True),
+            )
             assert build.run() == []
-            cls.lines = section(read(os.path.join(tmp, 'out', 'lines.html')), 'page')
+            cls.lines = section(read(os.path.join(tmp, "out", "lines.html")), "page")
 
     def test_tasks_lists_after_text_and_numbering(self):
-        self.assertIn('<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled> task'
-                      '</li>', self.html)
+        self.assertIn(
+            '<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled> task</li>',
+            self.html,
+        )
         self.assertIn('<input type="checkbox" class="task-list-item-checkbox" disabled checked> done', self.html)
-        self.assertIn('<p>Text:</p>\n<ul>\n<li>item</li>', self.html)
+        self.assertIn("<p>Text:</p>\n<ul>\n<li>item</li>", self.html)
         self.assertIn('<ol start="3">', self.html)
-        self.assertIn('<p><s>gone</s></p>', self.html)
-        self.assertIn('<td>1</td>', self.html)
+        self.assertIn("<p><s>gone</s></p>", self.html)
+        self.assertIn("<td>1</td>", self.html)
         self.assertIn('<div class="callout-title">Title with <strong>bold</strong></div>', self.html)
 
     def test_bare_links_and_emails_are_linked(self):
-        self.assertIn('<p>See <a href="https://example.com/a_(b)">https://example.com/a_(b)</a>. or '
-                      '<a href="mailto:me@x.org">me@x.org</a>, not README.md or <code>https://code.x</code></p>',
-                      self.html)
+        self.assertIn(
+            '<p>See <a href="https://example.com/a_(b)">https://example.com/a_(b)</a>. or '
+            '<a href="mailto:me@x.org">me@x.org</a>, not README.md or <code>https://code.x</code></p>',
+            self.html,
+        )
 
     def test_blocks_carry_source_lines(self):
         self.assertIn('<p data-line="6">Para one', self.lines)
@@ -1797,13 +2184,13 @@ class CommonMarkTest(unittest.TestCase):
         self.assertIn('<p data-line="16">body line</p>', self.lines)
         self.assertIn('<li data-line="19">', self.lines)
         self.assertIn('<table data-line="23">', self.lines)
-        self.assertNotIn('data-line', self.html)
+        self.assertNotIn("data-line", self.html)
 
 
 class MoveTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        for name in ['vault', 'mdlinks']:
+        for name in ["vault", "mdlinks"]:
             shutil.copytree(os.path.join(FIXTURES, name), os.path.join(self.tmp.name, name), symlinks=True)
 
     def tearDown(self):
@@ -1813,109 +2200,139 @@ class MoveTest(unittest.TestCase):
         return run(*args, cwd=self.tmp.name)
 
     def test_dry_run_prints_move_and_changed_lines(self):
-        res = self.run_in('mv', 'vault/MyPage.md', 'vault/Archive/Renamed.md', '--dry-run')
+        res = self.run_in("mv", "vault/MyPage.md", "vault/Archive/Renamed.md", "--dry-run")
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(res.stdout.splitlines()[:3], [
-            'mv vault/MyPage.md vault/Archive/Renamed.md',
-            'vault/Archive/Renamed.md:24: - > [!tip]+ Open with [[MyPage#Deeper]]',
-            'vault/Archive/Renamed.md:24: + > [!tip]+ Open with [[Renamed#Deeper]]',
-        ])
-        self.assertIn('vault/my notes.md:3: + ![[Renamed#Second Section]]', res.stdout.splitlines())
-        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, 'vault', 'MyPage.md')))
+        self.assertEqual(
+            res.stdout.splitlines()[:3],
+            [
+                "mv vault/MyPage.md vault/Archive/Renamed.md",
+                "vault/Archive/Renamed.md:24: - > [!tip]+ Open with [[MyPage#Deeper]]",
+                "vault/Archive/Renamed.md:24: + > [!tip]+ Open with [[Renamed#Deeper]]",
+            ],
+        )
+        self.assertIn("vault/my notes.md:3: + ![[Renamed#Second Section]]", res.stdout.splitlines())
+        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "vault", "MyPage.md")))
 
     def test_check_passes_after_moves(self):
-        self.assertEqual(self.run_in('check', 'vault').returncode, 0)
-        for args in [('vault/MyPage.md', 'vault/Archive/Renamed.md'), ('vault/Projects', 'vault/Work'),
-                     ('vault/attachments/pic.png', 'vault/images/pic.png'), ('vault/my notes.md', 'vault/Work')]:
-            res = self.run_in('mv', *args)
+        self.assertEqual(self.run_in("check", "vault").returncode, 0)
+        for args in [
+            ("vault/MyPage.md", "vault/Archive/Renamed.md"),
+            ("vault/Projects", "vault/Work"),
+            ("vault/attachments/pic.png", "vault/images/pic.png"),
+            ("vault/my notes.md", "vault/Work"),
+        ]:
+            res = self.run_in("mv", *args)
             self.assertEqual(res.returncode, 0, res.stderr)
-        res = self.run_in('check', 'vault')
-        self.assertEqual((res.returncode, res.stdout), (0, ''))
-        index = read(os.path.join(self.tmp.name, 'vault', 'index.md'))
-        self.assertIn('See [[Renamed]], [[my notes]], [[2024Plans]] and [[Project]].', index)
-        self.assertIn('[[Work/Alpha/Notes|alpha readme]]', index)
-        self.assertIn('![[pic.png]]', read(os.path.join(self.tmp.name, 'vault', 'Work', 'my notes.md')))
+        res = self.run_in("check", "vault")
+        self.assertEqual((res.returncode, res.stdout), (0, ""))
+        index = read(os.path.join(self.tmp.name, "vault", "index.md"))
+        self.assertIn("See [[Renamed]], [[my notes]], [[2024Plans]] and [[Project]].", index)
+        self.assertIn("[[Work/Alpha/Notes|alpha readme]]", index)
+        self.assertIn("![[pic.png]]", read(os.path.join(self.tmp.name, "vault", "Work", "my notes.md")))
 
     def test_links_that_would_lead_elsewhere_change(self):
-        res = self.run_in('mv', 'vault/Archive/Notes.md', 'vault/Projects/Notes.md', '--dry-run')
-        self.assertEqual(res.stdout.splitlines()[1:], [
-            'vault/Projects/Project.md:1: - Projects folder page, see [[Notes]].',
-            'vault/Projects/Project.md:1: + Projects folder page, see [[Alpha/Notes]].',
-            'vault/index.md:3: - Path links [[Archive/Notes]] and [[Projects/Alpha/Notes|alpha readme]].',
-            'vault/index.md:3: + Path links [[Projects/Notes]] and [[Projects/Alpha/Notes|alpha readme]].',
-        ])
+        res = self.run_in("mv", "vault/Archive/Notes.md", "vault/Projects/Notes.md", "--dry-run")
+        self.assertEqual(
+            res.stdout.splitlines()[1:],
+            [
+                "vault/Projects/Project.md:1: - Projects folder page, see [[Notes]].",
+                "vault/Projects/Project.md:1: + Projects folder page, see [[Alpha/Notes]].",
+                "vault/index.md:3: - Path links [[Archive/Notes]] and [[Projects/Alpha/Notes|alpha readme]].",
+                "vault/index.md:3: + Path links [[Projects/Notes]] and [[Projects/Alpha/Notes|alpha readme]].",
+            ],
+        )
 
     def test_markdown_links_follow_and_moved_pages_are_fixed(self):
-        res = self.run_in('mv', 'mdlinks/docs/Guide.md', 'mdlinks/Guide.md')
+        res = self.run_in("mv", "mdlinks/docs/Guide.md", "mdlinks/Guide.md")
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn('Back [home](index.md#intro).', read(os.path.join(self.tmp.name, 'mdlinks', 'Guide.md')))
-        index = read(os.path.join(self.tmp.name, 'mdlinks', 'index.md'))
-        self.assertIn('See [the guide](Guide.md), [first steps](Guide.md#first-steps-hiapi)', index)
-        self.assertIn('Code `[x](docs/Guide.md)` stays', index)
-        res = self.run_in('mv', 'mdlinks/docs', 'mdlinks/manual')
+        self.assertIn("Back [home](index.md#intro).", read(os.path.join(self.tmp.name, "mdlinks", "Guide.md")))
+        index = read(os.path.join(self.tmp.name, "mdlinks", "index.md"))
+        self.assertIn("See [the guide](Guide.md), [first steps](Guide.md#first-steps-hiapi)", index)
+        self.assertIn("Code `[x](docs/Guide.md)` stays", index)
+        res = self.run_in("mv", "mdlinks/docs", "mdlinks/manual")
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn('and [docs](manual/index.md).', read(os.path.join(self.tmp.name, 'mdlinks', 'index.md')))
-        self.assertIn('[bad heading](../Guide.md#nope)',
-                      read(os.path.join(self.tmp.name, 'mdlinks', 'manual', 'Broken.md')))
+        self.assertIn("and [docs](manual/index.md).", read(os.path.join(self.tmp.name, "mdlinks", "index.md")))
+        self.assertIn(
+            "[bad heading](../Guide.md#nope)", read(os.path.join(self.tmp.name, "mdlinks", "manual", "Broken.md"))
+        )
 
     def test_paths_in_inline_code_and_link_text_follow(self):
-        root = os.path.join(self.tmp.name, 'mdlinks')
-        with open(os.path.join(root, 'Paths.md'), 'w', encoding='utf-8') as f:
-            f.write('See `docs/`, `docs/Guide.md`, [docs/Setup.md](docs/Setup.md) and [`docs/`](docs/index.md).\n'
-                    'Stay: `index.md`, `docs/Nope.md`, `[x](docs/Guide.md)`, [the docs](docs/index.md).\n'
-                    '```\ndocs/Guide.md\n```\n')
-        with open(os.path.join(root, 'docs', 'Paths.md'), 'w', encoding='utf-8') as f:
-            f.write('Next to `./Guide.md`, up at `../index.md`.\n')
-        os.makedirs(os.path.join(root, 'out'))
-        for name, text in [('uwiki.toml', 'exclude = ["out"]\n'), ('out/Built.md', 'Built `docs/Guide.md`.\n')]:
-            with open(os.path.join(root, name), 'w', encoding='utf-8') as f:
+        root = os.path.join(self.tmp.name, "mdlinks")
+        with open(os.path.join(root, "Paths.md"), "w", encoding="utf-8") as f:
+            f.write(
+                "See `docs/`, `docs/Guide.md`, [docs/Setup.md](docs/Setup.md) and [`docs/`](docs/index.md).\n"
+                "Stay: `index.md`, `docs/Nope.md`, `[x](docs/Guide.md)`, [the docs](docs/index.md).\n"
+                "```\ndocs/Guide.md\n```\n"
+            )
+        with open(os.path.join(root, "docs", "Paths.md"), "w", encoding="utf-8") as f:
+            f.write("Next to `./Guide.md`, up at `../index.md`.\n")
+        os.makedirs(os.path.join(root, "out"))
+        for name, text in [("uwiki.toml", 'exclude = ["out"]\n'), ("out/Built.md", "Built `docs/Guide.md`.\n")]:
+            with open(os.path.join(root, name), "w", encoding="utf-8") as f:
                 f.write(text)
-        res = run('mv', 'docs', 'manual', cwd=root)
+        res = run("mv", "docs", "manual", cwd=root)
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(read(os.path.join(root, 'Paths.md')),
-                         'See `manual/`, `manual/Guide.md`, [manual/Setup.md](manual/Setup.md) and '
-                         '[`manual/`](manual/index.md).\n'
-                         'Stay: `index.md`, `docs/Nope.md`, `[x](docs/Guide.md)`, [the docs](manual/index.md).\n'
-                         '```\ndocs/Guide.md\n```\n')
-        self.assertEqual(read(os.path.join(root, 'manual', 'Paths.md')), 'Next to `./Guide.md`, up at `../index.md`.\n')
-        self.assertEqual(read(os.path.join(root, 'out', 'Built.md')), 'Built `docs/Guide.md`.\n')
-        res = run('mv', 'manual/Paths.md', 'Deep/Paths.md', cwd=root)
+        self.assertEqual(
+            read(os.path.join(root, "Paths.md")),
+            "See `manual/`, `manual/Guide.md`, [manual/Setup.md](manual/Setup.md) and "
+            "[`manual/`](manual/index.md).\n"
+            "Stay: `index.md`, `docs/Nope.md`, `[x](docs/Guide.md)`, [the docs](manual/index.md).\n"
+            "```\ndocs/Guide.md\n```\n",
+        )
+        self.assertEqual(read(os.path.join(root, "manual", "Paths.md")), "Next to `./Guide.md`, up at `../index.md`.\n")
+        self.assertEqual(read(os.path.join(root, "out", "Built.md")), "Built `docs/Guide.md`.\n")
+        res = run("mv", "manual/Paths.md", "Deep/Paths.md", cwd=root)
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(read(os.path.join(root, 'Deep', 'Paths.md')),
-                         'Next to `../manual/Guide.md`, up at `../index.md`.\n')
+        self.assertEqual(
+            read(os.path.join(root, "Deep", "Paths.md")), "Next to `../manual/Guide.md`, up at `../index.md`.\n"
+        )
 
     def test_git_mv_and_errors(self):
-        vault = os.path.join(self.tmp.name, 'vault')
-        git = lambda *args: subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', *args], cwd=vault,
-                                           capture_output=True, text=True, check=True).stdout
-        git('init', '-q')
-        git('add', '.')
-        git('commit', '-qm', 'init')
-        res = run('mv', 'root.md', 'Base.md', cwd=vault)
+        vault = os.path.join(self.tmp.name, "vault")
+        git = lambda *args: (
+            subprocess.run(
+                ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                cwd=vault,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+        )
+        git("init", "-q")
+        git("add", ".")
+        git("commit", "-qm", "init")
+        res = run("mv", "root.md", "Base.md", cwd=vault)
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn('R  root.md -> Base.md', git('status', '--porcelain'))
-        res = run('mv', 'Base.md', 'index.md', cwd=vault)
+        self.assertIn("R  root.md -> Base.md", git("status", "--porcelain"))
+        res = run("mv", "Base.md", "index.md", cwd=vault)
         self.assertEqual(res.returncode, 2)
-        self.assertIn('already exists', res.stderr)
-        res = run('mv', 'Base.md', 'Base.txt', cwd=vault)
+        self.assertIn("already exists", res.stderr)
+        res = run("mv", "Base.md", "Base.txt", cwd=vault)
         self.assertEqual(res.returncode, 2)
-        self.assertIn('keeps its .md extension', res.stderr)
+        self.assertIn("keeps its .md extension", res.stderr)
 
 
 class Lsp:
     """Language server in a subprocess, its replies by id and diagnostics by file name."""
 
     def __init__(self, root, encodings=()):
-        self.proc = subprocess.Popen([sys.executable, '-m', 'uwiki', 'lsp'], cwd=root, stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE, env={**os.environ, 'PYTHONPATH': SRC})
+        self.proc = subprocess.Popen(
+            [sys.executable, "-m", "uwiki", "lsp"],
+            cwd=root,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            env={**os.environ, "PYTHONPATH": SRC},
+        )
         self.root, self.id, self.diagnostics = root, 0, {}
-        self.request('initialize', {'rootUri': 'file://' + root,
-                                    'capabilities': {'general': {'positionEncodings': list(encodings)}}})
-        self.notify('initialized', {})
+        self.request(
+            "initialize",
+            {"rootUri": "file://" + root, "capabilities": {"general": {"positionEncodings": list(encodings)}}},
+        )
+        self.notify("initialized", {})
 
     def write(self, message):
-        data = json.dumps({'jsonrpc': '2.0', **message}).encode()
-        self.proc.stdin.write(b'Content-Length: %d\r\n\r\n' % len(data) + data)
+        data = json.dumps({"jsonrpc": "2.0", **message}).encode()
+        self.proc.stdin.write(b"Content-Length: %d\r\n\r\n" % len(data) + data)
         self.proc.stdin.flush()
 
     def read(self):
@@ -1924,37 +2341,41 @@ class Lsp:
             line = self.proc.stdout.readline().strip()
             if not line:
                 break
-            length = int(line.split(b':')[1])
+            length = int(line.split(b":")[1])
         return json.loads(self.proc.stdout.read(length))
 
     def notify(self, method, params):
-        self.write({'method': method, 'params': params})
+        self.write({"method": method, "params": params})
 
     def request(self, method, params):
         self.id += 1
-        self.write({'id': self.id, 'method': method, 'params': params})
+        self.write({"id": self.id, "method": method, "params": params})
         while True:
             message = self.read()
-            if message.get('method') == 'textDocument/publishDiagnostics':
-                self.diagnostics[message['params']['uri'].rsplit('/', 1)[-1]] = message['params']['diagnostics']
-            elif message.get('id') == self.id:
-                return message.get('result')
+            if message.get("method") == "textDocument/publishDiagnostics":
+                self.diagnostics[message["params"]["uri"].rsplit("/", 1)[-1]] = message["params"]["diagnostics"]
+            elif message.get("id") == self.id:
+                return message.get("result")
 
     def uri(self, name):
-        return 'file://' + os.path.join(self.root, name)
+        return "file://" + os.path.join(self.root, name)
 
     def open(self, name, text=None):
         text = read(os.path.join(self.root, name)) if text is None else text
-        self.notify('textDocument/didOpen', {'textDocument': {'uri': self.uri(name), 'languageId': 'markdown',
-                                                              'version': 1, 'text': text}})
+        self.notify(
+            "textDocument/didOpen",
+            {"textDocument": {"uri": self.uri(name), "languageId": "markdown", "version": 1, "text": text}},
+        )
 
     def at(self, method, name, line, character, **params):
-        return self.request(method, {'textDocument': {'uri': self.uri(name)},
-                                     'position': {'line': line, 'character': character}, **params})
+        return self.request(
+            method,
+            {"textDocument": {"uri": self.uri(name)}, "position": {"line": line, "character": character}, **params},
+        )
 
     def close(self):
-        self.request('shutdown', {})
-        self.notify('exit', {})
+        self.request("shutdown", {})
+        self.notify("exit", {})
         self.proc.wait(timeout=10)
         self.proc.stdout.close()
         self.proc.stdin.close()
@@ -1963,8 +2384,8 @@ class Lsp:
 class LspTest(unittest.TestCase):
     def setUp(self):
         self.lsp = Lsp(ITEMS)
-        self.lsp.open('index.md')
-        self.index = read(os.path.join(ITEMS, 'index.md')).splitlines()
+        self.lsp.open("index.md")
+        self.index = read(os.path.join(ITEMS, "index.md")).splitlines()
 
     def tearDown(self):
         self.lsp.close()
@@ -1973,269 +2394,302 @@ class LspTest(unittest.TestCase):
         return self.index[n].index(text) + 2
 
     def definition(self, n, text):
-        res = self.lsp.at('textDocument/definition', 'index.md', n, self.col(n, text))
-        return res and (res['uri'].rsplit('/', 1)[-1], res['range']['start']['line'])
+        res = self.lsp.at("textDocument/definition", "index.md", n, self.col(n, text))
+        return res and (res["uri"].rsplit("/", 1)[-1], res["range"]["start"]["line"])
 
     def test_definition_leads_to_page_heading_and_item(self):
-        self.assertEqual(self.definition(0, '[[Star#2.2]]'), ('Star.md', 5))
-        self.assertEqual(self.definition(0, '[[Star#Light#2]]'), ('Star.md', 19))
-        self.assertEqual(self.definition(0, '[md](Star.md#3)'), ('Star.md', 6))
-        self.assertEqual(self.definition(0, '[[#1]]'), ('index.md', 3))
-        self.assertIsNone(self.lsp.at('textDocument/definition', 'index.md', 0, 0))
+        self.assertEqual(self.definition(0, "[[Star#2.2]]"), ("Star.md", 5))
+        self.assertEqual(self.definition(0, "[[Star#Light#2]]"), ("Star.md", 19))
+        self.assertEqual(self.definition(0, "[md](Star.md#3)"), ("Star.md", 6))
+        self.assertEqual(self.definition(0, "[[#1]]"), ("index.md", 3))
+        self.assertIsNone(self.lsp.at("textDocument/definition", "index.md", 0, 0))
 
     def test_hover_shows_item_with_nested_ones(self):
-        res = self.lsp.at('textDocument/hover', 'index.md', 0, self.col(0, '[[Star#2]]'))
-        self.assertEqual(res['contents']['value'], '**Star#2**\n\n2. Second\n\t1. Nested one\n\t2. Nested two')
+        res = self.lsp.at("textDocument/hover", "index.md", 0, self.col(0, "[[Star#2]]"))
+        self.assertEqual(res["contents"]["value"], "**Star#2**\n\n2. Second\n\t1. Nested one\n\t2. Nested two")
 
     def test_completion_of_names_headings_and_items(self):
-        self.lsp.open('New.md', '[[St\n[[Star#\n[[Star#Light#')
-        labels = lambda n, c: [i['label'] for i in self.lsp.at('textDocument/completion', 'New.md', n, c)]
-        self.assertIn('Star', labels(0, 4))
-        self.assertEqual(labels(1, 7), ['Star', '1', '2', '2.1', '2.2', '3', 'Light'])
-        self.assertEqual(labels(2, 13), ['1', '2'])
+        self.lsp.open("New.md", "[[St\n[[Star#\n[[Star#Light#")
+        labels = lambda n, c: [i["label"] for i in self.lsp.at("textDocument/completion", "New.md", n, c)]
+        self.assertIn("Star", labels(0, 4))
+        self.assertEqual(labels(1, 7), ["Star", "1", "2", "2.1", "2.2", "3", "Light"])
+        self.assertEqual(labels(2, 13), ["1", "2"])
 
     def test_references_of_item_line(self):
-        self.lsp.open('Star.md')
-        res = self.lsp.at('textDocument/references', 'Star.md', 3, 0, context={'includeDeclaration': False})
-        self.assertEqual([(r['uri'].rsplit('/', 1)[-1], r['range']['start']['line']) for r in res],
-                         [('index.md', 0)])
+        self.lsp.open("Star.md")
+        res = self.lsp.at("textDocument/references", "Star.md", 3, 0, context={"includeDeclaration": False})
+        self.assertEqual([(r["uri"].rsplit("/", 1)[-1], r["range"]["start"]["line"]) for r in res], [("index.md", 0)])
 
     def test_outline_nests_items_under_headings(self):
-        self.lsp.open('Star.md')
-        res = self.lsp.request('textDocument/documentSymbol', {'textDocument': {'uri': self.lsp.uri('Star.md')}})
-        tree = lambda symbols: [(s['name'].split(' ')[0], tree(s['children'])) for s in symbols]
-        self.assertEqual(tree(res), [('Star', [('1', []), ('2', [('2.1', []), ('2.2', [])]), ('3', []),
-                                               ('Light', [('1', []), ('2', [])])])])
+        self.lsp.open("Star.md")
+        res = self.lsp.request("textDocument/documentSymbol", {"textDocument": {"uri": self.lsp.uri("Star.md")}})
+        tree = lambda symbols: [(s["name"].split(" ")[0], tree(s["children"])) for s in symbols]
+        self.assertEqual(
+            tree(res),
+            [("Star", [("1", []), ("2", [("2.1", []), ("2.2", [])]), ("3", []), ("Light", [("1", []), ("2", [])])])],
+        )
 
     def test_diagnostics_of_check(self):
-        self.lsp.request('shutdown', {})
-        problems = [(d['range']['start']['line'], d['message']) for d in self.lsp.diagnostics['index.md']]
-        self.assertEqual(problems, [(1, 'missing item: Star.md#9'), (1, 'missing item: [[Star#4]]'),
-                                    (1, 'missing item: [[Star#Light#3]]')])
+        self.lsp.request("shutdown", {})
+        problems = [(d["range"]["start"]["line"], d["message"]) for d in self.lsp.diagnostics["index.md"]]
+        self.assertEqual(
+            problems,
+            [(1, "missing item: Star.md#9"), (1, "missing item: [[Star#4]]"), (1, "missing item: [[Star#Light#3]]")],
+        )
 
     def test_utf16_positions(self):
-        self.lsp.open('New.md', '😀 [[Star#3]]')
-        res = self.lsp.at('textDocument/definition', 'New.md', 0, 4)
-        self.assertEqual(res['range']['start']['line'], 6)
-        hover = self.lsp.at('textDocument/hover', 'New.md', 0, 4)
-        self.assertEqual(hover['range']['start']['character'], 3)
+        self.lsp.open("New.md", "😀 [[Star#3]]")
+        res = self.lsp.at("textDocument/definition", "New.md", 0, 4)
+        self.assertEqual(res["range"]["start"]["line"], 6)
+        hover = self.lsp.at("textDocument/hover", "New.md", 0, 4)
+        self.assertEqual(hover["range"]["start"]["character"], 3)
 
 
 class LsTest(unittest.TestCase):
     def ls(self, *args):
-        res = run('ls', *args, cwd=FIXTURES)
+        res = run("ls", *args, cwd=FIXTURES)
         self.assertEqual(res.returncode, 0, res.stderr)
         return res.stdout
 
     def test_files(self):
-        self.assertEqual(self.ls('external'), 'external/index.md\nexternal/my page.md\n')
-        self.assertEqual(self.ls('external', '-z'), 'external/index.md\0external/my page.md\0')
-        self.assertEqual(self.ls('external', '--exclude', 'index.md'), 'external/my page.md\n')
+        self.assertEqual(self.ls("external"), "external/index.md\nexternal/my page.md\n")
+        self.assertEqual(self.ls("external", "-z"), "external/index.md\0external/my page.md\0")
+        self.assertEqual(self.ls("external", "--exclude", "index.md"), "external/my page.md\n")
 
     def test_only_keeps_files_the_paths_list_as_named(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write(os.path.join(tmp, 'uwiki.toml'), 'exclude = ["data"]\n')
-            write(os.path.join(tmp, 'a.md'), 'A https://a.example/x.\n')
-            write(os.path.join(tmp, 'docs', 'my page.md'), 'Doc https://d.example.\n')
-            write(os.path.join(tmp, 'data', 'raw.md'), 'Raw.\n')
-            write(os.path.join(tmp, 'sub', 'uwiki.toml'), 'exclude = []\n')  # a vault of its own, excluding nothing
-            write(os.path.join(tmp, 'sub', 'b.md'), 'B.\n')
-            write(os.path.join(tmp, 'notes.txt'), 'Notes.\n')
+            write(os.path.join(tmp, "uwiki.toml"), 'exclude = ["data"]\n')
+            write(os.path.join(tmp, "a.md"), "A https://a.example/x.\n")
+            write(os.path.join(tmp, "docs", "my page.md"), "Doc https://d.example.\n")
+            write(os.path.join(tmp, "data", "raw.md"), "Raw.\n")
+            write(os.path.join(tmp, "sub", "uwiki.toml"), "exclude = []\n")  # a vault of its own, excluding nothing
+            write(os.path.join(tmp, "sub", "b.md"), "B.\n")
+            write(os.path.join(tmp, "notes.txt"), "Notes.\n")
             # named alone, data/raw.md would be in the vault of data/, which excludes nothing
-            given = ['docs/my page.md', 'data/raw.md', 'sub/b.md', 'notes.txt', 'gone.md', 'a.md', './a.md']
-            res = run('ls', '.', '--only', *given, cwd=tmp)
-            self.assertEqual((res.returncode, res.stdout.splitlines()), (0, ['docs/my page.md', 'sub/b.md', 'a.md']))
-            res = run('ls', '.', '--only', 'data/raw.md', cwd=tmp)
-            self.assertEqual((res.returncode, res.stdout), (0, ''))
-            self.assertEqual(run('ls', 'docs', '--only', 'a.md', 'docs/my page.md', cwd=tmp).stdout, 'docs/my page.md\n')
-            self.assertEqual(run('ls', '--external', '.', '--only', 'a.md', cwd=tmp).stdout, 'https://a.example/x\n')
-            for stdin in ('data/raw.md\0a.md\0', 'data/raw.md\na.md\n'):
-                with mock.patch('sys.stdin', io.StringIO(stdin)):
-                    self.assertEqual(run('ls', '-z', '.', '--only', '-', cwd=tmp).stdout, 'a.md\0', stdin)
+            given = ["docs/my page.md", "data/raw.md", "sub/b.md", "notes.txt", "gone.md", "a.md", "./a.md"]
+            res = run("ls", ".", "--only", *given, cwd=tmp)
+            self.assertEqual((res.returncode, res.stdout.splitlines()), (0, ["docs/my page.md", "sub/b.md", "a.md"]))
+            res = run("ls", ".", "--only", "data/raw.md", cwd=tmp)
+            self.assertEqual((res.returncode, res.stdout), (0, ""))
+            self.assertEqual(
+                run("ls", "docs", "--only", "a.md", "docs/my page.md", cwd=tmp).stdout, "docs/my page.md\n"
+            )
+            self.assertEqual(run("ls", "--external", ".", "--only", "a.md", cwd=tmp).stdout, "https://a.example/x\n")
+            for stdin in ("data/raw.md\0a.md\0", "data/raw.md\na.md\n"):
+                with mock.patch("sys.stdin", io.StringIO(stdin)):
+                    self.assertEqual(run("ls", "-z", ".", "--only", "-", cwd=tmp).stdout, "a.md\0", stdin)
 
     def test_files_skip_symlinks_and_skip_list(self):
-        self.assertEqual(self.ls('project').splitlines(), [
-            'project/AGENTS.md', 'project/README.md', 'project/docs/README.md',
-            'project/docs/index.md', 'project/drafts/Draft.md',
-        ])
+        self.assertEqual(
+            self.ls("project").splitlines(),
+            [
+                "project/AGENTS.md",
+                "project/README.md",
+                "project/docs/README.md",
+                "project/docs/index.md",
+                "project/drafts/Draft.md",
+            ],
+        )
 
     def test_external_links_outside_code(self):
-        self.assertEqual(self.ls('external', '--external').splitlines(), [
-            'http://example.org/f?q=1&r=2#frag',
-            'https://en.wikipedia.org/wiki/Foo_(bar)',
-            'https://example.com/a',
-            'https://example.com/b',
-            'https://example.com/c',
-            'https://example.com/d',
-            'https://example.com/e',
-        ])
-        self.assertEqual(self.ls('external/my page.md', '--external'), 'https://example.com/c\n')
+        self.assertEqual(
+            self.ls("external", "--external").splitlines(),
+            [
+                "http://example.org/f?q=1&r=2#frag",
+                "https://en.wikipedia.org/wiki/Foo_(bar)",
+                "https://example.com/a",
+                "https://example.com/b",
+                "https://example.com/c",
+                "https://example.com/d",
+                "https://example.com/e",
+            ],
+        )
+        self.assertEqual(self.ls("external/my page.md", "--external"), "https://example.com/c\n")
 
 
 class StatsTest(unittest.TestCase):
     def stats(self, *args):
-        res = run('stats', *args, cwd=FIXTURES)
+        res = run("stats", *args, cwd=FIXTURES)
         self.assertEqual(res.returncode, 0, res.stderr)
         return res.stdout
 
     def test_counts(self):
-        data = json.loads(self.stats('vault', '--json'))
-        pages = {p['path']: p for p in data['pages']}
-        page = pages['vault/MyPage.md']
-        self.assertEqual((page['headings'], page['items'], page['links']), (2, 1, 2))
-        self.assertEqual(page['meta'], {'tags': '[a, b]', 'summary': 'ignored'})
-        notes = pages['vault/my notes.md']
-        self.assertEqual((notes['links'], notes['images']), (4, 2))
-        self.assertEqual(data['total']['pages'], 9)
-        self.assertEqual(data['total']['words'], sum(p['words'] for p in data['pages']))
+        data = json.loads(self.stats("vault", "--json"))
+        pages = {p["path"]: p for p in data["pages"]}
+        page = pages["vault/MyPage.md"]
+        self.assertEqual((page["headings"], page["items"], page["links"]), (2, 1, 2))
+        self.assertEqual(page["meta"], {"tags": "[a, b]", "summary": "ignored"})
+        notes = pages["vault/my notes.md"]
+        self.assertEqual((notes["links"], notes["images"]), (4, 2))
+        self.assertEqual(data["total"]["pages"], 9)
+        self.assertEqual(data["total"]["words"], sum(p["words"] for p in data["pages"]))
 
     def test_tokens_by_utf8_bytes(self):
         from uwiki.stats import Stats
-        self.assertEqual(Stats.tokens('word'), 1)
-        self.assertEqual(Stats.tokens('words'), 2)
-        self.assertEqual(Stats.tokens('слово'), 3)  # 10 bytes: Cyrillic counts twice as much as Latin
+
+        self.assertEqual(Stats.tokens("word"), 1)
+        self.assertEqual(Stats.tokens("words"), 2)
+        self.assertEqual(Stats.tokens("слово"), 3)  # 10 bytes: Cyrillic counts twice as much as Latin
 
     def test_orphans_and_folder_pages(self):
-        data = json.loads(self.stats('vault', '--json'))
-        self.assertEqual(data['orphans'], 2)
-        self.assertEqual([p['path'] for p in data['pages'] if p['orphan']], ['vault/R&D <x>.md', 'vault/root.md'])
-        self.assertEqual(self.stats('vault').splitlines()[-1], 'orphans: 2, check --orphans lists them')
-        self.assertEqual(sorted(data['groups']), ['vault', 'vault/Archive', 'vault/Projects', 'vault/Projects/Alpha'])
+        data = json.loads(self.stats("vault", "--json"))
+        self.assertEqual(data["orphans"], 2)
+        self.assertEqual([p["path"] for p in data["pages"] if p["orphan"]], ["vault/R&D <x>.md", "vault/root.md"])
+        self.assertEqual(self.stats("vault").splitlines()[-1], "orphans: 2, check --orphans lists them")
+        self.assertEqual(sorted(data["groups"]), ["vault", "vault/Archive", "vault/Projects", "vault/Projects/Alpha"])
 
     def test_markdown_links_count_for_orphans(self):
-        data = json.loads(self.stats('linkcheck', '--json'))
-        self.assertEqual([p['path'] for p in data['pages'] if p['orphan']], ['linkcheck/orphan.md'])
+        data = json.loads(self.stats("linkcheck", "--json"))
+        self.assertEqual([p["path"] for p in data["pages"] if p["orphan"]], ["linkcheck/orphan.md"])
 
     def test_group_by_frontmatter_key(self):
-        data = json.loads(self.stats('vault', '--by', 'tags', '--json'))
-        self.assertEqual(data['groups']['[a, b]']['pages'], 1)
-        self.assertEqual(data['groups']['-']['pages'], 8)
+        data = json.loads(self.stats("vault", "--by", "tags", "--json"))
+        self.assertEqual(data["groups"]["[a, b]"]["pages"], 1)
+        self.assertEqual(data["groups"]["-"]["pages"], 8)
 
     def test_report(self):
-        lines = self.stats('vault', '--top', '1').splitlines()
-        self.assertEqual(lines[0].split(), ['folder', 'pages', 'words', 'lines', 'headings', 'items',
-                                            'links', 'external', 'images'])
-        self.assertEqual(lines[5].split()[:2], ['total', '9'])
-        self.assertEqual(lines[7:9], ['largest:', '      33  vault/MyPage.md'])
+        lines = self.stats("vault", "--top", "1").splitlines()
+        self.assertEqual(
+            lines[0].split(), ["folder", "pages", "words", "lines", "headings", "items", "links", "external", "images"]
+        )
+        self.assertEqual(lines[5].split()[:2], ["total", "9"])
+        self.assertEqual(lines[7:9], ["largest:", "      33  vault/MyPage.md"])
 
 
 class WrapTest(unittest.TestCase):
     TEXT = (
-        '---\ntitle: a very long frontmatter line that is not wrapped at all, never\n---\n'
-        '1. a long numbered rule with [[Some Link]] and `inline code` that goes beyond\n'
-        '\t- nested\n'
-        '| table | row that is long enough to exceed the width of seventy columns |\n'
+        "---\ntitle: a very long frontmatter line that is not wrapped at all, never\n---\n"
+        "1. a long numbered rule with [[Some Link]] and `inline code` that goes beyond\n"
+        "\t- nested\n"
+        "| table | row that is long enough to exceed the width of seventy columns |\n"
     )
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.file = os.path.join(self.tmp.name, 'Page.md')
-        with open(self.file, 'w', encoding='utf-8') as f:
+        self.file = os.path.join(self.tmp.name, "Page.md")
+        with open(self.file, "w", encoding="utf-8") as f:
             f.write(self.TEXT)
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def test_check_reports_and_keeps_file(self):
-        res = run('wrap', '--check', '-w', '40', self.file)
+        res = run("wrap", "--check", "-w", "40", self.file)
         self.assertEqual(res.returncode, 1)
-        self.assertEqual(res.stdout, f'{self.file}:4: longer than 40 columns\n')
+        self.assertEqual(res.stdout, f"{self.file}:4: longer than 40 columns\n")
         self.assertEqual(read(self.file), self.TEXT)
 
     def test_wrap(self):
-        res = run('wrap', '-w', '40', self.file)
+        res = run("wrap", "-w", "40", self.file)
         self.assertEqual(res.returncode, 0, res.stderr)
         lines = read(self.file).splitlines()
-        self.assertEqual(lines[3:7], [
-            '1. a long numbered rule with',
-            '   [[Some Link]] and `inline code` that',
-            '   goes beyond',
-            '\t- nested',
-        ])
+        self.assertEqual(
+            lines[3:7],
+            [
+                "1. a long numbered rule with",
+                "   [[Some Link]] and `inline code` that",
+                "   goes beyond",
+                "\t- nested",
+            ],
+        )
         self.assertEqual(lines[1], self.TEXT.splitlines()[1])
         self.assertEqual(lines[-1], self.TEXT.splitlines()[-1])
-        self.assertEqual(run('wrap', '--check', '-w', '40', self.file).returncode, 0)
+        self.assertEqual(run("wrap", "--check", "-w", "40", self.file).returncode, 0)
 
     def test_leaves_all_code_and_front_matter(self):
-        long = 'a line of words long enough to go beyond forty columns'
+        long = "a line of words long enough to go beyond forty columns"
         texts = [
-            f'~~~\n{long}\n```\n{long}\n~~~\n',
-            f'---\ntitle: x\n...\n{long}\n',
-            f'---\ntitle: {long}\n',
+            f"~~~\n{long}\n```\n{long}\n~~~\n",
+            f"---\ntitle: x\n...\n{long}\n",
+            f"---\ntitle: {long}\n",
         ]
         for text in texts:
-            with open(self.file, 'w', encoding='utf-8') as f:
+            with open(self.file, "w", encoding="utf-8") as f:
                 f.write(text)
-            res = run('wrap', '--check', '-w', '40', self.file)
-            if text.startswith('---\ntitle: x'):
-                self.assertEqual(res.stdout, f'{self.file}:4: longer than 40 columns\n')
+            res = run("wrap", "--check", "-w", "40", self.file)
+            if text.startswith("---\ntitle: x"):
+                self.assertEqual(res.stdout, f"{self.file}:4: longer than 40 columns\n")
             else:
-                self.assertEqual((res.returncode, res.stdout), (0, ''), text)
-                run('wrap', '-w', '40', self.file)
+                self.assertEqual((res.returncode, res.stdout), (0, ""), text)
+                run("wrap", "-w", "40", self.file)
                 self.assertEqual(read(self.file), text)
 
     def test_folders_with_filters(self):
-        os.makedirs(os.path.join(self.tmp.name, 'node_modules'))
-        os.makedirs(os.path.join(self.tmp.name, 'sub'))
-        for name in ['node_modules/Skip.md', 'sub/Other.md']:
-            with open(os.path.join(self.tmp.name, name), 'w', encoding='utf-8') as f:
+        os.makedirs(os.path.join(self.tmp.name, "node_modules"))
+        os.makedirs(os.path.join(self.tmp.name, "sub"))
+        for name in ["node_modules/Skip.md", "sub/Other.md"]:
+            with open(os.path.join(self.tmp.name, name), "w", encoding="utf-8") as f:
                 f.write(self.TEXT)
-        res = run('wrap', '--check', '-w', '40', '.', '--exclude', 'Other.md', cwd=self.tmp.name)
-        self.assertEqual((res.returncode, res.stdout), (1, './Page.md:4: longer than 40 columns\n'))
-        res = run('wrap', '-w', '40', '.', cwd=self.tmp.name)
+        res = run("wrap", "--check", "-w", "40", ".", "--exclude", "Other.md", cwd=self.tmp.name)
+        self.assertEqual((res.returncode, res.stdout), (1, "./Page.md:4: longer than 40 columns\n"))
+        res = run("wrap", "-w", "40", ".", cwd=self.tmp.name)
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertNotEqual(read(os.path.join(self.tmp.name, 'sub', 'Other.md')), self.TEXT)
-        self.assertEqual(read(os.path.join(self.tmp.name, 'node_modules', 'Skip.md')), self.TEXT)
+        self.assertNotEqual(read(os.path.join(self.tmp.name, "sub", "Other.md")), self.TEXT)
+        self.assertEqual(read(os.path.join(self.tmp.name, "node_modules", "Skip.md")), self.TEXT)
 
     def test_nested_list_indented_with_spaces(self):
-        text = ('- top item with some words\n'
-                '  - nested item with a long line that goes past forty columns\n'
-                '  - another\n'
-                '    second paragraph of it, long enough to wrap at forty\n')
-        with open(self.file, 'w', encoding='utf-8') as f:
+        text = (
+            "- top item with some words\n"
+            "  - nested item with a long line that goes past forty columns\n"
+            "  - another\n"
+            "    second paragraph of it, long enough to wrap at forty\n"
+        )
+        with open(self.file, "w", encoding="utf-8") as f:
             f.write(text)
-        run('wrap', '-w', '40', self.file)
-        self.assertEqual(read(self.file), (
-            '- top item with some words\n'
-            '  - nested item with a long line that\n'
-            '    goes past forty columns\n'
-            '  - another second paragraph of it, long\n'
-            '    enough to wrap at forty\n'))
-        text = '\t- tiles: one\n\t  a) of a pile that is long enough to wrap\n'  # a) a line rewrapping began
-        with open(self.file, 'w', encoding='utf-8') as f:
+        run("wrap", "-w", "40", self.file)
+        self.assertEqual(
+            read(self.file),
+            (
+                "- top item with some words\n"
+                "  - nested item with a long line that\n"
+                "    goes past forty columns\n"
+                "  - another second paragraph of it, long\n"
+                "    enough to wrap at forty\n"
+            ),
+        )
+        text = "\t- tiles: one\n\t  a) of a pile that is long enough to wrap\n"  # a) a line rewrapping began
+        with open(self.file, "w", encoding="utf-8") as f:
             f.write(text)
-        run('wrap', '-w', '40', self.file)
-        self.assertEqual(read(self.file), '\t- tiles: one a) of a pile that is\n\t  long enough to wrap\n')
+        run("wrap", "-w", "40", self.file)
+        self.assertEqual(read(self.file), "\t- tiles: one a) of a pile that is\n\t  long enough to wrap\n")
 
     def test_paragraph_continues_mid_sentence(self):
-        text = ('A line that is far too long breaks off in the middle of the\n'
-                'Sentence, which goes on.\n'
-                'A new sentence stays.\n'
-                '\n'
-                'B4. A hanging paragraph that is long enough to wrap.\n'
-                '    Its indented lines join it.\n')
-        with open(self.file, 'w', encoding='utf-8') as f:
+        text = (
+            "A line that is far too long breaks off in the middle of the\n"
+            "Sentence, which goes on.\n"
+            "A new sentence stays.\n"
+            "\n"
+            "B4. A hanging paragraph that is long enough to wrap.\n"
+            "    Its indented lines join it.\n"
+        )
+        with open(self.file, "w", encoding="utf-8") as f:
             f.write(text)
-        run('wrap', '-w', '40', self.file)
-        self.assertEqual(read(self.file), (
-            'A line that is far too long breaks off\n'
-            'in the middle of the Sentence, which\n'
-            'goes on.\n'
-            'A new sentence stays.\n'
-            '\n'
-            'B4. A hanging paragraph that is long\n'
-            '    enough to wrap. Its indented lines\n'
-            '    join it.\n'))
+        run("wrap", "-w", "40", self.file)
+        self.assertEqual(
+            read(self.file),
+            (
+                "A line that is far too long breaks off\n"
+                "in the middle of the Sentence, which\n"
+                "goes on.\n"
+                "A new sentence stays.\n"
+                "\n"
+                "B4. A hanging paragraph that is long\n"
+                "    enough to wrap. Its indented lines\n"
+                "    join it.\n"
+            ),
+        )
 
     def test_unbreakable_line_not_reported(self):
-        text = ('1. [Rules\n'
-                '   pdf](https://example.com/a/very/long/path/to/the/rules.pdf).\n'
-                '   `/a/very/long/path/that/inline/code/never/splits`\n')
-        with open(self.file, 'w', encoding='utf-8') as f:
+        text = (
+            "1. [Rules\n"
+            "   pdf](https://example.com/a/very/long/path/to/the/rules.pdf).\n"
+            "   `/a/very/long/path/that/inline/code/never/splits`\n"
+        )
+        with open(self.file, "w", encoding="utf-8") as f:
             f.write(text)
-        res = run('wrap', '--check', '-w', '40', self.file)
+        res = run("wrap", "--check", "-w", "40", self.file)
         self.assertEqual(res.returncode, 0, res.stdout)
-        run('wrap', '-w', '40', self.file)
+        run("wrap", "-w", "40", self.file)
         self.assertEqual(read(self.file), text)
 
 
@@ -2245,148 +2699,187 @@ class RefsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         with tempfile.TemporaryDirectory() as out:
-            res = run('build', REFS, '-o', out)
+            res = run("build", REFS, "-o", out)
             assert res.returncode == 0, res.stdout + res.stderr
-            cls.html, cls.md = read(os.path.join(out, 'refs.html')), read(os.path.join(out, 'refs.md'))
+            cls.html, cls.md = read(os.path.join(out, "refs.html")), read(os.path.join(out, "refs.md"))
 
     def copy(self, files):
         """Copy of the refs vault with files added or replaced, removed after the test."""
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp)
-        vault = os.path.join(tmp, 'refs')
+        vault = os.path.join(tmp, "refs")
         shutil.copytree(REFS, vault)
         for name, text in files.items():
-            with open(os.path.join(vault, name), 'w', encoding='utf-8') as f:
+            with open(os.path.join(vault, name), "w", encoding="utf-8") as f:
                 f.write(text)
         return vault
 
     def test_refs_link_to_definitions_and_urls(self):
-        self.assertIn('Proposals <a class="ref" href="#ref-p-1" title="P:1. Space types.">P:1</a> and '
-                      '<a class="ref done" href="#ref-p-2" title="P:2. Done thing.">P:2</a>, ticket '
-                      '<a class="ref done" href="https://jira.example.com/browse/HQD-7" data-def="ref-hqd-7">HQD-7</a>, '
-                      'record '
-                      '<a class="ref" href="#ref-doc-245" title="doc:245 · Blood test">doc:245</a> at '
-                      '<a class="ref" href="#visit" title="Visit four">visit:4</a>.', self.html)
+        self.assertIn(
+            'Proposals <a class="ref" href="#ref-p-1" title="P:1. Space types.">P:1</a> and '
+            '<a class="ref done" href="#ref-p-2" title="P:2. Done thing.">P:2</a>, ticket '
+            '<a class="ref done" href="https://jira.example.com/browse/HQD-7" data-def="ref-hqd-7">HQD-7</a>, '
+            "record "
+            '<a class="ref" href="#ref-doc-245" title="doc:245 · Blood test">doc:245</a> at '
+            '<a class="ref" href="#visit" title="Visit four">visit:4</a>.',
+            self.html,
+        )
 
     def test_code_links_urls_and_words_keep_refs_as_text(self):
-        self.assertIn('Code <code>P:1</code> stays, as COVID-19, HQD-NNN and a-P:1 and <a href="#backlog">P:1</a> do.',
-                      self.html)
+        self.assertIn(
+            'Code <code>P:1</code> stays, as COVID-19, HQD-NNN and a-P:1 and <a href="#backlog">P:1</a> do.', self.html
+        )
         self.assertIn('<a href="https://x.example/P:1">https://x.example/P:1</a> or www.x.example/P:2.', self.html)
 
     def test_definitions_are_anchors(self):
-        self.assertIn('<strong><a class="ref-def" id="ref-p-1" href="#ref-p-1">P:1</a>. Space types.</strong>',
-                      self.html)
-        self.assertIn('<td><strong><a class="ref-def" id="ref-doc-245" href="#ref-doc-245">doc:245</a></strong></td>',
-                      self.html)
+        self.assertIn(
+            '<strong><a class="ref-def" id="ref-p-1" href="#ref-p-1">P:1</a>. Space types.</strong>', self.html
+        )
+        self.assertIn(
+            '<td><strong><a class="ref-def" id="ref-doc-245" href="#ref-doc-245">doc:245</a></strong></td>', self.html
+        )
 
     def test_external_refs_lead_to_their_url_where_the_vault_defines_them(self):
         self.assertIn('see <a class="ref" href="https://jira.example.com/browse/HQD-8">HQD-8</a>.', self.html)
-        self.assertIn('<strong><a class="ref-def" id="ref-hqd-7" href="https://jira.example.com/browse/HQD-7" '
-                      'data-def="ref-hqd-7">HQD-7</a></strong> Done ticket', self.html)
+        self.assertIn(
+            '<strong><a class="ref-def" id="ref-hqd-7" href="https://jira.example.com/browse/HQD-7" '
+            'data-def="ref-hqd-7">HQD-7</a></strong> Done ticket',
+            self.html,
+        )
 
     def test_points_link_to_their_definition_else_the_first_point(self):
         first = '<a class="ref" href="#ref-p-4a" title="P:4a. First point.">'
-        self.assertIn(f'Points (<a class="ref" href="#ref-p-4c" title="P:4c. Third point.">P:4c</a>) and '
-                      f'{first}P:4</a>, {first}P:4b</a> of it, not {first}P:4</a> a deck.', self.html)
+        self.assertIn(
+            f'Points (<a class="ref" href="#ref-p-4c" title="P:4c. Third point.">P:4c</a>) and '
+            f"{first}P:4</a>, {first}P:4b</a> of it, not {first}P:4</a> a deck.",
+            self.html,
+        )
         self.assertIn('<a class="ref-def" id="ref-p-4c" href="#ref-p-4c">P:4c</a>', self.html)
 
     def test_callout_titles_link_refs(self):
         self.assertIn('About <a class="ref" href="#ref-p-3"', self.html)
 
     def test_markdown_keeps_refs_as_written(self):
-        self.assertIn('Proposals P:1 and P:2, ticket HQD-7, record doc:245 at visit:4.', self.md)
-        self.assertIn('- [ ] **P:1. Space types.**', self.md)
+        self.assertIn("Proposals P:1 and P:2, ticket HQD-7, record doc:245 at visit:4.", self.md)
+        self.assertIn("- [ ] **P:1. Space types.**", self.md)
 
     def test_refs_are_backrefs_and_front_matter_links(self):
         data = page_data(self.html)
-        self.assertEqual(data['backlinks']['backlog'], ['root'])  # a link, refs are apart
-        self.assertEqual(data['backrefs']['backlog'], [['root', 'P:1'], ['root', 'P:2'], ['root', 'P:4c'],
-                                                       ['root', 'P:4'], ['root', 'P:4b'], ['notes', 'P:3']])
-        self.assertEqual(data['backrefs']['records'], [['root', 'doc:245'], ['notes', 'doc:245'],
-                                                       ['notes', 'doc:246']])
-        self.assertNotIn('records', data['backlinks'])
-        self.assertEqual(data['backrefs']['tickets'], [['root', 'HQD-7'], ['notes', 'HQD-9']])
-        self.assertIn('Backlinks: [Refs](#root)\n\nBackrefs: [Refs › P:1](#root), [Refs › P:2](#root)', self.md)
-        self.assertEqual(data['refs'], {'doc:246': ['#ref-doc-246', 'doc:246 · X-ray', False],
-                                        'HQD-9': ['https://jira.example.com/browse/HQD-9', '', False, '#ref-hqd-9']})
+        self.assertEqual(data["backlinks"]["backlog"], ["root"])  # a link, refs are apart
+        self.assertEqual(
+            data["backrefs"]["backlog"],
+            [["root", "P:1"], ["root", "P:2"], ["root", "P:4c"], ["root", "P:4"], ["root", "P:4b"], ["notes", "P:3"]],
+        )
+        self.assertEqual(data["backrefs"]["records"], [["root", "doc:245"], ["notes", "doc:245"], ["notes", "doc:246"]])
+        self.assertNotIn("records", data["backlinks"])
+        self.assertEqual(data["backrefs"]["tickets"], [["root", "HQD-7"], ["notes", "HQD-9"]])
+        self.assertIn("Backlinks: [Refs](#root)\n\nBackrefs: [Refs › P:1](#root), [Refs › P:2](#root)", self.md)
+        self.assertEqual(
+            data["refs"],
+            {
+                "doc:246": ["#ref-doc-246", "doc:246 · X-ray", False],
+                "HQD-9": ["https://jira.example.com/browse/HQD-9", "", False, "#ref-hqd-9"],
+            },
+        )
 
     def test_check_passes_refs_reached_only_by_refs(self):
-        res = run('check', REFS)
-        self.assertEqual((res.returncode, res.stdout), (0, ''), res.stderr)
+        res = run("check", REFS)
+        self.assertEqual((res.returncode, res.stdout), (0, ""), res.stderr)
 
     def test_check_reports_unresolved_and_twice_defined_refs(self):
-        vault = self.copy({
-            'Extra.md': '---\nsources: [doc:999]\n---\n\n# Extra\n\nSee P:99, P:99a, P:4am and [[index]].\n\n## P:2 again\n',
-        })
-        res = run('check', vault)
-        self.assertEqual(res.stdout.splitlines(), [
-            f'{vault}/Extra.md:9: ref P:2 defined again, first at Backlog.md:4',
-            f'{vault}/Extra.md:2: unresolved ref: doc:999',
-            f'{vault}/Extra.md:7: unresolved ref: P:99',
-            f'{vault}/Extra.md:7: unresolved ref: P:99a',
-            f'{vault}/Extra.md:7: unresolved ref: P:4am',
-            f'{vault}/Extra.md:1: orphan page: no page links here',
-        ], res.stderr)
+        vault = self.copy(
+            {
+                "Extra.md": "---\nsources: [doc:999]\n---\n\n# Extra\n\nSee P:99, P:99a, P:4am and [[index]].\n\n## P:2 again\n",
+            }
+        )
+        res = run("check", vault)
+        self.assertEqual(
+            res.stdout.splitlines(),
+            [
+                f"{vault}/Extra.md:9: ref P:2 defined again, first at Backlog.md:4",
+                f"{vault}/Extra.md:2: unresolved ref: doc:999",
+                f"{vault}/Extra.md:7: unresolved ref: P:99",
+                f"{vault}/Extra.md:7: unresolved ref: P:99a",
+                f"{vault}/Extra.md:7: unresolved ref: P:4am",
+                f"{vault}/Extra.md:1: orphan page: no page links here",
+            ],
+            res.stderr,
+        )
 
     def test_external_refs_reach_no_page(self):
-        vault = self.copy({'index.md': read(os.path.join(REFS, 'index.md')).replace('- [[Tickets]]\n', '')})
-        res = run('check', vault)
-        self.assertEqual(res.stdout.splitlines(), [f'{vault}/Tickets.md:1: orphan page: no page links here'],
-                         res.stderr)
+        vault = self.copy({"index.md": read(os.path.join(REFS, "index.md")).replace("- [[Tickets]]\n", "")})
+        res = run("check", vault)
+        self.assertEqual(
+            res.stdout.splitlines(), [f"{vault}/Tickets.md:1: orphan page: no page links here"], res.stderr
+        )
 
     def test_schema_ref_type(self):
-        vault = self.copy({'uwiki.toml': read(os.path.join(REFS, 'uwiki.toml')) + '\n[schema]\nsources = "ref"\n'
-                                                                                   'aliases = "list"\nid = "ref"\n',
-                           'Notes.md': '---\nsources: [doc:246, P:7, words]\n---\n\n# Notes\n\nNotes.\n'})
-        res = run('check', vault)
-        self.assertIn(f'{vault}/Notes.md:2: front matter sources: P:7, words, expected ref', res.stdout.splitlines())
+        vault = self.copy(
+            {
+                "uwiki.toml": read(os.path.join(REFS, "uwiki.toml")) + '\n[schema]\nsources = "ref"\n'
+                'aliases = "list"\nid = "ref"\n',
+                "Notes.md": "---\nsources: [doc:246, P:7, words]\n---\n\n# Notes\n\nNotes.\n",
+            }
+        )
+        res = run("check", vault)
+        self.assertIn(f"{vault}/Notes.md:2: front matter sources: P:7, words, expected ref", res.stdout.splitlines())
 
     def test_mentions_skip_refs(self):
-        res = run('check', '--mentions', REFS)
-        self.assertNotIn('unlinked mention: doc', res.stdout + res.stderr)
+        res = run("check", "--mentions", REFS)
+        self.assertNotIn("unlinked mention: doc", res.stdout + res.stderr)
 
     def test_prefix_ends_in_separator(self):
-        vault = self.copy({'uwiki.toml': '[refs."P"]\n'})
-        res = run('check', vault)
+        vault = self.copy({"uwiki.toml": '[refs."P"]\n'})
+        res = run("check", vault)
         self.assertEqual(res.returncode, 2)
         self.assertIn('refs."P": a prefix ends in its separator', res.stderr)
 
     def test_ls_lists_definitions(self):
-        res = run('ls', '--refs', '.', cwd=REFS)
-        self.assertEqual(res.stdout.splitlines(), [
-            'P:1\t./Backlog.md:3\tP:1. Space types.',
-            'P:2\t./Backlog.md:4\tP:2. Done thing.',
-            'P:3\t./Backlog.md:5\tP:3. Comes after P:1, see HQD-8.',
-            'P:4a\t./Backlog.md:6\tP:4a. First point.',
-            'P:4c\t./Backlog.md:7\tP:4c. Third point.',
-            'doc:245\t./Records.md:5\tdoc:245 · Blood test',
-            'doc:246\t./Records.md:6\tdoc:246 · X-ray',
-            'HQD-7\t./Tickets.md:3\tHQD-7 Done ticket, refs to it lead to the tracker.',
-            'HQD-9\t./Tickets.md:4\tHQD-9 Ticket the notes name.',
-            'visit:4\t./Visit.md:2\tVisit four',
-        ])
+        res = run("ls", "--refs", ".", cwd=REFS)
+        self.assertEqual(
+            res.stdout.splitlines(),
+            [
+                "P:1\t./Backlog.md:3\tP:1. Space types.",
+                "P:2\t./Backlog.md:4\tP:2. Done thing.",
+                "P:3\t./Backlog.md:5\tP:3. Comes after P:1, see HQD-8.",
+                "P:4a\t./Backlog.md:6\tP:4a. First point.",
+                "P:4c\t./Backlog.md:7\tP:4c. Third point.",
+                "doc:245\t./Records.md:5\tdoc:245 · Blood test",
+                "doc:246\t./Records.md:6\tdoc:246 · X-ray",
+                "HQD-7\t./Tickets.md:3\tHQD-7 Done ticket, refs to it lead to the tracker.",
+                "HQD-9\t./Tickets.md:4\tHQD-9 Ticket the notes name.",
+                "visit:4\t./Visit.md:2\tVisit four",
+            ],
+        )
 
     def test_lsp_goes_to_hovers_completes_and_finds_refs(self):
         lsp = Lsp(REFS)
         self.addCleanup(lsp.close)
-        lsp.open('index.md')
-        res = lsp.at('textDocument/definition', 'index.md', 2, 11)
-        self.assertEqual((res['uri'].rsplit('/', 1)[-1], res['range']['start']['line']), ('Backlog.md', 2))
-        res = lsp.at('textDocument/hover', 'index.md', 2, 11)
-        self.assertEqual(res['contents']['value'], '**P:1. Space types.**\n\n'
-                                                   '- [ ] **P:1. Space types.** No dice: every effect is fixed.')
-        res = lsp.at('textDocument/hover', 'index.md', 2, 30)
-        self.assertEqual(res['contents']['value'], '**HQD-7**: https://jira.example.com/browse/HQD-7\n\n'
-                                                   '- [x] **HQD-7** Done ticket, refs to it lead to the tracker.')
-        res = lsp.at('textDocument/definition', 'index.md', 2, 30)
-        self.assertEqual((res['uri'].rsplit('/', 1)[-1], res['range']['start']['line']), ('Tickets.md', 2))
-        lsp.open('New.md', 'See P:')
-        labels = [i['label'] for i in lsp.at('textDocument/completion', 'New.md', 0, 6)]
-        self.assertEqual(labels, ['P:1', 'P:2', 'P:3', 'P:4a', 'P:4c'])
-        res = lsp.at('textDocument/references', 'index.md', 2, 11, context={'includeDeclaration': True})
-        self.assertEqual([(r['uri'].rsplit('/', 1)[-1], r['range']['start']['line']) for r in res],
-                         [('Backlog.md', 2), ('Backlog.md', 4), ('index.md', 2)])
+        lsp.open("index.md")
+        res = lsp.at("textDocument/definition", "index.md", 2, 11)
+        self.assertEqual((res["uri"].rsplit("/", 1)[-1], res["range"]["start"]["line"]), ("Backlog.md", 2))
+        res = lsp.at("textDocument/hover", "index.md", 2, 11)
+        self.assertEqual(
+            res["contents"]["value"],
+            "**P:1. Space types.**\n\n- [ ] **P:1. Space types.** No dice: every effect is fixed.",
+        )
+        res = lsp.at("textDocument/hover", "index.md", 2, 30)
+        self.assertEqual(
+            res["contents"]["value"],
+            "**HQD-7**: https://jira.example.com/browse/HQD-7\n\n"
+            "- [x] **HQD-7** Done ticket, refs to it lead to the tracker.",
+        )
+        res = lsp.at("textDocument/definition", "index.md", 2, 30)
+        self.assertEqual((res["uri"].rsplit("/", 1)[-1], res["range"]["start"]["line"]), ("Tickets.md", 2))
+        lsp.open("New.md", "See P:")
+        labels = [i["label"] for i in lsp.at("textDocument/completion", "New.md", 0, 6)]
+        self.assertEqual(labels, ["P:1", "P:2", "P:3", "P:4a", "P:4c"])
+        res = lsp.at("textDocument/references", "index.md", 2, 11, context={"includeDeclaration": True})
+        self.assertEqual(
+            [(r["uri"].rsplit("/", 1)[-1], r["range"]["start"]["line"]) for r in res],
+            [("Backlog.md", 2), ("Backlog.md", 4), ("index.md", 2)],
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

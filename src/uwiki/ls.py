@@ -7,11 +7,12 @@ from .convert import Converter
 from .refs import Refs
 from .vault import Filter, Vaults, read_text
 
+
 class Listing:
     """Markdown files under given paths, after skip list and filters, and http links outside their code."""
 
     URL = re.compile(r'https?://\w[^\s<>\[\]"\'`]*')
-    TRAILING = '.,:;!?*_~'
+    TRAILING = ".,:;!?*_~"
 
     def __init__(self, paths, include=(), exclude=(), only=None):
         self.vaults = Vaults(paths, Filter(include, exclude))
@@ -44,7 +45,7 @@ class Listing:
             except ValueError:
                 continue
             for _, line in Converter.prose(text):
-                res.update(map(self.trim, self.URL.findall(Converter.CODE.sub(' ', line))))
+                res.update(map(self.trim, self.URL.findall(Converter.CODE.sub(" ", line))))
         return sorted(res)
 
     def refs(self):
@@ -54,12 +55,12 @@ class Listing:
         for scanner, page, shown in self.entries():
             refs = Refs.of(scanner)
             if refs and page.source is not None:
-                res += [f'{d.ref}\t{shown}:{d.line}\t{d.text}' for d in refs.defined(page, page.source.fullpath)]
+                res += [f"{d.ref}\t{shown}:{d.line}\t{d.text}" for d in refs.defined(page, page.source.fullpath)]
         return res
 
     @classmethod
     def trim(cls, url):
         """Drops trailing punctuation and closing parentheses url does not open, as GitHub autolinks do."""
-        while url[-1] in cls.TRAILING or url[-1] == ')' and url.count(')') > url.count('('):
+        while url[-1] in cls.TRAILING or url[-1] == ")" and url.count(")") > url.count("("):
             url = url[:-1]
         return url
