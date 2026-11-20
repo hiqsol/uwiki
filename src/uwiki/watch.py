@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import suppress
 
 from watchfiles._rust_notify import RustNotify  # what watchfiles.watch runs: watching starts on creating it
 
@@ -18,7 +19,6 @@ from .vault import Scanner
 
 CODE = os.path.dirname(os.path.abspath(__file__))
 RESTARTED = "UWIKI_RESTARTED"  # port of serve in the environment of the restarted one
-IN_VAULT, IN_CODE, IN_CONFIG = "vault", "code", "config"  # what a folder is watched for
 
 
 class Restart(Exception):
@@ -41,19 +41,10 @@ def stats(files):
     return res
 
 
-def code_files(folders=None):
-    """Files of uwiki code, its folders added to folders."""
-    for folder, subfolders, files in os.walk(CODE):
-        subfolders[:] = [f for f in subfolders if f != "__pycache__"]
-        if folders is not None:
-            folders.add(os.path.realpath(folder))
+def code_files():
+    for folder, folders, files in os.walk(CODE):
+        folders[:] = [f for f in folders if f != "__pycache__"]
         yield from (os.path.join(folder, f) for f in files)
-
-
-def real(file):
-    """Real path of the folder of file, joined with its name: the path events tell about it, existing or not."""
-    folder, name = os.path.split(os.path.abspath(file))
-    return os.path.join(os.path.realpath(folder), name)
 
 
 def restart_command():
@@ -85,10 +76,9 @@ class Watcher:
     """Builds once, then again on change of any file the vault takes: pages and attachments,
     or of its config: `uwiki.toml` or `pyproject.toml` wherever `Config.load` looks, ones not there yet too.
 
-    Watches filesystem events in the folders the vault scan enters, symlinked ones too, the config folders
-    and uwiki code folders, one by one, each by its real path; anew when they change, as a folder is added.
-    Events within `DEBOUNCE` seconds of each other, `LONGEST` at most, make one look at what changed:
-    a scan as of then, compared with the one before; a change makes one build,
+    Watches filesystem events in the folders of these files, by real path, so symlinked ones too,
+    and anew when the folders change. Events `STEP_MS` apart at most, `DEBOUNCE_MS` in all at most,
+    make one scan, compared with the one before; a change makes one build,
     a failed build keeps the last good output and watching goes on.
     A change of uwiki code raises `Restart`, so does a change of what options gives:
     the option defaults the config gives the command, which it takes on start only; None watches no options.
@@ -96,8 +86,8 @@ class Watcher:
     watching goes on either way.
     """
 
-    DEBOUNCE = 0.3
-    LONGEST = 2
+    STEP_MS = 300
+    DEBOUNCE_MS = 2000
 
     def __init__(self, build, quiet=False, out=None, options=None):
         self.build = build
@@ -106,56 +96,31 @@ class Watcher:
         self.quiet = quiet
         self.out = out or sys.stdout
         self.outputs = {os.path.abspath(f) for f in build.outputs.values()}
-        written = [os.path.realpath(f) for f in build.outputs.values()]  # write_atomic writes through symlinks
-        self.written = {
-            *written,
-            *(os.path.join(os.path.dirname(f), f".{os.path.basename(f)}.{os.getpid()}.tmp") for f in written),
-        }
         self.root = None
-        self.configs = set()  # real paths of the config files, existing or not
-        self.folders = {}  # real path of a folder to watch: what for, IN_VAULT, IN_CODE or IN_CONFIG, the first that fits
+        self.folders = set()  # to watch, as of the last snapshot
         self.notify = None
         self.watched = None  # folders the notify watches
 
     def snapshot(self):
-        """Mtime and size of every file the vault takes, outputs left out, of the uwiki code and of the config;
-        the folders to watch for them as of now."""
+        """Mtime and size of every file the vault takes, outputs left out, of the uwiki code and of the config,
+        existing or not; the folders they are in, empty ones the vault scan enters too."""
         if self.root is None:
             self.root = (self.build.selection or self.build.scan()).root
         scanner = Scanner(self.root, self.build.filter)
         scanner.scan(links=False)
         vault = stats(f for f in scanner.file_paths() if f not in self.outputs)
-        code_folders = set()
-        code = stats(code_files(code_folders))
-        configs = Config.files(self.root)
-        self.configs = {real(f) for f in configs}
-        folders = dict.fromkeys((os.path.dirname(f) for f in self.configs), IN_CONFIG)
-        folders.update(dict.fromkeys(code_folders, IN_CODE))
-        folders.update(dict.fromkeys((os.path.realpath(f) for f in scanner.folders), IN_VAULT))
-        self.folders = folders
-        return vault, code, stats(configs)
+        code = stats(code_files())
+        folders = [*scanner.folders, *map(os.path.dirname, code), *Config.folders(self.root)]
+        self.folders = {os.path.realpath(f) for f in folders}
+        return vault, code, stats(Config.files(self.root))
 
-    def relevant(self, path):
-        """Whether an event about path may change a snapshot: a file in a vault folder but not an output,
-        a vault folder, a config file or a file in a code folder."""
-        if path in self.configs or self.folders.get(path) == IN_VAULT:
-            return True
-        kind = self.folders.get(os.path.dirname(path))
-        if kind == IN_VAULT:
-            return path not in self.written
-        return kind == IN_CODE and not path.endswith(".pyc")
-
-    def listen(self):
-        """Watches the folders of the last snapshot, anew when they differ from the ones watched; True when anew."""
-        if self.folders.keys() == self.watched:
-            return False
+    def watch(self):
+        """Watches the folders of the last snapshot, none when one went since."""
         self.close()
-        watched = set(self.folders)
-        folders = sorted(f for f in watched if os.path.isdir(f))
-        # paths, debug, force_polling, poll_delay_ms, recursive, ignore_permission_denied
-        self.notify = RustNotify(folders, False, False, 0, False, True)
-        self.watched = watched
-        return True
+        with suppress(FileNotFoundError):
+            # paths, debug, force_polling, poll_delay_ms, recursive, ignore_permission_denied
+            self.notify = RustNotify(list(self.folders), False, False, 0, False, True)
+            self.watched = self.folders
 
     def close(self):
         if self.notify:
@@ -164,19 +129,12 @@ class Watcher:
 
     def changes(self, last):
         """Waits for events until the snapshot differs from last, returns the new one.
-        Watching anew looks at once, for what changed while not watching, a build or the scan before it."""
+        Watching other folders looks at once, for what changed while they were not watched."""
         while True:
-            try:
-                anew = self.listen()
-            except FileNotFoundError:  # a folder went since the scan
-                self.snapshot()
-                continue
-            if not anew:
-                events = self.notify.watch(int(self.LONGEST * 1000), int(self.DEBOUNCE * 1000), 0, None)
-                if events == "signal":
-                    raise KeyboardInterrupt
-                if not any(self.relevant(path) for _, path in events):
-                    continue
+            if self.folders != self.watched:
+                self.watch()
+            elif self.notify.watch(self.DEBOUNCE_MS, self.STEP_MS, 0, None) == "signal":
+                raise KeyboardInterrupt
             current = self.snapshot()
             if current != last:
                 return current
