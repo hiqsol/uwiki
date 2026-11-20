@@ -3,7 +3,7 @@
 
 [tasks.test]
 description = "run tests"
-run = "uv run --no-project --with markdown-it-py --with linkify-it-py python -m unittest discover tests"
+run = "uv run --no-project --with markdown-it-py --with linkify-it-py --with watchfiles python -m unittest discover tests"
 
 [tasks.build]
 description = "build sdist and wheel"

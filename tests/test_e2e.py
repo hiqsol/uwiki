@@ -1949,7 +1949,7 @@ class WatchTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_rebuilds_on_change(self):
-        watch = Background("watch", self.vault, "-o", self.out, "--interval", "0.1")
+        watch = Background("watch", self.vault, "-o", self.out)
         try:
             self.assertRegex(watch.line(), rf"^\d\d:\d\d:\d\d built 2 pages: {re.escape(self.out)} \(\d+\.\d\ds\)$")
             write(os.path.join(self.vault, "B.md"), "Page B.\n")
@@ -1966,8 +1966,46 @@ class WatchTest(unittest.TestCase):
         finally:
             watch.stop()
 
+    def test_watches_new_and_symlinked_folders(self):
+        ext, later = os.path.join(self.tmp.name, "ext"), os.path.join(self.tmp.name, "later")
+        write(os.path.join(ext, "E.md"), "Page E.\n")
+        write(os.path.join(later, "L.md"), "Page L.\n")
+        os.symlink(ext, os.path.join(self.vault, "linked"))
+        watch = Background("watch", self.vault, "-o", self.out)
+        try:
+            self.assertIn("built 3 pages", watch.line())
+            write(os.path.join(ext, "sub", "F.md"), "Page F.\n")  # outside the vault, through the symlink
+            self.assertIn("built 4 pages", watch.line())
+            os.mkdir(os.path.join(self.vault, "new"))
+            time.sleep(1)  # watching the new folder by now
+            write(os.path.join(self.vault, "new", "N.md"), "Page N.\n")
+            self.assertIn("built 5 pages", watch.line())
+            os.symlink(later, os.path.join(self.vault, "later"))
+            self.assertIn("built 6 pages", watch.line())
+            time.sleep(1)
+            write(os.path.join(later, "M.md"), "Page M.\n")
+            self.assertIn("built 7 pages", watch.line())
+        finally:
+            watch.stop()
+
+    def test_skips_what_the_vault_does_not_take(self):
+        out = os.path.join(self.vault, "out", "Wiki.html")  # output in the vault
+        watch = Background("watch", self.vault, "-o", out)
+        try:
+            self.assertIn("built 2 pages", watch.line())
+            write(os.path.join(self.vault, ".git", "HEAD"), "ref: refs/heads/master\n")
+            write(os.path.join(self.vault, ".A.md.swp"), "swap\n")  # hidden, skipped
+            with self.assertRaises(queue.Empty):  # neither these nor writing the output build again
+                watch.line(timeout=1.5)
+            write(os.path.join(self.vault, "B.md"), "Page B.\n")
+            self.assertIn("built 3 pages", watch.line())
+            with self.assertRaises(queue.Empty):
+                watch.line(timeout=1.5)
+        finally:
+            watch.stop()
+
     def test_quiet_prints_errors_only(self):
-        watch = Background("watch", self.vault, "-o", self.out, "--interval", "0.1", "-q")
+        watch = Background("watch", self.vault, "-o", self.out, "-q")
         try:
             wait_for(lambda: os.path.exists(self.out))
             write(os.path.join(self.vault, "A.md"), b"\xff", "wb")
@@ -1984,7 +2022,7 @@ class WatchTest(unittest.TestCase):
         pyproject = os.path.join(self.tmp.name, "pyproject.toml")  # above the vault
         config = os.path.join(self.vault, "uwiki.toml")
         write(pyproject, '[project]\nversion = "1"\n[tool.uwiki]\nexclude = ["B.md"]\n')
-        watch = Background("watch", self.vault, "-o", self.out, "--interval", "0.1")
+        watch = Background("watch", self.vault, "-o", self.out)
         try:
             self.assertIn("built 2 pages", watch.line())
             write(pyproject, '[project]\nversion = "2"\n[tool.uwiki]\nexclude = ["B.md"]\n')
@@ -2007,7 +2045,7 @@ class WatchTest(unittest.TestCase):
         src = os.path.join(self.tmp.name, "src")
         shutil.copytree(os.path.join(SRC, "uwiki"), os.path.join(src, "uwiki"))
         code = os.path.join(src, "uwiki", "ls.py")
-        watch = Background("watch", self.vault, "-o", self.out, "--interval", "0.1", src=src)
+        watch = Background("watch", self.vault, "-o", self.out, src=src)
         try:
             self.assertIn("built 2 pages", watch.line())
             write(code, "# changed\n", "a")
@@ -2044,7 +2082,7 @@ class ServeTest(unittest.TestCase):
     def test_serves_rebuilds_and_cleans_up(self):
         from urllib.error import HTTPError
 
-        serve = Background("serve", self.vault, "-p", "0", "--interval", "0.1")
+        serve = Background("serve", self.vault, "-p", "0")
         try:
             url = re.fullmatch(r"serving (http://127\.0\.0\.1:\d+/wiki\.html)", serve.line())[1]
             built = re.search(r"built 2 pages: (\S+)/wiki\.html \(", serve.line())
@@ -2070,7 +2108,7 @@ class ServeTest(unittest.TestCase):
     def test_restart_serves_the_same_port(self):
         src = os.path.join(self.tmp.name, "src")
         shutil.copytree(os.path.join(SRC, "uwiki"), os.path.join(src, "uwiki"))
-        serve = Background("serve", self.vault, "-p", "0", "--interval", "0.1", src=src)
+        serve = Background("serve", self.vault, "-p", "0", src=src)
         try:
             serving = serve.line()
             outdir = re.search(r"built 2 pages: (\S+)/wiki\.html \(", serve.line())[1]
@@ -2100,7 +2138,7 @@ class ServeTest(unittest.TestCase):
         self.assertNotIn("{mode}", html)
 
     def test_serve_reloads_by_build_id_with_live_too(self):
-        serve = Background("serve", self.vault, "-p", "0", "--interval", "0.1", "--live")
+        serve = Background("serve", self.vault, "-p", "0", "--live")
         try:
             url = serve.line().split()[1]
             serve.line()

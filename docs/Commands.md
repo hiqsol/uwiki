@@ -2,7 +2,7 @@
 
 ```
 uwiki build  <paths> [-o OUTPUT] [--title TITLE] [--html | --md] [--no-backlinks] [--no-front-matter] [--up URL] [--live]
-uwiki watch  <paths> [build options] [-q] [--interval 0.5]
+uwiki watch  <paths> [build options] [-q]
 uwiki serve  <paths> [watch options] [-p 8000] [--host 127.0.0.1] [--open]
 uwiki check  <paths> [--orphans] [--unlisted] [--mentions] [--mentions-exclude GLOB] [--no-folder-links] [--max-lines N]
 uwiki link   <paths> [--dry-run] [-w 70]
@@ -28,7 +28,8 @@ a page shows its folders, metadata and front matter; a link to a page left out f
 
 ## watch and serve
 
-`watch` builds again on change of a page, attachment or the config, `serve` also serves the HTML
+`watch` builds again on change of a page, attachment or the config, told by filesystem events, idle otherwise,
+in the folders the vault takes, symlinked ones too; `serve` also serves the HTML
 on `http://127.0.0.1:8000`, reloading the page, its blocks with `data-line` of the source line they start at;
 both restart on change of uwiki's own code, as on upgrade, unless it fails to import,
 and of options the config gives them.

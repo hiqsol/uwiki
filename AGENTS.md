@@ -2,7 +2,7 @@
 
 ## Tests
 
-- `mise run test` runs the suite via uv with the `markdown-it-py` and `linkify-it-py` packages; tests require them and never skip
+- `mise run test` runs the suite via uv with the `markdown-it-py`, `linkify-it-py` and `watchfiles` packages; tests require them and never skip
 - `mise run lint` checks pages (uwiki check, markdownlint, typos, Vale) and the repo (hygiene, gitleaks), see `hk.pkl`;
   `devkit doctor` says what keeps it or the pre-commit hook from running; lint, hooks and the files devkit owns:
   `.config/devkit/AGENTS.md`

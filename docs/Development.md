@@ -19,8 +19,8 @@ mise run up                  # install the tagged version with mise
 
 ## Tests
 
-`mise run test` runs the end-to-end suite in `tests/` via uv with `markdown-it-py` and `linkify-it-py`,
-the only dependencies; tests require them and never skip. CI runs it on Python 3.11 to 3.14.
+`mise run test` runs the end-to-end suite in `tests/` via uv with `markdown-it-py`, `linkify-it-py`
+and `watchfiles`, the only dependencies; tests require them and never skip. CI runs it on Python 3.11 to 3.14.
 The fixture vaults in `tests/fixtures` are left out of the build of this repo by `[tool.uwiki]` in `pyproject.toml`.
 
 ## Lint

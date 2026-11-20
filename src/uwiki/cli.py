@@ -52,7 +52,7 @@ def given_options(args):
 
 
 def watch(args):
-    Watcher(make_build(args), args.interval, quiet=args.quiet, options=given_options(args)).run()
+    Watcher(make_build(args), quiet=args.quiet, options=given_options(args)).run()
 
 
 def serve(args):
@@ -77,7 +77,6 @@ def serve(args):
                 args.host,
                 port,
                 args.open and not restarted,
-                args.interval,
                 args.quiet,
                 options=given_options(args),
             )
@@ -287,9 +286,6 @@ def add_build_options(p, output="current"):
 
 def add_watch_options(p):
     p.add_argument("-q", "--quiet", action="store_true", help="print errors only")
-    p.add_argument(
-        "--interval", type=float, default=0.5, metavar="SECONDS", help="how often to look for changes, default: 0.5"
-    )
 
 
 BUILD_USAGE = f"[--title TITLE] [--html] [--md] [-o OUTPUT] [--no-backlinks] [--no-front-matter] [--up URL] [--live] {FILTER_USAGE}"
@@ -321,7 +317,7 @@ def parser():
         commands,
         "watch",
         "build, then build again on change of any page, attachment or config",
-        f"{BUILD_USAGE} [-q] [--interval SECONDS]",
+        f"{BUILD_USAGE} [-q]",
     )
     add_paths(p, "folders or files to build")
     add_build_options(p)
@@ -332,7 +328,7 @@ def parser():
         commands,
         "serve",
         "serve built HTML on localhost, rebuild on change and reload the page",
-        f"{BUILD_USAGE} [-p 8000] [--host 127.0.0.1] [--open] [-q] [--interval SECONDS]",
+        f"{BUILD_USAGE} [-p 8000] [--host 127.0.0.1] [--open] [-q]",
     )
     add_paths(p, "folders or files to build")
     add_build_options(p, output="temporary one removed on exit")

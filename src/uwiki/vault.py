@@ -521,6 +521,7 @@ class Scanner:
         self.targets = {}
         self.attachments = {}
         self.symlinks = []
+        self.folders = []  # full paths of the folders scanned, empty ones too, for watching
         self.warnings = []
         self._aliases = None
         self._lookups = {}  # (name, source): lookup result, a build looks the same links up 50k times
@@ -574,6 +575,7 @@ class Scanner:
 
     def _scan_dir(self, folder):
         base = folder.fullpath
+        self.folders.append(base)
         o = sorted(os.scandir(base), key=lambda e: e.name)
         for entry in o:
             fullpath = os.path.join(base, entry.name)
