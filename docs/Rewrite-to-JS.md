@@ -36,7 +36,7 @@ What is slow is the work the page does at load and an uncached build, neither is
    about 20% smaller as a local file. Rendering takes 340 ms plus 100 ms inserting, nothing shows before it
    is done, while HTML paints as it streams. Rendering pages lazily breaks Ctrl+F and deep links.
 2. **Two models again**: the page renderer needs anchors, item numbers and problem lines ported to JS.
-3. **The standard library rule breaks**: no TOML, unified diff or subcommand help in Node.
+3. **More packages**: Node has no TOML, unified diff or subcommand help built in.
 4. **Regex traps**: JS `\w` and `\b` are ASCII only, about 28 uses would quietly break Cyrillic names.
 5. **No build step is not quite true**: the page is one file with inline script, ES modules need
    joining with `import` and `export` stripped.
